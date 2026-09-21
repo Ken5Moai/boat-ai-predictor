@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ボートAI予想ツール v13.0 STABLE</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+:root{--bg:#0b0e17;--card:#111827;--line:#20304d;--blue:#4a90d9;--gold:#f0c040;--green:#3ecf74;--red:#ef6262;--text:#d7e2f3;--muted:#7f8eaa;--ink:#090d15}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif}.wrap{max-width:920px;margin:auto;padding:16px 12px 70px}
+h1{font-size:24px;color:#fff;margin:4px 0 6px}.lead{font-size:12px;color:var(--muted);line-height:1.8}.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0}.slot{border:1px solid #263755;border-radius:9px;padding:11px;margin:8px 0;background:#0d1421}.slot b{color:#e7f0ff}.slot small{display:block;color:#8291aa;margin:4px 0 8px;line-height:1.55}
+label{display:block;font-size:12px;color:#83a7d1;margin:10px 0 5px}input,select{width:100%;background:var(--ink);border:1px solid var(--line);color:#eef5ff;border-radius:7px;padding:11px;font-size:15px}input:focus,select:focus{outline:none;border-color:var(--blue)}button{background:#183a69;border:1px solid var(--blue);color:#fff;border-radius:7px;padding:12px 15px;font-weight:800;margin:8px 6px 0 0;font-size:14px}button:disabled{opacity:.32}.danger{background:#4b1620;border-color:var(--red)}.secondary{background:#12223e}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.status{font-size:12px;color:var(--green);margin-top:10px;line-height:1.65}.progress{height:7px;background:#172139;border-radius:10px;overflow:hidden;margin-top:8px}.progress>div{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));width:0%}.notice{font-size:12px;line-height:1.8;border-radius:7px;padding:11px;margin:10px 0}.warn{color:#d6aa5e;background:#17130b;border:1px solid #4e3d1a}.ok{color:#70df9b;background:#0b1710;border:1px solid #214b31}.err{color:#ff9d9d;background:#1a0d10;border:1px solid #6b2830}.debug{font-family:'Share Tech Mono',monospace;font-size:10px;color:#7d90ae;white-space:pre-wrap;line-height:1.55;max-height:220px;overflow:auto;margin-top:8px}.factorgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.factor{border:1px solid var(--line);border-radius:7px;background:#0d1421;padding:10px}.factor b{color:#dce9ff}.factor small{display:block;color:#8291aa;line-height:1.7;margin-top:4px}
+.boatcard{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0;background:#0d1421}.boathead{display:flex;align-items:center;gap:10px;margin-bottom:9px}.lane{width:34px;height:34px;border-radius:7px;display:grid;place-items:center;font-weight:900;background:#162137;color:#fff}.boatname{font-weight:900;color:#fff;font-size:16px;flex:1}.fields{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.fields .f label{margin:0 0 4px;font-size:10px}.fields .f input{padding:9px;font-size:14px}.bad{border-color:var(--red)!important;box-shadow:0 0 0 1px rgba(239,98,98,.15) inset}.good{border-color:#2a6f49!important}.soft{border-color:#765c20!important}.chip{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:10px;color:#a9b9d1;margin-left:6px}.report{margin-top:20px}.header{text-align:center;padding:26px 12px;background:linear-gradient(180deg,#0d1830,#0b0e17);border-bottom:2px solid #1e3a6e}.eyebrow{font-family:'Share Tech Mono';letter-spacing:.3em;color:var(--blue);font-size:10px}.title{font-size:27px;font-weight:900;color:#fff;margin-top:8px}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:14px 0;overflow:hidden}.cardhead{padding:11px 14px;background:#0f1520;border-bottom:1px solid var(--line);font-weight:800;color:#dfeaff}.cardbody{padding:14px}.pick{border:1px solid var(--line);border-radius:7px;padding:11px;margin:8px 0}.pick strong{color:#fff}.pick small{display:block;color:var(--muted);line-height:1.65;margin-top:4px}.bet{font-family:'Share Tech Mono';font-size:14px;color:#fff;line-height:2}.rankA{color:#ffdc66}.rankB{color:#8fc7ff}.rankC{color:#75d99a}.mini{font-size:11px;color:var(--muted);line-height:1.65}.testpass{color:#71df9c}.testfail{color:#ff9d9d}
+@media(max-width:700px){.grid2,.grid3,.factorgrid{grid-template-columns:1fr}.fields{grid-template-columns:1fr 1fr}.title{font-size:22px}.wrap{padding-left:10px;padding-right:10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>ボートAI予想ツール v13.0 STABLE</h1>
+<div class="lead">登録番号を軸に6艇を固定し、選手名・級別は公式照合で確定。勝率・ST・展示・水面気象は「画像全体OCR」ではなく、各スクショの表レイアウトに合わせてセル単位で読みます。異常値は自動採用せず、赤枠で止めます。</div>
+
+<div class="panel">
+  <div class="slot"><b>① 基本情報</b><small>登録番号・級別・平均ST。登録番号の主データ源です。</small><input id="fBasic" type="file" accept="image/*"></div>
+  <div class="slot"><b>② 直前情報</b><small>登録番号・体重・チルト・部品交換。登録番号の照合用です。</small><input id="fDirect" type="file" accept="image/*"></div>
+  <div class="slot"><b>③ 勝率</b><small>全国勝率・当地勝率・モーター2連率。固定セルOCRします。</small><input id="fRates" type="file" accept="image/*"></div>
+  <div class="slot"><b>④ 今節成績</b><small>今節着順・ST（補助資料）。</small><input id="fForm" type="file" accept="image/*"></div>
+  <div class="slot"><b>⑤ 展示情報</b><small>展示ST・展示タイム。F/L表記対応。</small><input id="fEx" type="file" accept="image/*"></div>
+  <div class="slot"><b>⑥ 水面気象・潮汐</b><small>場名・レース番号・気温・水温・波高・風速・風向・潮汐。</small><input id="fWeather" type="file" accept="image/*"></div>
+
+  <div class="grid2"><div><label>場名</label><input id="venue" placeholder="例：多摩川"></div><div><label>レース番号</label><input id="raceNo" placeholder="例：12R"></div></div>
+  <div class="grid2"><div><label>レース種別</label><input id="raceType" placeholder="例：優勝戦"></div><div><label>購入予算（円）</label><input id="budget" type="number" value="1000" min="100" step="100"></div></div>
+
+  <button id="readBtn" onclick="readAllFixed()">① 読み取る</button>
+  <button id="lookupBtn" onclick="lookupAll()" disabled>② 登録番号で公式照合</button>
+  <button onclick="loadVenueFeature()">③ 競艇場特性を読み込む</button>
+  <button onclick="resetAll()" class="danger">↺ 完全リセット</button>
+  <div class="progress"><div id="bar"></div></div>
+  <div id="status" class="status">待機中</div>
+  <div id="debug" class="debug"></div>
+</div>
+
+<div class="panel">
+  <div class="grid3"><div><label>風向</label><input id="windDir" placeholder="右向き / 左向き / 向かい風 / 追い風"></div><div><label>風速 m/s</label><input id="windSpeed"></div><div><label>潮汐</label><input id="tide" placeholder="満潮 / 干潮 / 上げ潮 / 下げ潮"></div></div>
+  <div class="grid3"><div><label>波高 cm</label><input id="wave"></div><div><label>気温 ℃</label><input id="temp"></div><div><label>水温 ℃</label><input id="waterTemp"></div></div>
+</div>
+
+<div class="panel"><div id="featureSummary" class="notice warn">競艇場特性はまだ読み込んでいません。</div><div id="featureGrid" class="factorgrid"></div></div>
+
+<div class="panel">
+  <div id="quality" class="notice warn">まだ選手データを読み取っていません。</div>
+  <div id="boats"></div>
+  <button id="genBtn" onclick="generateReport()" disabled>④ 予想レポート生成</button>
+  <div class="mini" style="margin-top:10px">※ v13では「0」「空欄」「明らかな異常値」を勝手に正解扱いしません。OCR不明は不明のまま止めます。</div>
+</div>
+
+<div id="report" class="report"></div>
+</div>
+<script>
+'use strict';
+let imgs={},venueFeature=null,ocrWorker=null;
+const WATER_MAP={'平和島':'海水','常滑':'海水','鳴門':'海水','丸亀':'海水','児島':'海水','宮島':'海水','徳山':'海水','下関':'海水','若松':'海水','大村':'海水','江戸川':'汽水','浜名湖':'汽水','蒲郡':'汽水','津':'汽水','福岡':'汽水','桐生':'淡水','戸田':'淡水','多摩川':'淡水','三国':'淡水','びわこ':'淡水','住之江':'淡水','尼崎':'淡水','芦屋':'淡水','唐津':'淡水'};
+const VENUES=Object.keys(WATER_MAP);
+
+function q(id){return document.getElementById(id)}
+function setStatus(s){q('status').textContent=s}
+function dbg(s){q('debug').textContent+=s+'\n'}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function normalize(t){return (t||'').replace(/[０-９ＡＢ]/g,ch=>({'０':'0','１':'1','２':'2','３':'3','４':'4','５':'5','６':'6','７':'7','８':'8','９':'9','Ａ':'A','Ｂ':'B'}[ch]||ch)).replace(/[／｜|]/g,'/').replace(/[Oo]/g,'0').replace(/，/g,'.')}
+function compact(t){return normalize(t).replace(/\s+/g,'')}
+function finite(v){return Number.isFinite(Number(v))}
+function fmt(v,d=2){return finite(v)?Number(v).toFixed(d):''}
+function plausible(id,v){
+  const n=Number(String(v).replace(/^F/i,'-').replace(/^L/i,'-'));
+  if(id.startsWith('nat')||id.startsWith('loc'))return n>=1.0&&n<=9.99;
+  if(id.startsWith('st'))return n>=0.05&&n<=0.35;
+  if(id.startsWith('mot'))return n>=0&&n<=100;
+  if(id.startsWith('ext'))return n>=6.0&&n<=9.5;
+  if(id.startsWith('exst'))return /^F\d+(?:\.\d+)?$/i.test(v)||/^L\d+(?:\.\d+)?$/i.test(v)||(n>=0&&n<=0.40);
+  if(id==='temp')return n>=-5&&n<=45;
+  if(id==='waterTemp')return n>=0&&n<=40;
+  if(id==='wave')return n>=0&&n<=100;
+  if(id==='windSpeed')return n>=0&&n<=30;
+  return true;
+}
+
+function initBoats(){
+  q('boats').innerHTML='';
+  for(let i=1;i<=6;i++){
+    q('boats').insertAdjacentHTML('beforeend',`<div class="boatcard"><div class="boathead"><div class="lane">${i}</div><div class="boatname" id="title${i}">${i}号艇</div><span class="chip" id="source${i}">未確定</span></div><div class="fields">
+      <div class="f"><label>登録番号</label><input id="reg${i}" maxlength="4" inputmode="numeric" oninput="validateAll()"></div>
+      <div class="f"><label>選手名</label><input id="name${i}" oninput="validateAll()"></div>
+      <div class="f"><label>級</label><input id="grade${i}" oninput="validateAll()"></div>
+      <div class="f"><label>全国勝率</label><input id="nat${i}" inputmode="decimal" oninput="validateAll()"></div>
+      <div class="f"><label>当地勝率</label><input id="loc${i}" inputmode="decimal" oninput="validateAll()"></div>
+      <div class="f"><label>平均ST</label><input id="st${i}" inputmode="decimal" oninput="validateAll()"></div>
+      <div class="f"><label>M2連率</label><input id="mot${i}" inputmode="decimal" oninput="validateAll()"></div>
+      <div class="f"><label>展示ST</label><input id="exst${i}" oninput="validateAll()"></div>
+      <div class="f"><label>展示T</label><input id="ext${i}" inputmode="decimal" oninput="validateAll()"></div>
+    </div></div>`);
+  }
+}
+initBoats();
+
+async function getWorker(){
+  if(!ocrWorker){
+    setStatus('OCRエンジンを起動中…');
+    ocrWorker=await Tesseract.createWorker('jpn+eng');
+  }
+  return ocrWorker;
+}
+async function loadImageFromInput(id){
+  const f=q(id).files[0];if(!f)return null;
+  return await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=URL.createObjectURL(f)});
+}
+async function cropBlob(im,x1,y1,x2,y2,scale=3.2){
+  return await new Promise(resolve=>{
+    const w=im.naturalWidth,h=im.naturalHeight,sx=Math.max(0,Math.round(x1*w)),sy=Math.max(0,Math.round(y1*h)),sw=Math.max(1,Math.round((x2-x1)*w)),sh=Math.max(1,Math.round((y2-y1)*h));
+    const c=document.createElement('canvas');c.width=Math.round(sw*scale);c.height=Math.round(sh*scale);const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(im,sx,sy,sw,sh,0,0,c.width,c.height);c.toBlob(resolve,'image/png');
+  });
+}
+async function ocrBlob(blob,mode='text'){
+  const w=await getWorker();
+  if(mode==='digits') await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789.FLA B',preserve_interword_spaces:'0'});
+  else await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:'',preserve_interword_spaces:'1'});
+  return normalize((await w.recognize(blob)).data.text||'').trim();
+}
+async function ocrRegion(im,box,mode='text',scale=3.2){return await ocrBlob(await cropBlob(im,...box,scale),mode)}
+
+function parseRegGrade(text){
+  const s=normalize(text);const out=[];let m;const re=/(\d{4})\s*\/?\s*(A1|A2|B1|B2)/gi;
+  while((m=re.exec(s)))out.push({reg:m[1],grade:m[2].toUpperCase()});
+  return out;
+}
+function consensusRegs(seqs){
+  // choose best 6-order sequence by votes at each lane, never shift rows globally
+  const votes=Array.from({length:6},()=>new Map());
+  for(const seq of seqs){seq.slice(0,6).forEach((x,i)=>{if(/^\d{4}$/.test(x.reg)){const key=x.reg+'|'+(x.grade||'');votes[i].set(key,(votes[i].get(key)||0)+1)}})}
+  const used=new Set(),out=[];
+  for(let i=0;i<6;i++){
+    const arr=[...votes[i].entries()].sort((a,b)=>b[1]-a[1]);let pick=null;
+    for(const [key,c] of arr){const [reg,grade]=key.split('|');if(!used.has(reg)){pick={reg,grade,conf:c};break}}
+    if(pick){used.add(pick.reg);out.push(pick)} else out.push({reg:'',grade:'',conf:0});
+  }
+  return out;
+}
+
+async function readPairTable(im,kind){
+  if(!im)return [];
+  // Registration/grade column occupies left-center; row bands are stable across BOATRACE mobile screenshots.
+  const presets={
+    basic:{x1:.10,x2:.47,y0:.315,y1:.900},
+    direct:{x1:.10,x2:.48,y0:.30,y1:.885},
+    rates:{x1:.10,x2:.47,y0:.31,y1:.90}
+  };
+  const p=presets[kind]||presets.basic;
+  const h=(p.y1-p.y0)/6,out=[];
+  for(let i=0;i<6;i++){
+    const t=await ocrRegion(im,[p.x1,p.y0+i*h,p.x2,p.y0+(i+1)*h],'text',3.4);
+    const pair=parseRegGrade(t)[0]||null;
+    if(pair)out.push(pair); else out.push({reg:'',grade:''});
+    dbg(`${kind}${i+1}: ${pair?pair.reg+'/'+pair.grade:'-'}`);
+  }
+  return out;
+}
+
+function firstNum(text){const a=normalize(text).match(/-?\d+(?:\.\d+)?|\.\d+/g)||[];return a.length?Number(a[0].startsWith('.')?'0'+a[0]:a[0]):null}
+function allNums(text){return (normalize(text).match(/-?\d+(?:\.\d+)?|\.\d+/g)||[]).map(s=>Number(s.startsWith('.')?'0'+s:s)).filter(Number.isFinite)}
+function setSafe(id,v){if(v===null||v===undefined||v==='')return false;const s=String(v);if(!plausible(id,s))return false;q(id).value=s;return true}
+
+async function readBasic(im){
+  if(!im)return;
+  const y0=.315,y1=.900,h=(y1-y0)/6;
+  for(let i=0;i<6;i++){
+    const t=await ocrRegion(im,[.64,y0+i*h,.79,y0+(i+1)*h],'digits',4.0);
+    const nums=allNums(t).filter(v=>v>=0.05&&v<=0.35);if(nums.length)setSafe('st'+(i+1),nums[0].toFixed(2));
+    dbg(`basic ST${i+1}: ${t}`);
+  }
+}
+
+async function readRates(im){
+  if(!im)return;
+  const y0=.315,y1=.905,h=(y1-y0)/6;
+  for(let i=0;i<6;i++){
+    const rowTop=y0+i*h,rowBot=y0+(i+1)*h;
+    const natTxt=await ocrRegion(im,[.44,rowTop,.555,rowBot],'digits',4.1);
+    const locTxt=await ocrRegion(im,[.555,rowTop,.688,rowBot],'digits',4.1);
+    const motTxt=await ocrRegion(im,[.688,rowTop,.835,rowBot],'digits',4.1);
+    const nat=allNums(natTxt).find(v=>v>=1&&v<=9.99);
+    const loc=allNums(locTxt).find(v=>v>=0&&v<=9.99);
+    const motNums=allNums(motTxt).filter(v=>v>=0&&v<=100);
+    // motor cell usually No, 2連率, 3連率. select percentage-like number after first integer No.
+    let mot=null;
+    if(motNums.length>=2) mot=motNums[1];
+    else if(motNums.length===1 && !Number.isInteger(motNums[0])) mot=motNums[0];
+    if(nat!==undefined)setSafe('nat'+(i+1),nat.toFixed(2));
+    if(loc!==undefined)setSafe('loc'+(i+1),loc.toFixed(2));
+    if(mot!==null)setSafe('mot'+(i+1),mot.toFixed(2));
+    dbg(`rates${i+1}: nat[${natTxt}] loc[${locTxt}] mot[${motTxt}]`);
+  }
+}
+
+function parseExST(text){
+  const s=compact(text).toUpperCase();
+  let m=s.match(/F\.?0?(\d{1,2})/);if(m)return 'F0.'+m[1].padStart(2,'0');
+  m=s.match(/L\.?0?(\d{1,2})/);if(m)return 'L0.'+m[1].padStart(2,'0');
+  m=s.match(/(?:^|[^\d])(0?\.\d{2}|0\.\d{1,2})(?:[^\d]|$)/);if(m){const v=Number(m[1]);if(v>=0&&v<=.40)return v.toFixed(2)}
+  const nums=allNums(s);const v=nums.find(x=>x>=0&&x<=.40);return v!==undefined?v.toFixed(2):'';
+}
+async function readExhibition(im){
+  if(!im)return;
+  const y0=.315,y1=.905,h=(y1-y0)/6;
+  for(let i=0;i<6;i++){
+    const top=y0+i*h,bot=y0+(i+1)*h;
+    const stTxt=await ocrRegion(im,[.73,top,.88,bot],'digits',4.2);
+    const tmTxt=await ocrRegion(im,[.86,top,.995,bot],'digits',4.2);
+    const st=parseExST(stTxt);const tm=allNums(tmTxt).find(v=>v>=6&&v<=9.5);
+    if(st)setSafe('exst'+(i+1),st);
+    if(tm!==undefined)setSafe('ext'+(i+1),tm.toFixed(2));
+    dbg(`ex${i+1}: ST[${stTxt}]=>${st||'-'} T[${tmTxt}]=>${tm??'-'}`);
+  }
+}
+
+async function readHeaderMeta(im){
+  if(!im)return {venue:'',race:''};
+  const t=await ocrRegion(im,[0,.02,1,.26],'text',2.6);const s=compact(t);
+  const venue=VENUES.find(v=>s.includes(v))||'';let race='';const m=s.match(/(?:^|[^0-9])(\d{1,2})R(?:[^0-9]|$)/i);if(m)race=m[1]+'R';
+  dbg(`header: ${t.replace(/\n/g,' / ')} => ${venue||'-'} ${race||'-'}`);return {venue,race};
+}
+
+function parseWeatherText(t){
+  const s=compact(t);let m;
+  if((m=s.match(/気温[^0-9-]*(\d+(?:\.\d+)?)/))&&plausible('temp',m[1]))q('temp').value=String(Number(m[1]));
+  if((m=s.match(/水温[^0-9-]*(\d+(?:\.\d+)?)/))&&plausible('waterTemp',m[1]))q('waterTemp').value=String(Number(m[1]));
+  if((m=s.match(/波高[^0-9-]*(\d+(?:\.\d+)?)/))&&plausible('wave',m[1]))q('wave').value=String(Number(m[1]));
+  if((m=s.match(/風速[^0-9-]*(\d+(?:\.\d+)?)/))&&plausible('windSpeed',m[1]))q('windSpeed').value=String(Number(m[1]));
+  if((m=s.match(/(満潮|干潮|上げ潮|下げ潮)/)))q('tide').value=m[1];
+}
+async function readWeather(im){
+  if(!im)return;
+  const whole=await ocrRegion(im,[0,.35,1,.99],'text',2.6);parseWeatherText(whole);dbg('weather text: '+whole.replace(/\n/g,' / '));
+  // fallback fixed cells for BOATRACE water-weather card. Never fill zero unless OCR explicitly sees zero.
+  const fallbacks=[
+    ['temp',[.18,.60,.54,.77],-5,45],['wave',[.18,.68,.55,.85],0,100],['waterTemp',[.18,.78,.55,.96],0,40],['windSpeed',[.70,.68,.99,.94],0,30]
+  ];
+  for(const [id,box,min,max] of fallbacks){if(q(id).value)continue;const t=await ocrRegion(im,box,'digits',4);const nums=allNums(t).filter(v=>v>=min&&v<=max);if(nums.length)setSafe(id,String(nums[0]));dbg(`weather ${id}: [${t}]`)}
+}
+
+async function readAllFixed(){
+  const btn=q('readBtn');btn.disabled=true;q('bar').style.width='0%';q('debug').textContent='';
+  try{
+    imgs.basic=await loadImageFromInput('fBasic');imgs.direct=await loadImageFromInput('fDirect');imgs.rates=await loadImageFromInput('fRates');imgs.form=await loadImageFromInput('fForm');imgs.ex=await loadImageFromInput('fEx');imgs.weather=await loadImageFromInput('fWeather');
+    const n=[imgs.basic,imgs.direct,imgs.rates,imgs.form,imgs.ex,imgs.weather].filter(Boolean).length;if(!n){alert('スクショを選択してください');return}
+    await getWorker();q('bar').style.width='8%';
+    setStatus('登録番号を6艇固定で読取中…');
+    const seqs=[];if(imgs.basic)seqs.push(await readPairTable(imgs.basic,'basic'));if(imgs.direct)seqs.push(await readPairTable(imgs.direct,'direct'));if(imgs.rates)seqs.push(await readPairTable(imgs.rates,'rates'));
+    const merged=consensusRegs(seqs);merged.forEach((x,i)=>{if(x.reg)q('reg'+(i+1)).value=x.reg;if(x.grade)q('grade'+(i+1)).value=x.grade;q('source'+(i+1)).textContent=x.conf>=2?'複数画像一致':x.conf===1?'単画像':'未確定'});dbg('consensus: '+merged.map((x,i)=>`${i+1}:${x.reg||'-'}/${x.grade||'-'}(${x.conf})`).join(' '));
+    q('bar').style.width='25%';
+    setStatus('場名・レース番号をヘッダーから読取中…');let meta={venue:'',race:''};for(const im of [imgs.weather,imgs.ex,imgs.basic,imgs.direct].filter(Boolean)){const m=await readHeaderMeta(im);if(m.venue&&!meta.venue)meta.venue=m.venue;if(m.race&&!meta.race)meta.race=m.race;if(meta.venue&&meta.race)break}if(meta.venue)q('venue').value=meta.venue;if(meta.race)q('raceNo').value=meta.race;
+    q('bar').style.width='35%';
+    setStatus('平均STを読取中…');await readBasic(imgs.basic);q('bar').style.width='48%';
+    setStatus('全国・当地・モーターをセル単位で読取中…');await readRates(imgs.rates);q('bar').style.width='67%';
+    setStatus('展示ST・展示タイムを読取中…');await readExhibition(imgs.ex);q('bar').style.width='82%';
+    setStatus('水面気象を読取中…');await readWeather(imgs.weather||imgs.ex);q('bar').style.width='100%';
+    validateAll();
+    const rc=[1,2,3,4,5,6].filter(i=>/^\d{4}$/.test(q('reg'+i).value.trim())).length;
+    setStatus(rc===6?'6艇の登録番号を取得しました。次に「② 登録番号で公式照合」を押してください。':`登録番号 ${rc}/6艇。赤枠だけ手動確認してください。`);
+    if(meta.venue){try{await loadVenueFeature()}catch(e){console.warn(e)}}
+  }catch(e){console.error(e);q('quality').className='notice err';q('quality').textContent='読取エラー: '+e.message;setStatus('読取エラー: '+e.message)}finally{btn.disabled=false}
+}
+
+async function lookupRacer(reg){
+  const urls=[
+    `https://r.jina.ai/https://www.boatrace.jp/owpc/pc/data/racersearch/profile?toban=${reg}`,
+    `https://r.jina.ai/http://www.boatrace.jp/owpc/pc/data/racersearch/profile?toban=${reg}`
+  ];
+  let last='';
+  for(const u of urls){try{const r=await fetch(u,{cache:'no-store'});if(!r.ok)continue;const t=await r.text();last=t;const gm=t.match(/級別\s*[:：]?\s*(A1|A2|B1|B2)級?/i)||t.match(/\b(A1|A2|B1|B2)級\b/i);const lines=t.split(/\n/).map(x=>x.trim()).filter(Boolean);let name='';for(const line of lines){if(line.includes(reg)&&/[一-龯ぁ-んァ-ン]/.test(line)){name=line.replace(/[#*`]/g,'').replace(new RegExp(reg+'.*$'),'').trim();if(name.length>=2&&name.length<=20)break}}if(!name){const nm=t.match(/^##\s*([^\n（(]+)[（(]/m);if(nm)name=nm[1].replace(/\s+/g,' ').trim()}if(name&&gm)return {name,grade:gm[1].toUpperCase()};}catch(e){console.warn(e)}}
+  throw new Error('公式照合失敗 '+reg+' '+last.slice(0,50));
+}
+async function lookupAll(){
+  const regs=[1,2,3,4,5,6].map(i=>q('reg'+i).value.trim());if(!regs.every(x=>/^\d{4}$/.test(x))){alert('登録番号6艇を4桁にしてください');return}
+  let ok=0;for(let i=0;i<6;i++){setStatus(`${i+1}号艇 ${regs[i]} を公式照合中…`);try{const p=await lookupRacer(regs[i]);q('name'+(i+1)).value=p.name;q('grade'+(i+1)).value=p.grade;q('title'+(i+1)).textContent=`${i+1}号艇 ${p.name}`;q('source'+(i+1)).textContent='公式照合済';ok++}catch(e){dbg(String(e.message||e));q('source'+(i+1)).textContent='照合失敗'}}setStatus(`公式照合 ${ok}/6艇 完了`);validateAll();
+}
+
+async function loadVenueFeature(){
+  const venue=q('venue').value.trim();if(!venue){alert('場名を入れてください');return}
+  try{
+    const r=await fetch('https://r.jina.ai/https://kcbn.jp/feature/',{cache:'no-store'});if(!r.ok)throw new Error('feature fetch');const t=await r.text();let idx=t.indexOf(`### ${venue}競艇場の特徴`);if(idx<0)idx=t.indexOf(`### ${venue}競艇の特徴`);if(idx<0)idx=t.indexOf(venue);if(idx<0)throw new Error('not found');const tail=t.slice(idx),next=tail.slice(30).search(/\n### /),sec=next>=0?tail.slice(0,next+30):tail.slice(0,3600);const im=sec.match(/イン勝率\s*\|\s*([0-9.]+)％/),wm=sec.match(/水質\s*\|\s*([^\n|]+)/),bul=[...sec.matchAll(/^\s*\*\s+(.+)$/gm)].map(m=>m[1].trim()).slice(0,8);venueFeature={venue,inRate:im?Number(im[1]):null,water:wm?wm[1].trim():(WATER_MAP[venue]||''),bullets:bul,raw:sec};q('featureSummary').className='notice ok';q('featureSummary').textContent=`${venue}｜イン勝率 ${venueFeature.inRate??'－'}%｜水質 ${venueFeature.water||'－'}`;q('featureGrid').innerHTML=bul.map(x=>`<div class="factor"><b>攻略ファクター</b><small>${esc(x)}</small></div>`).join('');setStatus(`${venue}特性を読み込みました。`);
+  }catch(e){q('featureSummary').className='notice warn';q('featureSummary').textContent='競艇場特性の自動取得に失敗しました。予想は選手・展示・水面データだけでも生成できます。';setStatus('競艇場特性の取得に失敗しました。')}
+}
+
+function validateField(id,ok){const el=q(id);el.classList.toggle('good',!!ok);el.classList.toggle('bad',!ok);return !!ok}
+function validateAll(){
+  let essential=true;
+  for(let i=1;i<=6;i++){
+    const regOk=validateField('reg'+i,/^\d{4}$/.test(q('reg'+i).value.trim()));
+    const nameOk=validateField('name'+i,q('name'+i).value.trim().length>=2);
+    const gradeOk=validateField('grade'+i,/^(A1|A2|B1|B2)$/.test(q('grade'+i).value.trim()));
+    const natOk=validateField('nat'+i,plausible('nat'+i,q('nat'+i).value));
+    const locOk=validateField('loc'+i,plausible('loc'+i,q('loc'+i).value));
+    const motOk=validateField('mot'+i,plausible('mot'+i,q('mot'+i).value));
+    const stv=q('st'+i).value.trim();q('st'+i).classList.toggle('good',!stv||plausible('st'+i,stv));q('st'+i).classList.toggle('bad',!!stv&&!plausible('st'+i,stv));
+    const exs=q('exst'+i).value.trim();q('exst'+i).classList.toggle('good',!exs||plausible('exst'+i,exs));q('exst'+i).classList.toggle('bad',!!exs&&!plausible('exst'+i,exs));
+    const ext=q('ext'+i).value.trim();q('ext'+i).classList.toggle('good',!ext||plausible('ext'+i,ext));q('ext'+i).classList.toggle('bad',!!ext&&!plausible('ext'+i,ext));
+    essential=essential&&regOk&&nameOk&&gradeOk&&natOk&&locOk&&motOk;
+  }
+  q('lookupBtn').disabled=![1,2,3,4,5,6].every(i=>/^\d{4}$/.test(q('reg'+i).value.trim()));q('genBtn').disabled=!essential;const qq=q('quality');qq.className='notice '+(essential?'ok':'warn');qq.textContent=essential?'必須データが揃いました。予想レポート生成できます。':'赤枠の必須項目を確認してください。v13では異常値・未取得値を自動で正解扱いしません。';
+}
+
+function resetAll(){
+  if(!confirm('現在のレースデータをすべて消去しますか？'))return;
+  for(const id of ['fBasic','fDirect','fRates','fForm','fEx','fWeather'])q(id).value='';for(const id of ['venue','raceNo','raceType','windDir','windSpeed','tide','wave','temp','waterTemp'])q(id).value='';q('budget').value='1000';venueFeature=null;imgs={};initBoats();q('featureSummary').className='notice warn';q('featureSummary').textContent='競艇場特性はまだ読み込んでいません。';q('featureGrid').innerHTML='';q('report').innerHTML='';q('debug').textContent='';q('bar').style.width='0%';q('quality').className='notice warn';q('quality').textContent='まだ選手データを読み取っていません。';setStatus('リセット完了。');validateAll();window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function players(){return [1,2,3,4,5,6].map(i=>({lane:i,name:q('name'+i).value.trim(),grade:q('grade'+i).value.trim(),national:Number(q('nat'+i).value),local:Number(q('loc'+i).value),st:Number(q('st'+i).value)||0,motor:Number(q('mot'+i).value),exst:q('exst'+i).value.trim(),ext:Number(q('ext'+i).value)||0}))}
+function exstNum(v){if(/^F/i.test(v)||/^L/i.test(v))return .50;const n=Number(v);return Number.isFinite(n)?n:0}
+function score(p,all){let s=({A1:18,A2:12,B1:5,B2:0}[p.grade]??0)+({1:20,2:12,3:10,4:8,5:4,6:2}[p.lane]||0)+p.national*6+p.local*7+p.motor*.45;if(p.st)s+=Math.max(0,28-p.st*100);if(p.exst){const n=exstNum(p.exst);if(/^F|^L/i.test(p.exst))s-=12;else s+=Math.max(-4,7-n*30)}if(p.ext){const ts=all.map(x=>x.ext).filter(Boolean);if(ts.length>=3){const b=Math.min(...ts);s+=Math.max(-3,6-(p.ext-b)*14)}}if(venueFeature?.inRate!=null&&p.lane===1)s+=(venueFeature.inRate-50)*.6;const ws=Number(q('windSpeed').value)||0;if(ws>=5){if(p.lane===1)s-=2;if([3,4].includes(p.lane))s+=1}return Math.round(s)}
+function generateReport(){
+  const ps=players();ps.forEach(p=>p.score=score(p,ps));const r=[...ps].sort((a,b)=>b.score-a.score),h=r[0],o=r[1],a=r[2],d=r[3];const bets=[`${h.lane}-${o.lane}-${a.lane}`,`${h.lane}-${a.lane}-${o.lane}`,`${o.lane}-${h.lane}-${a.lane}`,`${h.lane}-${o.lane}-${d.lane}`,`${h.lane}-${d.lane}-${o.lane}`,`${a.lane}-${h.lane}-${o.lane}`];const budget=Math.max(100,Number(q('budget').value)||1000),rank=h.score-o.score>=15?'A':h.score-o.score>=8?'B':'C',pct=rank==='A'?[40,20,15,10,10,5]:rank==='B'?[30,20,15,15,10,10]:[22,18,16,16,14,14],vals=pct.map(x=>Math.floor(budget*x/100/100)*100);q('report').innerHTML=`<div class="header"><div class="eyebrow">BOAT RACE PREDICTION</div><div class="title">${esc(q('venue').value||'競艇')} ${esc(q('raceNo').value||'')}</div></div><div class="card"><div class="cardhead">RANK</div><div class="cardbody"><div style="font-size:30px;font-weight:900" class="rank${rank}">${rank}</div><div class="mini">A=厚め向き / B=標準 / C=抑え重視。これは入力データの差から付ける内部ランクです。</div></div></div><div class="card"><div class="cardhead">PICKS</div><div class="cardbody"><div class="pick"><strong>◎ ${h.lane}号艇 ${esc(h.name)}</strong><small>${h.score}点</small></div><div class="pick"><strong>○ ${o.lane}号艇 ${esc(o.name)}</strong><small>${o.score}点</small></div><div class="pick"><strong>△ ${a.lane}号艇 ${esc(a.name)}</strong><small>${a.score}点</small></div><div class="pick"><strong>穴 ${d.lane}号艇 ${esc(d.name)}</strong><small>${d.score}点</small></div></div></div><div class="card"><div class="cardhead">BET</div><div class="cardbody">${bets.map((b,i)=>`<div class="bet">${i===0?'本線':i<3?'準本線':'穴押さえ'} ${b} ${vals[i]}円</div>`).join('')}</div></div>`;q('report').scrollIntoView({behavior:'smooth'});
+}
+
+validateAll();
+</script>
+</body>
+</html>
