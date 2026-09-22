@@ -188,7 +188,12 @@ BOAT RACE公式から取得します。<br>
   <div><label>レース種別（自動取得・修正可）</label><input id="raceType" placeholder="一般 / 予選 など"></div>
   <div><label>購入予算（円）</label><input id="budget" type="number" value="1000" min="100" step="100"></div>
 </div>
-<div id="venueInfo" class="notice info">競艇場を選ぶと水質・イン traits を表示します。</div>
+<div id="venueInfo" class="notice info">競艇場を選ぶと水質・イン傾向を表示します。</div>
+<button id="btnStadium" class="secondary" onclick="fetchStadiumData()">この競艇場のデータを取り込む（1回だけ）</button>
+<div id="stadiumNotice" class="notice info">
+コース別入着率・決まり手・枠なり率を公式から取り込み、枠の評価に使います。<br>
+<b>一度取り込めばこの端末に保存され、次回から通信不要です。</b>取り込まなくても予想はできます。
+</div>
 </div>
 
 <!-- ===================== STEP 2 ===================== -->
@@ -1510,6 +1515,212 @@ async function fetchCourseStats(){
 }
 
 /* ==================================================================
+   競艇場データ（コース別入着率・決まり手・枠番別コース取得率）
+   --------------------------------------------------------------
+   公式の「ボートレース場データ」ページの内容。
+   私の推測値ではなく実測値を使うことで、枠の評価が場ごとに変わる。
+   ・course[c]   = [1着,2着,3着,4着,5着,6着] の率(%)
+   ・kimarite[c] = [逃げ,捲り,差し,捲り差し,抜き,恵まれ] の率(%)
+   ・entry[枠]   = [1C,2C,3C,4C,5C,6C] を取る率(%) ＝ 枠なり進入の多さ
+   ・season      = 春夏秋冬それぞれのコース別入着率
+   一度取り込めば端末に保存され、次回から通信なしで使える。
+   ================================================================== */
+const KIMARITE_NAMES = ['逃げ','捲り','差し','捲り差し','抜き','恵まれ'];
+
+/* 取り込み済みの場データ（初期値として多摩川を収録） */
+const STADIUM = {
+  '05': {
+    name:'多摩川', water:'淡水', tideRange:'なし', motor:'減音',
+    source:'official', updated:'2026/08/31',
+    course:{ 1:[55.6,15.3,9.1,7.9,7.7,4.1], 2:[12.0,26.5,18.5,17.4,12.9,12.4],
+             3:[12.3,23.1,18.2,18.1,15.6,12.4], 4:[11.3,16.0,19.7,18.0,17.8,16.9],
+             5:[6.7,13.3,18.1,20.1,20.9,20.6], 6:[2.6,6.2,17.0,19.2,25.4,29.4] },
+    kimarite:{ 1:[94.2,0.0,0.0,0.0,5.4,0.2], 2:[0.0,34.1,55.6,0.0,10.1,0.0],
+               3:[0.0,48.1,9.8,35.8,6.1,0.0], 4:[0.0,50.0,20.2,18.9,9.4,1.3],
+               5:[0.0,11.3,6.8,63.6,15.9,2.2], 6:[0.0,35.2,23.5,29.4,11.7,0.0] },
+    entry:{ 1:[99.6,0.1,0.1,0.0,0.0,0.0], 2:[0.9,94.6,3.5,0.7,0.1,0.0],
+            3:[0.0,2.7,92.1,3.9,0.6,0.6], 4:[0.0,0.7,2.4,88.4,5.0,3.3],
+            5:[0.0,0.9,1.0,4.8,85.7,7.4], 6:[0.0,1.2,0.9,2.1,8.6,87.1] },
+    season:{
+      春:{ 1:[54.0,14.0,10.4,9.8,7.6,4.2], 2:[14.9,25.6,20.1,16.7,13.3,9.1],
+           3:[15.1,22.5,21.1,16.1,14.1,10.7], 4:[9.4,16.8,20.3,19.0,18.4,15.2],
+           5:[5.6,15.6,16.4,22.8,22.0,17.4], 6:[1.6,6.0,11.9,16.2,24.7,39.3] },
+      夏:{ 1:[55.6,15.3,9.1,7.9,7.7,4.1], 2:[12.0,26.5,18.5,17.4,12.9,12.4],
+           3:[12.3,23.1,18.2,18.1,15.6,12.4], 4:[11.3,16.0,19.7,18.0,17.8,16.9],
+           5:[6.7,13.3,18.1,20.1,20.9,20.6], 6:[2.6,6.2,17.0,19.2,25.4,29.4] },
+      秋:{ 1:[52.4,19.3,9.5,7.8,6.3,4.4], 2:[12.6,22.8,18.3,18.6,14.4,13.0],
+           3:[13.2,19.0,20.4,18.0,16.8,12.5], 4:[11.6,19.0,19.0,16.1,18.5,15.4],
+           5:[7.4,12.9,19.1,22.7,22.4,15.3], 6:[3.2,7.7,14.5,17.5,21.8,35.0] },
+      冬:{ 1:[56.2,14.6,9.4,7.5,7.0,5.0], 2:[12.4,25.1,20.0,16.9,14.4,10.8],
+           3:[10.8,20.8,21.2,18.1,15.2,13.6], 4:[12.4,16.4,18.2,20.6,18.2,13.9],
+           5:[6.1,14.3,17.8,18.9,23.0,19.6], 6:[2.9,9.8,14.6,19.2,21.6,31.6] }
+    }
+  }
+};
+
+/* 開催日から季節を決める（公式の区分に合わせる） */
+function seasonOf(dateStr){
+  const m = dateStr ? Number(String(dateStr).slice(5,7)) : (new Date().getMonth()+1);
+  if(m>=3 && m<=5)  return '春';
+  if(m>=6 && m<=8)  return '夏';
+  if(m>=9 && m<=11) return '秋';
+  return '冬';
+}
+/* その場・その季節のコース別入着率。季節データが無ければ通年を使う */
+function venueCourseRates(jcd, dateStr){
+  const sd = STADIUM[jcd];
+  if(!sd) return null;
+  const s = seasonOf(dateStr);
+  return (sd.season && sd.season[s]) ? { rates:sd.season[s], label:s+'季' }
+       : (sd.course ? { rates:sd.course, label:'直近3ヶ月' } : null);
+}
+
+/* ---------- 端末への保存（一度取り込めば通信不要） ---------- */
+const STADIUM_KEY = 'boatai_stadium_v1';
+function loadStadiumCache(){
+  try{
+    const raw = localStorage.getItem(STADIUM_KEY);
+    if(!raw) return 0;
+    const obj = JSON.parse(raw);
+    let n = 0;
+    Object.entries(obj).forEach(([jcd,v])=>{
+      if(v && v.course){ STADIUM[jcd] = v; n++; }
+    });
+    return n;
+  }catch(e){ return 0; }
+}
+function saveStadiumCache(){
+  try{ localStorage.setItem(STADIUM_KEY, JSON.stringify(STADIUM)); return true; }
+  catch(e){ log('[場データ] 保存できませんでした: '+e.message); return false; }
+}
+
+/* ==================================================================
+   競艇場データページの解析
+   見出し語で区切ってから、各行の数値を読む。
+   各行の合計が100%になるかを必ず検算し、合わなければ採用しない。
+   ================================================================== */
+function parseStadiumData(body, jcd){
+  const text = isHTML(body) ? htmlToText(body) : stripMarkdown(String(body));
+
+  /* 見出しで区切る */
+  const cut = (from, ...until) => {
+    const i = text.indexOf(from);
+    if(i < 0) return '';
+    let end = text.length;
+    for(const u of until){
+      const j = text.indexOf(u, i + from.length);
+      if(j >= 0 && j < end) end = j;
+    }
+    return text.slice(i, end);
+  };
+
+  /* 「先頭が1〜6」で「小数がn個並ぶ」行を拾う */
+  const rowsIn = (chunk, count) => {
+    const out = {};
+    for(const line of chunk.split(/\r?\n/)){
+      const toks = line.replace(/[|｜]/g,' ').trim().split(/\s+/).filter(Boolean);
+      if(!toks.length) continue;
+      if(!/^[1-6]$/.test(toks[0])) continue;
+      const nums = toks.slice(1).map(t=>toNum(t)).filter(n=>n!==null && n>=0 && n<=100);
+      if(nums.length < count) continue;
+      const row = nums.slice(0, count);
+      const sum = row.reduce((a,c)=>a+c,0);
+      if(Math.abs(sum-100) > 4) continue;          /* 検算に合わない行は捨てる */
+      out[Number(toks[0])] = row.map(n=>Math.round(n*10)/10);
+    }
+    return out;
+  };
+  /* 12列（入着率6＋決まり手6）の行 */
+  const rows12 = chunk => {
+    const course = {}, kimarite = {};
+    for(const line of chunk.split(/\r?\n/)){
+      const toks = line.replace(/[|｜]/g,' ').trim().split(/\s+/).filter(Boolean);
+      if(!/^[1-6]$/.test(toks[0]||'')) continue;
+      const nums = toks.slice(1).map(t=>toNum(t)).filter(n=>n!==null && n>=0 && n<=100);
+      if(nums.length < 12) continue;
+      const a = nums.slice(0,6), b = nums.slice(6,12);
+      if(Math.abs(a.reduce((x,y)=>x+y,0)-100) > 4) continue;
+      if(Math.abs(b.reduce((x,y)=>x+y,0)-100) > 4) continue;
+      const c = Number(toks[0]);
+      course[c]   = a.map(n=>Math.round(n*10)/10);
+      kimarite[c] = b.map(n=>Math.round(n*10)/10);
+    }
+    return { course, kimarite };
+  };
+
+  const mainChunk = cut('コース別入着率', '枠番別コース取得率', '季節別');
+  const { course, kimarite } = rows12(mainChunk);
+  const entry  = rowsIn(cut('枠番別コース取得率', 'MEMO', '季節別', '水面図'), 6);
+  const season = {};
+  [['春','春季'],['夏','夏季'],['秋','秋季'],['冬','冬季']].forEach(([k,label])=>{
+    const c = cut(label, '夏季','秋季','冬季','水面図','注意');
+    const r = rowsIn(c, 6);
+    if(Object.keys(r).length === 6) season[k] = r;
+  });
+
+  const water = (text.match(/水質\s*[:：]?\s*(淡水|海水|汽水)/)||[])[1] || null;
+  const tideR = (text.match(/干満差\s*[:：]?\s*([^\s\n]{1,8})/)||[])[1] || null;
+  const motor = (text.match(/モーター\s*[:：]?\s*([^\s\n]{1,8})/)||[])[1] || null;
+  /* 区切りは ～(全角) / 〜(波ダッシュ) / ~(半角) のいずれもありうる */
+  const upd   = (text.match(/集計期間[^~〜～]*[~〜～]\s*(\d{4}\/\d{1,2}\/\d{1,2})/)||[])[1] || null;
+
+  const okCourse = Object.keys(course).length === 6;
+  return {
+    ok: okCourse,
+    data: okCourse ? {
+      name: VENUES[jcd] ? VENUES[jcd].name : '',
+      water, tideRange:tideR, motor,
+      source:'official', updated:upd,
+      course, kimarite: Object.keys(kimarite).length===6 ? kimarite : null,
+      entry:  Object.keys(entry).length===6 ? entry : null,
+      season: Object.keys(season).length ? season : null
+    } : null,
+    detail: {
+      course: Object.keys(course).length,
+      kimarite: Object.keys(kimarite).length,
+      entry: Object.keys(entry).length,
+      season: Object.keys(season).length
+    }
+  };
+}
+
+async function fetchStadiumData(){
+  const jcd = $('venue').value;
+  if(!jcd){ alert('先に競艇場を選んでください。'); return; }
+  if(state.busy){ alert('ほかの取得を実行中です。'); return; }
+  const btn = $('btnStadium'); if(btn) btn.disabled = true;
+  state.busy = true;
+  try{
+    const url = `https://www.boatrace.jp/owpc/pc/data/stadium?jcd=${jcd}`;
+    log('[場データ] '+url);
+    setStatus(`${VENUES[jcd].name}の場データを取得中…`);
+    const body = await fetchViaProxy(url, { mustContain:['コース別','入着率','ボートレース'] });
+    const res = parseStadiumData(body, jcd);
+    if(!res.ok){
+      notice('stadiumNotice','warn',
+        `場データを読み取れませんでした（コース別入着率 ${res.detail.course}/6行）。` +
+        `<br>取り込めなくても予想はできます（その場合は目安の数値を使います）。`);
+      return;
+    }
+    STADIUM[jcd] = res.data;
+    saveStadiumCache();
+    renderVenueInfo();
+    validateAll();
+    notice('stadiumNotice','ok',
+      `<b>${esc(res.data.name)}の場データを取り込みました。</b>この端末に保存したので次回から通信不要です。` +
+      `<br>コース別入着率 ${res.detail.course}/6 ・ 決まり手 ${res.detail.kimarite}/6 ・ ` +
+      `枠なり率 ${res.detail.entry}/6 ・ 季節別 ${res.detail.season}/4`);
+    setStatus('場データ取得完了');
+  }catch(e){
+    log('[場データ] 失敗: '+e.message);
+    notice('stadiumNotice','warn',
+      `場データを取得できませんでした（${esc(e.message)}）。` +
+      `<br><b>取り込めなくても予想はできます。</b>その場合は目安の数値で枠を評価します。`);
+    setStatus('場データ取得に失敗');
+  }finally{ state.busy = false; if(btn) btn.disabled = false; }
+}
+
+/* ==================================================================
    OCR（補助のみ）
    読み取る対象は 展示情報 / 水面気象 / 今節成績 に限定。
    登録番号・選手名・勝率・モーター2連率は絶対にOCRしない。
@@ -2086,12 +2297,25 @@ function toggleAllDetails(open){
   document.querySelectorAll('#boats details').forEach(d=>d.open=open);
 }
 function renderVenueInfo(){
-  const v = VENUES[$('venue').value];
+  const jcd = $('venue').value;
+  const v = VENUES[jcd];
   if(!v){ notice('venueInfo','info','競艇場を選ぶと水質・イン傾向を表示します。'); return; }
-  notice('venueInfo','info',
-    `<b>${esc(v.name)}</b> ／ 水質: <b>${esc(v.water)}</b> ／ 1コース1着率の目安: <b>${v.inRate}%</b>` +
-    `${v.tide?' ／ <b>潮の影響あり</b>':''}<br>${esc(v.note)}` +
-    `<br><span style="color:#7f8eaa">※ イン率・特徴は傾向把握用の参考値です。</span>`);
+  const sd = STADIUM[jcd];
+  const cr = venueCourseRates(jcd, $('raceDate') ? $('raceDate').value : null);
+
+  if(sd && cr){
+    const r1 = cr.rates[1];
+    notice('venueInfo','ok',
+      `<b>${esc(v.name)}</b> ／ 水質 <b>${esc(sd.water||v.water)}</b>` +
+      `${sd.tideRange?` ／ 干満差 ${esc(sd.tideRange)}`:''}` +
+      `<br>1コース1着率 <b>${r1?r1[0].toFixed(1):'—'}%</b>（${esc(cr.label)}の実測）` +
+      `<br><span style="color:#79e3a5">実測データ取り込み済み。枠の評価に反映されます。</span>`);
+  }else{
+    notice('venueInfo','info',
+      `<b>${esc(v.name)}</b> ／ 水質 <b>${esc(v.water)}</b> ／ 1コース1着率の目安 <b>${v.inRate}%</b>` +
+      `${v.tide?' ／ <b>潮の影響あり</b>':''}<br>${esc(v.note)}` +
+      `<br><span style="color:#7f8eaa">※ これは目安の数値です。下のボタンで実測値を取り込めます。</span>`);
+  }
 }
 
 /* ==================================================================
@@ -2108,7 +2332,16 @@ function renderVenueInfo(){
 const COURSE_BAND_FIRST = {1:[32,78], 2:[5,24], 3:[4,21], 4:[3,20], 5:[1,12], 6:[0,6.5]};
 const COURSE_BAND_TRIO  = {1:[58,90], 2:[32,68], 3:[28,62], 4:[23,57], 5:[14,44], 6:[7,31]};
 const GRADE_SCORE = { A1:100, A2:76, B1:52, B2:32 };
+/* 場データが無い時の目安。実測が取り込まれていればそちらを使う。 */
 const LANE_BASE   = {1:100, 2:72, 3:62, 4:55, 5:44, 6:34};
+
+/* 着順率から「このコースはこの場でどれだけ good か」を1つの数値にする。
+   1着100点・2着70点…と重みをつけた期待値。実測の入着率から計算する。 */
+const FINISH_WEIGHT = [100,70,45,25,12,0];
+function courseExpectation(rates){
+  if(!rates || rates.length<6) return null;
+  return rates.reduce((a,p,i)=>a+p*FINISH_WEIGHT[i],0)/100;
+}
 
 const lin = (v,lo,hi) => clamp((v-lo)/(hi-lo)*100, 0, 100);
 const stScore = st => clamp((0.22-st)/0.12*100, 0, 100);
@@ -2122,14 +2355,21 @@ function scoreBoat(b, ctx){
   /* --- 基礎 --- */
   add('級別', GRADE_SCORE[V(b.grade)] ?? null, 0.09);
 
-  /* 枠：競艇場のイン率で補正（固定評価にしない） */
-  let laneVal = LANE_BASE[b.lane];
-  if(ctx.venue){
-    const d = ctx.venue.inRate - 55;                    /* 全国平均55%との差 */
+  /* 枠：その競艇場の実測の入着率から評価する。
+     実測が無い場合だけ、目安の値をイン率で補正して使う。 */
+  let laneVal = LANE_BASE[b.lane], laneLabel = '枠・場特性(目安)';
+  if(ctx.courseRates && ctx.courseRates.rates[b.lane]){
+    const ev = courseExpectation(ctx.courseRates.rates[b.lane]);
+    if(ev!==null){
+      laneVal = lin(ev, 15, 80);
+      laneLabel = `枠・${ctx.venue?ctx.venue.name:''}${ctx.courseRates.label}の実測`;
+    }
+  }else if(ctx.venue){
+    const d = ctx.venue.inRate - 55;
     const adj = {1:1.6, 2:0.2, 3:-0.3, 4:-0.9, 5:-0.8, 6:-0.6}[b.lane];
     laneVal = clamp(laneVal + d*adj, 0, 100);
   }
-  add('枠・場特性', laneVal, 0.14);
+  add(laneLabel, laneVal, 0.14);
 
   /* --- 成績 --- */
   if(has(b.nationalWinRate)) add('全国勝率', lin(V(b.nationalWinRate),3.0,8.0), 0.11);
@@ -2209,6 +2449,13 @@ function scoreBoat(b, ctx){
     if(ctx.tide==='上げ潮' && b.lane===1) bump(+1.5, '上げ潮でイン微有利（微調整）');
     if(ctx.tide==='下げ潮' && (b.lane===2||b.lane===3)) bump(+1.5, '下げ潮で差し微有利（微調整）');
   }
+  /* 枠なり進入率が低い場は、その枠が想定どおりのコースに入らない可能性がある */
+  if(ctx.entry && ctx.entry[b.lane]){
+    const nari = ctx.entry[b.lane][b.lane-1];
+    if(nari!=null && nari < 80){
+      bump(-2, `${b.lane}枠が${b.lane}コースに入る率 ${nari}%（進入変更の可能性）`);
+    }
+  }
   /* 水質と体重 */
   const wt = V(b.weight);
   if(wt!==null && ctx.venue?.water==='淡水' && wt>=55)
@@ -2232,8 +2479,15 @@ const TOTAL_WEIGHT = 0.09+0.14+0.11+0.08+0.11+0.03+0.07+0.07+0.08+0.11+0.05+0.04
 function scoreAll(){
   readConditionsFromInputs();
   const exTimes = state.boats.map(b=>V(b.exhibitionTime)).filter(v=>v!==null);
+  const jcd = $('venue').value;
+  const sd  = STADIUM[jcd] || null;
   const ctx = {
-    venue: VENUES[$('venue').value] || null,
+    jcd,
+    venue: VENUES[jcd] || null,
+    stadium: sd,
+    courseRates: venueCourseRates(jcd, $('raceDate').value),
+    kimarite: sd ? sd.kimarite : null,
+    entry: sd ? sd.entry : null,
     windSpeed: V(state.conditions.windSpeed),
     windDir: state.conditions.windDir,
     wave: V(state.conditions.wave),
@@ -2371,32 +2625,59 @@ function validateAll(){
 /* ==================================================================
    展開シナリオの生成
    ================================================================== */
+/* そのコースの主な決まり手を実測から返す */
+function topKimarite(ctx, lane){
+  if(!ctx.kimarite || !ctx.kimarite[lane]) return null;
+  const arr = ctx.kimarite[lane];
+  let bi = 0;
+  arr.forEach((v,i)=>{ if(v > arr[bi]) bi = i; });
+  if(arr[bi] < 20) return null;
+  return { name: KIMARITE_NAMES[bi], rate: arr[bi] };
+}
 function buildScenarios(ranked, ctx){
   const [h,o,a] = ranked;
   const nm = b => V(b.name) || `${b.lane}号艇`;
+  const km = l => { const k = topKimarite(ctx,l); return k ? `${k.name}${k.rate}%` : null; };
   const venue = ctx.venue;
   const windTxt = ctx.windSpeed!==null && ctx.windDir
     ? `${ctx.windDir}${ctx.windSpeed}m` : '風の情報なし';
   const inBoat = boatOf(1);
   const inStrong = inBoat.score >= 62 && (ranked[0].lane===1 || ranked[1].lane===1);
 
+  const kmH = km(h.lane);
+  const rateH = ctx.courseRates && ctx.courseRates.rates[h.lane]
+    ? ctx.courseRates.rates[h.lane][0] : null;
   const main = h.lane===1
-    ? `1号艇 ${nm(h)} のイン逃げが軸。${venue?`${venue.name}は1コース1着率${venue.inRate}%の水面で`:''}`
+    ? `1号艇 ${nm(h)} のイン逃げが軸。`
+      + (rateH!==null
+          ? `${venue?venue.name:''}の1コースは${ctx.courseRates.label}の実測で1着率${rateH}%` +
+            (kmH?`、決まり手は${kmH}`:'') + `。`
+          : `${venue?`${venue.name}は1コース1着率${venue.inRate}%の水面で`:''}`)
       + `スタートが揃えば押し切る展開。相手は差しの2号艇と、まくり差しの${o.lane}号艇。`
     : `${h.lane}号艇 ${nm(h)} が総合力で最上位。`
       + (inStrong ? `ただし1号艇のイン逃げも十分残るため、頭は割れる可能性がある。`
                   : `1号艇の評価が低く、イン信頼度は高くない。${h.lane}号艇の攻めが決まりやすい。`);
 
   const counter = `対抗は ${o.lane}号艇 ${nm(o)}。`
-    + (o.lane<=2 ? `内から差して先頭に立つ、あるいは2着に残る形。`
-                 : `${o.lane}コースからまくり差しで突き抜ける形。`)
+    + (()=>{ const k = km(o.lane);
+        if(k) return `${o.lane}コースの決まり手は実測で${k}が最多。`;
+        return o.lane<=2 ? `内から差して先頭に立つ、あるいは2着に残る形。`
+                         : `${o.lane}コースからまくり差しで突き抜ける形。`; })()
     + `${a.lane}号艇 ${nm(a)} が3着に絡むケースが最も多い。`;
 
   let rough = `荒れる条件は、`;
   const factors = [];
   if(ctx.windSpeed!==null && ctx.windSpeed>=5) factors.push(`${windTxt}の強風で1Mが流れること`);
   if(ctx.wave!==null && ctx.wave>=5) factors.push(`波高${ctx.wave}cmで乗りづらいこと`);
-  if(venue && venue.inRate<=52) factors.push(`${venue.name}がもともとイン受難の水面であること`);
+  const inRealRate = ctx.courseRates && ctx.courseRates.rates[1] ? ctx.courseRates.rates[1][0] : null;
+  if(inRealRate!==null && inRealRate<=52)
+    factors.push(`${venue?venue.name:''}の1コース1着率が実測${inRealRate}%と低めであること`);
+  else if(inRealRate===null && venue && venue.inRate<=52)
+    factors.push(`${venue.name}がもともとイン受難の水面であること`);
+  if(ctx.entry){
+    const loose = [1,2,3,4,5,6].filter(l=>ctx.entry[l] && ctx.entry[l][l-1] < 80);
+    if(loose.length) factors.push(`${loose.join('・')}枠が枠なりに入らないことがある水面であること`);
+  }
   const slowIn = V(inBoat.averageST);
   if(slowIn!==null && slowIn>=0.18) factors.push(`1号艇の平均ST ${slowIn.toFixed(2)} が遅くスタートで置かれる可能性`);
   if(inBoat.flagF) factors.push(`1号艇がF持ちで慎重になること`);
@@ -2440,12 +2721,13 @@ function generateReport(){
   }
 
   const venue = ctx.venue;
+  const sd0 = ctx.stadium;
   const sc = buildScenarios(ranked, ctx);
   const marks = ['◎','○','△','▲','×','×'];
   const markName = ['本命','対抗','連下','穴','',''];
 
   const condLine = [
-    venue && `水質 ${venue.water}`,
+    (ctx.stadium && ctx.stadium.water) ? `水質 ${ctx.stadium.water}` : (venue && `水質 ${venue.water}`),
     ctx.windDir && `${ctx.windDir}${ctx.windSpeed!==null?' '+ctx.windSpeed+'m':''}`,
     ctx.wave!==null && `波高 ${ctx.wave}cm`,
     V(state.conditions.temp)!==null && `気温 ${V(state.conditions.temp)}℃`,
@@ -2474,6 +2756,31 @@ ${vres.forced?`<div class="notice err"><b>重要データが不足したまま�
   ${venue?`${esc(venue.name)}の1コース1着率の目安 ${venue.inRate}% を枠評価に反映済み。`:''}
   <br>信頼度Aは「当たりやすい」ではなく「<b>データが揃っていて評価差がはっきりしている</b>」という意味です。</div>
 </div></div>
+
+${ctx.courseRates ? `
+<div class="card"><div class="chead">${esc(venue?venue.name:'')}の実測データ<span class="mini">${esc(ctx.courseRates.label)}</span></div><div class="cbody">
+  <table class="tbl"><tr><th>コース</th><th>1着率</th><th>3連対率</th><th>主な決まり手</th></tr>
+  ${[1,2,3,4,5,6].map(c=>{
+    const r = ctx.courseRates.rates[c];
+    if(!r) return '';
+    const trio = (r[0]+r[1]+r[2]).toFixed(1);
+    const k = topKimarite(ctx,c);
+    const here = state.boats.find(b=>b.lane===c);
+    return `<tr${c===ranked[0].lane?' style="background:#16120a"':''}>` +
+      `<td><b>${c}</b></td><td>${r[0].toFixed(1)}%</td><td>${trio}%</td>` +
+      `<td>${k?esc(k.name)+' '+k.rate+'%':'—'}</td></tr>`;
+  }).join('')}
+  </table>
+  <div class="mini" style="margin-top:7px">
+    ${esc(sd0 && sd0.water ? '水質 '+sd0.water : '')}
+    ${sd0 && sd0.tideRange ? ' ／ 干満差 '+esc(sd0.tideRange) : ''}
+    ${sd0 && sd0.updated ? ' ／ 集計 '+esc(sd0.updated)+'まで' : ''}
+    <br>この表は公式の実測値です。枠の評価に直接反映しています。
+  </div>
+</div></div>` : `
+<div class="notice info">この競艇場の実測データはまだ取り込まれていません。
+STEP1の「この競艇場のデータを取り込む」を押すと、枠の評価が実測値ベースになります。
+（未取り込みでも目安の数値で予想はできます）</div>`}
 
 <div class="card"><div class="chead">6艇 評価順位</div><div class="cbody">
 ${ranked.map((b,i)=>`
@@ -2592,6 +2899,8 @@ function init(){
   ['windSpeed','wave','temp','waterTemp','windDir','tide'].forEach(id=>
     $(id).addEventListener('change', ()=>{ readConditionsFromInputs(); }));
 
+  const cached = loadStadiumCache();
+  if(cached) log(`保存済みの競艇場データ ${cached}場ぶんを読み込みました。`);
   renderVenueInfo();
   renderBoats();
   validateAll();
