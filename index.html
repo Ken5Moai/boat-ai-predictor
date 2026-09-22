@@ -204,59 +204,67 @@ BOAT RACE公式から取得します。<br>
 
 <!-- ===================== STEP 3 ===================== -->
 <div class="panel" id="p3">
-<h2><span class="stepno">3</span>公式レースデータ取得</h2>
-<div class="lead">出走表（勝率・モーター・ボート）と直前情報（展示・気象）を取得します。</div>
+<h2><span class="stepno">3</span>出走表データを入れる</h2>
+
+<div class="notice info" style="margin-top:0">
+<b>方法は3つ。どれか1つでOKです。</b><br>
+<b style="color:#3ecf74">A. スクショから読む</b> … 通信不要。スマホだけで完結します<br>
+<b style="color:#4a90d9">B. 自動取得</b> … うまくいけば一番ラク（通信状況に左右されます）<br>
+<b style="color:#f0c040">C. 手入力</b> … STEP6のカードに直接入力
+</div>
+
+<!-- ▼ A: スクショ（スマホだけで完結する本命ルート） -->
+<div class="sub" style="border-style:solid;border-color:#2a6f49">
+<div class="subhead" style="color:#79e3a5">A. 出走表のスクショから読む（通信不要）</div>
+<div class="mini">
+① 下のボタンで公式の出走表を開く<br>
+② <b>スクリーンショットを撮る</b>（6艇が入りきらなければスクロールして複数枚でOK）<br>
+③ 下で写真を選ぶ → <b>「スクショから読み取る」</b><br>
+<span style="color:#7f8eaa">登録番号を目印に読むので、艇番がズレることはありません。<br>
+読めなかった項目は空欄のまま残ります（勝手に0を入れません）。</span>
+</div>
+<button class="secondary" onclick="openOfficialPage('racelist')">① 出走表ページを開く</button>
+<label>③ スクショを選ぶ（複数選択できます）</label>
+<input id="fRacelist" type="file" accept="image/*" multiple>
+<button onclick="runRacelistOCR()">スクショから読み取る</button>
+<div id="racelistOcrNotice" class="notice info">未実行</div>
+</div>
+
+<!-- ▼ B: 自動取得 -->
+<div class="sub">
+<div class="subhead">B. 自動取得を試す</div>
 <div class="btnrow">
   <button id="btnRacelist" onclick="fetchRacelist()">出走表を取得</button>
   <button id="btnBefore" onclick="fetchBeforeInfo()">直前情報を取得</button>
 </div>
-<button class="ghost" onclick="fetchRacelist(true)">出走表から登録番号を読み込む（入力補助）</button>
+<button class="ghost" onclick="fetchRacelist(true)">出走表から登録番号を読み込む</button>
 <div id="raceNotice" class="notice info">まだ取得していません。</div>
-
-<!-- ▼ 確実に動く代替ルート（通信不要） -->
-<details id="pasteDetails">
-<summary>★ 取得できない時はこちら：公式ページをコピーして貼り付け（通信不要・確実）</summary>
+<details>
+<summary>コピー＆貼り付けで入れる</summary>
 <div class="dbody">
-<div class="notice info">
-<b>iPhoneでの手順</b><br>
-① 下の「出走表ページを開く」を押す（新しいタブで開きます）<br>
-② ページが表示されたら、文字の上を<b>長押し</b>→<b>「すべてを選択」</b>→<b>「コピー」</b><br>
-③ このタブに戻って、下の枠を長押し→<b>「ペースト」</b><br>
-④ <b>「貼り付け内容を解析」</b>を押す<br>
-<span style="color:#7f8eaa">※ ページ全体をコピーしてください。途中だけだと読み取れません。</span>
-</div>
+<div class="mini">公式ページで文字を長押し →「すべてを選択」→「コピー」→ 下に貼り付け。</div>
 <div class="btnrow">
-  <button class="secondary" onclick="openOfficialPage('racelist')">① 出走表ページを開く</button>
-  <button class="secondary" onclick="openOfficialPage('beforeinfo')">① 直前情報ページを開く</button>
+  <button class="ghost" onclick="openOfficialPage('racelist')">出走表を開く</button>
+  <button class="ghost" onclick="openOfficialPage('beforeinfo')">直前情報を開く</button>
 </div>
-<label>③ ここに貼り付け</label>
-<textarea id="pasteBox" placeholder="公式ページでコピーした内容をここに貼り付けてください"></textarea>
-<button onclick="parsePasted('auto')">④ 貼り付け内容を解析</button>
+<textarea id="pasteBox" placeholder="ここに貼り付け"></textarea>
+<button class="secondary" onclick="parsePasted('auto')">貼り付け内容を解析</button>
 <div id="pasteNotice" class="notice info">出走表か直前情報かは自動で判別します。</div>
-<details>
-<summary>うまくいかない時（解析する種類を指定する）</summary>
-<div class="dbody"><div class="btnrow">
-  <button class="ghost" onclick="parsePasted('racelist')">出走表として解析</button>
-  <button class="ghost" onclick="parsePasted('beforeinfo')">直前情報として解析</button>
-</div></div>
-</details>
 </div>
 </details>
-
+<details id="pasteDetails" style="display:none"><summary>　</summary><div class="dbody"></div></details>
 <details>
-<summary>通信テスト（「取得できません」が出る時はまずこれ）</summary>
+<summary>通信テスト・専用の取り出し口（上級者向け）</summary>
 <div class="dbody">
-<div class="mini">データの取り出し口を順番に試して、どれが使えるかを実際に確かめます。
-結果をそのまま報告いただければ原因を特定できます。</div>
 <button id="btnConnTest" class="secondary" onclick="runConnectionTest()">通信テストを実行</button>
 <div id="connResult" class="notice info">未実行</div>
-<label>自分専用の取り出し口（任意・設定すると最優先で使います）</label>
+<label>自分専用の取り出し口（任意）</label>
 <input id="urlCustomProxy" placeholder="https://xxxxx.workers.dev/?url={url}">
-<div class="mini">無料の共有プロキシは停止や有料化が頻繁に起こります。
-自分専用のものを用意すると安定します（READMEに手順あり）。
-<code>{url}</code> が取得先に置き換わります。</div>
+<div class="mini">設定すると最優先で使います。手順は PROXY_SETUP.md。
+パソコンが無い場合は設定不要です（Aのスクショで代用できます）。</div>
 </div>
 </details>
+</div>
 </div>
 
 <!-- ===================== STEP 4 ===================== -->
@@ -304,7 +312,7 @@ BOAT RACE公式から取得します。<br>
 <summary>スクリーンショットOCR（展示情報 / 水面気象 / 今節成績）</summary>
 <div class="dbody">
 <div class="notice warn">OCRは<b>補助</b>です。登録番号・選手名・勝率・モーター2連率はOCRで読み取りません（誤読が起きるため公式取得のみ）。</div>
-<label>展示情報のスクショ</label><input id="fEx" type="file" accept="image/*">
+<label>展示情報のスクショ（複数選択可）</label><input id="fEx" type="file" accept="image/*" multiple>
 <label>水面気象のスクショ</label><input id="fWeather" type="file" accept="image/*">
 <button class="secondary" onclick="runOCR()">OCR実行</button>
 <div id="ocrNotice" class="notice info">未実行</div>
@@ -1468,14 +1476,15 @@ async function getWorker(){
   }
   return ocrWorker;
 }
-async function readFile(id){
-  const f = $(id).files[0]; if(!f) return null;
+async function readImageFile(f){
+  if(!f) return null;
   return await new Promise((res,rej)=>{
     const im = new Image();
     im.onload = ()=>res(im); im.onerror = ()=>rej(new Error('画像を読めません'));
     im.src = URL.createObjectURL(f);
   });
 }
+async function readFile(id){ return await readImageFile($(id).files[0]); }
 async function ocrImage(im, mode='6'){
   const w = await getWorker();
   const c = document.createElement('canvas');
@@ -1601,16 +1610,16 @@ function extractExhibitionRows(texts){
   return uniq;
 }
 
-/* 行を艇へ割り当てる。
+/* 展示の行を艇へ割り当てる。
    優先度は 選手名 → 枠番 → (条件を満たす時だけ)並び順。
    選手名は6人の既知リストとの完全一致なので、1文字しかない枠番より
-   誤読に強い。両方読めて食い違う場合は選手名を採り、警告として記録する。 */
+   誤読に強いため最優先にする。両方読めて食い違う場合は選手名を採り、
+   警告として記録する。                                              */
 function assignExhibitionRows(rows){
   const assigned = new Map();
   const used = new Set();
   const report = { byName:0, byLane:0, byOrder:0, conflicts:[], leftover:[] };
 
-  /* 1) 選手名の完全一致（最も強い手がかり） */
   rows.forEach((r,i)=>{
     if(!r.name) return;
     const b = state.boats.find(x=>V(x.name) && V(x.name)===r.name);
@@ -1620,13 +1629,10 @@ function assignExhibitionRows(rows){
     }
     assigned.set(b.lane, r); used.add(i); report.byName++;
   });
-  /* 2) 行内の枠番 */
   rows.forEach((r,i)=>{
     if(used.has(i) || !r.lane || assigned.has(r.lane)) return;
     assigned.set(r.lane, r); used.add(i); report.byLane++;
   });
-  /* 3) どれも特定できない場合のみ、6行ちょうどで
-        既に割り当てた行の位置と艇番が矛盾しない時に限り並び順を使う */
   const rest = rows.filter((_,i)=>!used.has(i));
   const orderConsistent = [...assigned.entries()].every(([lane,r])=>rows.indexOf(r)+1 === lane);
   if(rows.length===6 && orderConsistent && rest.length){
@@ -1638,6 +1644,254 @@ function assignExhibitionRows(rows){
     report.leftover = rest;
   }
   return { assigned, report };
+}
+
+/* 水面気象のOCR。数値は範囲チェックを通ったものだけ採用する。 */
+function parseWeatherOCR(text){
+  const s = normalizeOcrDigits(text).replace(/\s+/g,' ');
+  const got = [];
+  const defs = [
+    ['temp',      /気温[^0-9\-]{0,8}(-?\d+(?:\.\d+)?)/],
+    ['waterTemp', /水温[^0-9\-]{0,8}(-?\d+(?:\.\d+)?)/],
+    ['windSpeed', /風速[^0-9]{0,8}(\d+(?:\.\d+)?)/],
+    ['wave',      /波高[^0-9]{0,8}(\d+(?:\.\d+)?)/]
+  ];
+  defs.forEach(([k,re])=>{
+    const m = s.match(re); if(!m) return;
+    const n = toNum(m[1]);
+    if(n!==null && isSane(k,n)){
+      state.conditions[k] = { value:n, source:'ocr-medium', confidence:'ocr-medium' };
+      got.push(k);
+    }
+  });
+  const t = s.match(/(満潮|干潮|上げ潮|下げ潮)/);
+  if(t){ $('tide').value = t[1]; got.push('tide'); }
+  const w = s.match(/(向かい風|追い風|左横風|右横風|無風)/);
+  if(w){ $('windDir').value = w[1]; got.push('windDir'); }
+  return got;
+}
+
+/* 展示情報・水面気象のスクショを読む（補助） */
+async function runOCR(){
+  const exFiles = $('fEx').files, weFile = $('fWeather').files[0];
+  if((!exFiles || !exFiles.length) && !weFile){
+    alert('展示情報か水面気象のスクショを選んでください。'); return;
+  }
+  if(state.busy){ alert('ほかの処理を実行中です。終わるまでお待ちください。'); return; }
+  state.busy = true;
+  $('ocrCandidates').innerHTML = '';
+  try{
+    const msg = [];
+    if(weFile){
+      setStatus('水面気象をOCR中…'); setBar(20);
+      const texts = await ocrImageMulti(await readImageFile(weFile));
+      const got = parseWeatherOCR(texts.join('\n'));
+      msg.push(got.length ? `水面気象: ${got.length}項目を反映` : '水面気象: 読み取れませんでした');
+    }
+    if(exFiles && exFiles.length){
+      const texts = [];
+      for(let i=0;i<exFiles.length;i++){
+        setStatus(`展示スクショ ${i+1}/${exFiles.length} を読み取り中…`);
+        setBar(40 + (i/exFiles.length)*50);
+        const im = await readImageFile(exFiles[i]);
+        texts.push(...await ocrImageMulti(im, ts=>extractExhibitionRows(ts).length>=6));
+      }
+      log('[OCR展示 生テキスト]\n'+normalizeOcrDigits(texts.join('\n---\n')).slice(0,2000));
+
+      const rows = extractExhibitionRows(texts);
+      const { assigned, report } = assignExhibitionRows(rows);
+      let n = 0;
+      assigned.forEach((r,lane)=>{
+        const b = boatOf(lane); if(!b) return;
+        if(r.time!==null) setField(b,'exhibitionTime',r.time,'ocr-medium');
+        if(r.st!==null){ b.exhibitionSTFlag = r.stFlag; setField(b,'exhibitionST',r.st,'ocr-medium'); }
+        n++;
+      });
+      msg.push(`展示情報: ${rows.length}行を検出し <b>${n}艇</b>に反映` +
+        `（選手名で${report.byName} / 枠番で${report.byLane} / 並び順で${report.byOrder}）` +
+        (report.conflicts.length ? `<br><b style="color:#ef6262">要確認: ${report.conflicts.map(esc).join(' / ')}</b>` : ''));
+
+      if(n < 6){
+        $('ocrCandidates').innerHTML =
+          `<div class="notice warn"><b>反映できなかった行（手入力の参考にしてください）</b><br>` +
+          (report.leftover.length
+            ? report.leftover.map(r=>
+                `ST ${r.stFlag||''}${r.st!==null?r.st.toFixed(2):'—'} / ` +
+                `展示 ${r.time!==null?r.time.toFixed(2):'—'}` +
+                `${r.name?' / '+esc(r.name):''}`).join('<br>')
+            : '（なし）') +
+          `<br><br><b>コツ:</b> 先に選手名を取得しておくと、OCRの行を` +
+          `<b>選手名で照合</b>できるため艇番ズレが起きません。</div>`;
+      }
+    }
+    setBar(100);
+    notice('ocrNotice','warn', msg.join('<br>') +
+      '<br><span style="color:#d9ad5f">OCRは補助です。艇番と値の対応を必ず目視確認してください。</span>');
+    setStatus('OCR完了');
+    renderConditions(); renderBoats(); validateAll();
+  }catch(e){
+    log('[OCR] 失敗: '+e.message);
+    notice('ocrNotice','err','OCRに失敗しました: '+esc(e.message)+'<br>手入力で続行できます。');
+    setStatus('OCR失敗');
+  }finally{ state.busy = false; }
+}
+
+/* ==================================================================
+   出走表スクショの解析
+   登録番号を絶対キーにして、その周辺だけを読む。
+   行の位置・順序には一切依存しないため、艇番ズレが起こり得ない。
+   読めなかった値は空欄のまま残す（0で埋めない）。
+   ================================================================== */
+function extractRacelistFromOCR(texts){
+  const list = Array.isArray(texts) ? texts : [texts];
+  const full = splitConcatNumbers(normalizeOcrDigits(list.join('\n')));
+
+  /* まず6艇の登録番号がテキストのどこにあるかを調べ、
+     「次の登録番号の手前まで」を1艇ぶんの範囲とする。
+     範囲が隣の艇へはみ出すと他艇の数値を拾ってしまうため、
+     境界は必ず登録番号で区切る。                              */
+  const pos = [];
+  for(const b of state.boats){
+    if(!b.registrationNumber) continue;
+    const at = full.indexOf(b.registrationNumber);
+    pos.push({ reg:b.registrationNumber, at });
+  }
+  const ordered = pos.filter(p=>p.at>=0).sort((a,b)=>a.at-b.at);
+  const endOf = p => {
+    const nx = ordered.find(o=>o.at > p.at);
+    return Math.min(nx ? nx.at : full.length, p.at + 500);
+  };
+
+  const out = [];
+  for(const p of pos){
+    if(p.at < 0){ out.push({reg:p.reg, found:false}); continue; }
+    const win = full.slice(p.at, endOf(p));
+    const rec = { reg:p.reg, found:true };
+
+    const gm = win.match(/\b(A1|A2|B1|B2)\b/);
+    if(gm) rec.grade = gm[1];
+    const nm = pickRacerName(win.slice(4, 200));
+    if(nm) rec.name = nm;
+
+    /* --- 方法1: 見出し語のすぐ後ろの数値を使う（最も確実） ---
+       見出しの選択肢は必ず括弧でくくる。くくらないと
+       「A|B|C[0-9]」が「A」または「B」または「C[0-9]」になってしまう。 */
+    const near = (labels, re) => win.match(new RegExp('(?:'+labels+')[^0-9]{0,14}'+re));
+    let m;
+    if((m = near('全国|全國', '(\\d\\.\\d{2})')))        rec.nationalWinRate = Number(m[1]);
+    if((m = near('当地|當地', '(\\d\\.\\d{2})')))        rec.localWinRate    = Number(m[1]);
+    if((m = near('モーター|モータ|ﾓｰﾀｰ|機番|モ-ター', '(\\d{1,3})[^0-9]{0,10}(\\d{1,2}\\.\\d{2})'))){
+      rec.motorNumber = Number(m[1]); rec.motor2Rate = Number(m[2]);
+    }
+    if((m = near('ボート|ﾎﾞｰﾄ|艇番', '(\\d{1,3})[^0-9]{0,10}(\\d{1,2}\\.\\d{2})'))){
+      rec.boatNumber = Number(m[1]); rec.boat2Rate = Number(m[2]);
+    }
+    if((m = win.match(/平均\s*ST[^0-9]{0,8}(0?\.\d{2})/)))
+      rec.averageST = Number('0.'+m[1].split('.')[1]);
+    if((m = win.match(/F\s*(\d)\D{0,10}L\s*(\d)/))){
+      rec.flagF = Number(m[1]); rec.flagL = Number(m[2]);
+    }
+
+    /* --- 方法2: 見出しが無い場合、形で判断する --- */
+    if(rec.nationalWinRate == null || rec.motor2Rate == null){
+      if(!isAmbiguousNumberRun(win)){
+        const toks = (win.match(/\d{1,3}(?:\.\d{1,2})?/g) || [])
+          .map(classifyToken).filter(Boolean)
+          .filter(t => !(t.kind==='int' && String(t.n)===p.reg));
+        const rates = toks.filter(t => t.kind==='decimal' && t.n>=1 && t.n<=9.99);
+        if(rec.nationalWinRate == null && rates[0]) rec.nationalWinRate = rates[0].n;
+        if(rec.localWinRate    == null && rates[1]) rec.localWinRate    = rates[1].n;
+        if(rec.motor2Rate == null){
+          for(let i=0;i<toks.length-1;i++){
+            if(toks[i].kind==='int' && toks[i].n>=1 && toks[i].n<=999 &&
+               toks[i+1].kind==='decimal' && toks[i+1].n>=10 && toks[i+1].n<=100){
+              rec.motorNumber = toks[i].n; rec.motor2Rate = toks[i+1].n; break;
+            }
+          }
+        }
+      }else{
+        rec.ambiguous = true;
+      }
+    }
+    out.push(rec);
+  }
+  return out;
+}
+
+/* OCRで読んだ出走表を艇へ反映。信頼度は ocr-medium なので、
+   あとから公式取得や手入力があればそちらが優先される。 */
+function applyRacelistOCR(recs){
+  let applied = 0;
+  const missing = [];
+  for(const r of recs){
+    const b = boatByReg(r.reg);
+    if(!b) continue;
+    if(!r.found){ missing.push(`${b.lane}号艇(登番${r.reg})はスクショ内に見つかりません`); continue; }
+    if(r.ambiguous) missing.push(`${b.lane}号艇は数字の区切りが不明瞭なため一部を見送りました`);
+
+    let n = 0;
+    const put = (key,val) => { if(val!=null && setField(b,key,val,'ocr-medium')) n++; };
+    if(r.grade && GRADES.includes(r.grade)) put('grade', r.grade);
+    if(r.name) put('name', r.name);
+    put('nationalWinRate', r.nationalWinRate);
+    put('localWinRate',    r.localWinRate);
+    put('motorNumber',     r.motorNumber);
+    put('motor2Rate',      r.motor2Rate);
+    put('boatNumber',      r.boatNumber);
+    put('boat2Rate',       r.boat2Rate);
+    put('averageST',       r.averageST);
+    if(r.flagF!=null) b.flagF = r.flagF;
+    if(r.flagL!=null) b.flagL = r.flagL;
+    if(n) applied++;
+
+    /* 読めたが必須項目が欠けている艇も必ず知らせる。
+       「一部だけ読めた」状態を見逃すと、不足に気づかないまま進んでしまう。 */
+    const lacks = REQUIRED.filter(([k])=>!has(b[k])).map(([,label])=>label);
+    if(lacks.length) missing.push(`${b.lane}号艇は ${lacks.join('・')} が読み取れませんでした`);
+
+    log(`  [出走表OCR] ${b.lane}号艇 登番${r.reg}: ${n}項目 ` +
+        `全国${r.nationalWinRate??'-'} 当地${r.localWinRate??'-'} M${r.motor2Rate??'-'}`);
+  }
+  return { applied, missing };
+}
+
+async function runRacelistOCR(){
+  const files = $('fRacelist').files;
+  if(!files || !files.length){ alert('出走表のスクリーンショットを選んでください。'); return; }
+  syncRegsFromInputs();
+  if(!regsReady()){ alert('先に6艇の登録番号を入力してください。登録番号が読み取りの目印になります。'); return; }
+  if(state.busy){ alert('ほかの処理を実行中です。'); return; }
+  state.busy = true;
+  try{
+    const texts = [];
+    for(let i=0;i<files.length;i++){
+      setStatus(`出走表スクショ ${i+1}/${files.length} を読み取り中…`);
+      setBar((i/files.length)*90);
+      const im = await readImageFile(files[i]);
+      texts.push(...await ocrImageMulti(im, ts=>{
+        const r = extractRacelistFromOCR(ts);
+        return r.filter(x=>x.found && x.nationalWinRate!=null).length >= 6;
+      }));
+    }
+    log('[出走表OCR 生テキスト]\n'+normalizeOcrDigits(texts.join('\n---\n')).slice(0,2500));
+
+    const recs = extractRacelistFromOCR(texts);
+    const res  = applyRacelistOCR(recs);
+    setBar(100);
+
+    const got = state.boats.filter(b=>has(b.nationalWinRate)).length;
+    notice('racelistOcrNotice', got>=5 ? 'ok' : 'warn',
+      `スクショから <b>${res.applied}/6艇</b> に反映しました（全国勝率が入ったのは ${got}艇）。` +
+      (res.missing.length ? `<br>${res.missing.map(esc).join('<br>')}` : '') +
+      `<br><b>下の6艇カードで数値が合っているか必ず見比べてください。</b>` +
+      `違う場合はカードの欄を直接タップして直せます（手入力が最優先されます）。`);
+    setStatus(`出走表OCR 完了（${got}/6艇）`);
+    renderBoats(); validateAll();
+  }catch(e){
+    log('[出走表OCR] 失敗: '+e.message);
+    notice('racelistOcrNotice','err','読み取りに失敗しました: '+esc(e.message));
+    setStatus('出走表OCR 失敗');
+  }finally{ state.busy = false; }
 }
 
 /* ==================================================================
