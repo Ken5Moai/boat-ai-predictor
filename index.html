@@ -654,9 +654,14 @@ function renderConnRows(rows){
 
 /* セル内テキストを行に分解（<br>も改行として扱う） */
 function cellLines(el){
-  const html = el.innerHTML.replace(/<br\s*\/?>/gi,'\n');
+  /* textContent はブロック要素の境目に区切りを入れない。
+     <div>4064 / A1</div><div>原田 篤志</div> が
+     「4064 / A1原田 篤志」と繋がり、名前を切り出せなくなるため、
+     <br> だけでなくブロック要素の末尾にも改行を入れる。        */
   const tmp = document.createElement('div');
-  tmp.innerHTML = html;
+  tmp.innerHTML = el.innerHTML;
+  tmp.querySelectorAll('br').forEach(b=>b.replaceWith(document.createTextNode('\n')));
+  tmp.querySelectorAll('div,p,li,span,a,h1,h2,h3,h4').forEach(e=>e.appendChild(document.createTextNode('\n')));
   return (tmp.textContent||'').split('\n').map(s=>s.trim()).filter(Boolean);
 }
 /* 数値トークン（小数か整数か）を判定して返す */
@@ -697,7 +702,42 @@ function isValidRacerName(s){
   if(NAME_BLOCKLIST.some(w=>name.includes(w))) return false;
   return true;
 }
-function cleanName(s){ return String(s).replace(/[\s　*#`|]/g,''); }
+function cleanName(s){ return String(s).replace(/[\s　*#`|\[\]()（）<>]/g,''); }
+
+/* Markdown記法を外す。r.jina.ai は本文をMarkdownで返すため、
+   [原田 篤志](https://...) のようなリンク記法が名前の判定を壊す。 */
+function stripMarkdown(t){
+  return String(t)
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')   /* [表示](URL) → 表示 */
+    .replace(/[*_`#>]/g, '')
+    .replace(/\\(.)/g, '$1');
+}
+
+/* 登録番号を含むプロフィールリンクから選手名を取り出す。
+   リンクのURLに toban=<登番> が入っているため、
+   名前と登録番号が1対1で結びつく最も確実な方法。            */
+function nameFromProfileLink(text, reg){
+  const t = String(text);
+  /* Markdown: [原田 篤志](https://.../profile?toban=4064) */
+  let m = t.match(new RegExp('\\[([^\\]]{2,24})\\]\\(([^)]*)toban=' + reg + '(?!\\d)'));
+  if(m){
+    const n = cleanName(m[1]);
+    if(isValidRacerName(n)) return n;
+  }
+  /* HTML: <a href="...toban=4064">原田 篤志</a> */
+  m = t.match(new RegExp('toban=' + reg + '(?!\\d)[^>]*>\\s*([^<]{2,24})<'));
+  if(m){
+    const n = cleanName(m[1]);
+    if(isValidRacerName(n)) return n;
+  }
+  /* リンクの直後に名前が続く形 */
+  m = t.match(new RegExp('toban=' + reg + '(?!\\d)[^\\n]{0,60}?([\\u4e00-\\u9fafぁ-んァ-ヶー々]{2,6}[\\s\\u3000]?[\\u4e00-\\u9fafぁ-んァ-ヶー々]{0,6})'));
+  if(m){
+    const n = cleanName(m[1]);
+    if(isValidRacerName(n)) return n;
+  }
+  return null;
+}
 
 /* 選手名の取り出し。
    「原田 篤志」のように姓名が空白で分かれる形と、
@@ -705,7 +745,7 @@ function cleanName(s){ return String(s).replace(/[\s　*#`|]/g,''); }
    行まるごと → 隣接2語の結合 → 単語単体 の順に候補を作り、
    姓名がそろった長さ(3〜6文字)を優先して選ぶ。          */
 function pickRacerName(chunk){
-  const lines = String(chunk).split(/[\n\r|｜]+/).map(x=>x.trim()).filter(Boolean).slice(0,6);
+  const lines = stripMarkdown(chunk).split(/[\n\r|｜]+/).map(x=>x.trim()).filter(Boolean).slice(0,6);
   const cands = [];
   for(const ln of lines){
     const stripped = ln.replace(/\d{4}\s*[\/|｜]\s*(A1|A2|B1|B2)/,'');
@@ -746,7 +786,13 @@ function parseRacelistDOM(html){
       const txt = cellLines(td).join(' ');
       const m = txt.match(/(\d{4})\s*\/\s*(A1|A2|B1|B2)/);
       if(m){ reg=m[1]; grade=m[2];
-        name = pickRacerName(cellLines(td).join('\n'));
+        /* まず toban=<登番> を含むリンクから取る（名前と登番が直結する） */
+        const a = tb.querySelector(`a[href*="toban=${reg}"]`) || tb.querySelector('a[href*="racersearch"]');
+        if(a){
+          const cand = cleanName(a.textContent||'');
+          if(isValidRacerName(cand)) name = cand;
+        }
+        if(!name) name = pickRacerName(cellLines(td).join('\n'));
         const bm = txt.match(/([一-龯]{2,4})\s*\/\s*([一-龯]{2,4})/);
         if(bm) branch=bm[1];
         break;
@@ -813,8 +859,9 @@ function parseRacelistText(text){
     const rawWin = text.slice(m.index, m.index + 900);
     const win = splitConcatNumbers(rawWin);
 
-    /* 選手名 */
-    const name = pickRacerName(win.slice(m[0].length, m[0].length+180));
+    /* 選手名: まず toban付きリンクから、無ければ文面から拾う */
+    const name = nameFromProfileLink(text.slice(Math.max(0,m.index-200), m.index+400), reg)
+              || pickRacerName(win.slice(m[0].length, m[0].length+200));
 
     /* F/L/平均ST */
     let fCount=null,lCount=null,avgST=null,flEnd=-1;
@@ -1934,7 +1981,7 @@ function manualEdit(lane,key,raw){
 function paintField(lane,key){
   const b = boatOf(lane); const el = $(`fld_${lane}_${key}`); if(!b||!el) return;
   const ok = has(b[key]);
-  const required = ['name','grade','nationalWinRate','localWinRate','motor2Rate'].includes(key);
+  const required = ['grade','nationalWinRate','localWinRate','motor2Rate'].includes(key);
   el.classList.toggle('good', ok);
   el.classList.toggle('bad', !ok && (required || el.value.trim()!==''));
   el.classList.toggle('soft', !ok && !required && el.value.trim()==='');
@@ -1959,7 +2006,7 @@ function courseHTML(b){
 
 function boatCardHTML(b){
   const reg = b.registrationNumber || '—';
-  const name = V(b.name) || '（選手名 未取得）';
+  const name = V(b.name) || `${b.lane}号艇（選手名 未取得）`;
   const grade = V(b.grade) || '—';
   const anySource = [b.name,b.nationalWinRate,b.motor2Rate].find(f=>f);
   const sc = anySource ? anySource.confidence : 'none';
@@ -1983,7 +2030,7 @@ function boatCardHTML(b){
       ${b.partsChange?`<span class="chip">部品 ${esc(b.partsChange)}</span>`:''}
     </div>
     <div class="fields">
-      ${fieldHTML(b,'name','選手名',{text:true,required:true})}
+      ${fieldHTML(b,'name','選手名',{text:true})}
       ${fieldHTML(b,'grade','級別',{text:true,required:true})}
       ${fieldHTML(b,'nationalWinRate','全国勝率',{required:true,fixed:2})}
       ${fieldHTML(b,'localWinRate','当地勝率',{required:true,fixed:2})}
@@ -2257,10 +2304,14 @@ function allocate(points, budget, odds){
 /* ==================================================================
    データ検証（必須項目の充足チェック）
    ================================================================== */
+/* 予想の計算に実際に使う項目だけを必須とする。
+   選手名は表示とOCRの照合に使うだけで採点には関与しないため、
+   必須にすると「名前が読めないだけで予想できない」ことになってしまう。 */
 const REQUIRED = [
-  ['name','選手名'], ['grade','級別'],
+  ['grade','級別'],
   ['nationalWinRate','全国勝率'], ['localWinRate','当地勝率'], ['motor2Rate','モーター2連率']
 ];
+const NICE_TO_HAVE = [['name','選手名']];
 function validateAll(){
   syncRegsFromInputs();
   const missing = [];
@@ -2271,6 +2322,11 @@ function validateAll(){
     const lacks = REQUIRED.filter(([k])=>!has(b[k])).map(([,label])=>label);
     if(lacks.length) missing.push(`${b.lane}号艇: ${lacks.join('・')}`);
   });
+
+  /* 選手名は欠けていても予想できる。注意として別枠で伝える。 */
+  const noName = state.boats
+    .filter(b=>b.registrationNumber && !has(b.name))
+    .map(b=>`${b.lane}号艇`);
 
   /* データ充足率（採点に使える重みの割合） */
   const covered = state.boats.reduce((a,b)=>a+(b.weightCovered||0),0);
@@ -2289,12 +2345,18 @@ function validateAll(){
     notice('quality','err','<b>登録番号が重複しています。</b>6艇すべて異なる番号を入力してください。');
   }else if(ready){
     notice('quality','ok',
-      `必須データが揃いました。展示・コース別・気象は取得できた分だけ加点されます。` +
-      `<br>採点に使えているデータ量の目安: <b>${isFinite(fill)?fill:0}%</b>`);
+      `<b>予想に必要なデータが揃いました。</b>展示・コース別・気象は取得できた分だけ加点されます。` +
+      `<br>採点に使えているデータ量の目安: <b>${isFinite(fill)?fill:0}%</b>` +
+      (noName.length
+        ? `<br><span style="color:#d9ad5f">${noName.join('・')}の選手名が未取得ですが、` +
+          `選手名は採点に使わないため<b>このまま予想できます</b>。` +
+          `（名前を入れておくと展示スクショの照合精度が上がります）</span>`
+        : ''));
   }else{
     notice('quality','warn',
-      `<b>重要データが不足しています。</b>次の項目を取得または入力してください。<br>` +
+      `<b>予想に必要なデータが不足しています。</b>次の項目を取得または入力してください。<br>` +
       missing.map(m=>'・'+esc(m)).join('<br>') +
+      (noName.length ? `<br><span style="color:#7f8eaa">（${noName.join('・')}の選手名も未取得ですが、選手名は必須ではありません）</span>` : '') +
       `<br><br>取得手順: <b>STEP2 公式照合</b> → <b>STEP3 出走表を取得</b>。` +
       `<br>それでも取れない場合は、各カードの欄に直接入力できます（手入力は最優先で扱われます）。` +
       `<br><label style="display:flex;gap:7px;align-items:center;margin-top:9px;color:#d9ad5f">` +
@@ -2311,6 +2373,7 @@ function validateAll(){
    ================================================================== */
 function buildScenarios(ranked, ctx){
   const [h,o,a] = ranked;
+  const nm = b => V(b.name) || `${b.lane}号艇`;
   const venue = ctx.venue;
   const windTxt = ctx.windSpeed!==null && ctx.windDir
     ? `${ctx.windDir}${ctx.windSpeed}m` : '風の情報なし';
@@ -2318,16 +2381,16 @@ function buildScenarios(ranked, ctx){
   const inStrong = inBoat.score >= 62 && (ranked[0].lane===1 || ranked[1].lane===1);
 
   const main = h.lane===1
-    ? `1号艇 ${V(h.name)} のイン逃げが軸。${venue?`${venue.name}は1コース1着率${venue.inRate}%の水面で`:''}`
+    ? `1号艇 ${nm(h)} のイン逃げが軸。${venue?`${venue.name}は1コース1着率${venue.inRate}%の水面で`:''}`
       + `スタートが揃えば押し切る展開。相手は差しの2号艇と、まくり差しの${o.lane}号艇。`
-    : `${h.lane}号艇 ${V(h.name)} が総合力で最上位。`
+    : `${h.lane}号艇 ${nm(h)} が総合力で最上位。`
       + (inStrong ? `ただし1号艇のイン逃げも十分残るため、頭は割れる可能性がある。`
                   : `1号艇の評価が低く、イン信頼度は高くない。${h.lane}号艇の攻めが決まりやすい。`);
 
-  const counter = `対抗は ${o.lane}号艇 ${V(o.name)}。`
+  const counter = `対抗は ${o.lane}号艇 ${nm(o)}。`
     + (o.lane<=2 ? `内から差して先頭に立つ、あるいは2着に残る形。`
                  : `${o.lane}コースからまくり差しで突き抜ける形。`)
-    + `${a.lane}号艇 ${V(a.name)} が3着に絡むケースが最も多い。`;
+    + `${a.lane}号艇 ${nm(a)} が3着に絡むケースが最も多い。`;
 
   let rough = `荒れる条件は、`;
   const factors = [];
@@ -2418,7 +2481,7 @@ ${ranked.map((b,i)=>`
     <div class="pickhead">
       <span class="mark">${marks[i]}</span>
       <span class="bno" style="width:26px;height:26px;font-size:14px;background:${LANE_BG[b.lane]};color:${LANE_FG[b.lane]}">${b.lane}</span>
-      <b style="color:#fff">${esc(V(b.name)||'(未取得)')}</b>
+      <b style="color:#fff">${esc(V(b.name)||b.lane+'号艇')}</b>
       <span class="chip">${esc(V(b.grade)||'—')}</span>
       ${markName[i]?`<span class="chip">${markName[i]}</span>`:''}
       <span class="scorepill">${b.score.toFixed(1)}</span>
