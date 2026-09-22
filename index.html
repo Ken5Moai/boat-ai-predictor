@@ -194,6 +194,26 @@ BOAT RACE公式から取得します。<br>
 コース別入着率・決まり手・枠なり率を公式から取り込み、枠の評価に使います。<br>
 <b>一度取り込めばこの端末に保存され、次回から通信不要です。</b>取り込まなくても予想はできます。
 </div>
+<div id="stadiumDone" class="mini"></div>
+
+<details id="stadiumPasteDetails">
+<summary>取れない時：ページを開いて貼り付け（通信不要）</summary>
+<div class="dbody">
+<div class="mini">
+① 下のボタンで全場データのページを開く<br>
+② 見たい競艇場を選ぶ<br>
+③ 文字を長押し →「すべてを選択」→「コピー」<br>
+④ 戻って下に貼り付け → 「貼り付けから取り込む」
+</div>
+<button class="ghost" onclick="openStadiumPage()">① 全場データのページを開く</button>
+<label>④ ここに貼り付け</label>
+<textarea id="stadiumPasteBox" placeholder="競艇場データのページ内容を貼り付け"></textarea>
+<button class="secondary" onclick="parseStadiumPaste()">貼り付けから取り込む</button>
+<label>データ元URL（自動で探しますが、分かる場合はここに指定できます）</label>
+<input id="urlStadium" placeholder="https://www.boatrace.jp/owpc/pc/extra/data/stadium/...?jcd={jcd}">
+<div class="mini"><code>{jcd}</code> が競艇場コードに置き換わります。</div>
+</div>
+</details>
 </div>
 
 <!-- ===================== STEP 2 ===================== -->
@@ -994,7 +1014,12 @@ function applyRacelistRows(rows, source){
    取得結果の形式を判定して適切な解析にまわす
    （プロキシによってHTMLが返る場合とMarkdown/テキストが返る場合がある）
    ================================================================== */
-function isHTML(s){ return /<t[dr]\b|<tbody\b|<table\b|<!DOCTYPE/i.test(String(s).slice(0,4000)); }
+/* HTMLかどうかの判定。表のあるページだけでなく、
+   リンク一覧のように表が無いページもHTMLとして扱う必要がある。 */
+function isHTML(s){
+  return /<(?:!DOCTYPE|html|body|table|tbody|thead|tr|td|th|div|ul|ol|li|span|p|a\s|section|article)\b/i
+    .test(String(s).slice(0, 4000));
+}
 
 function parseRacelistAny(body){
   let rows = [];
@@ -1684,40 +1709,168 @@ function parseStadiumData(body, jcd){
   };
 }
 
+/* ==================================================================
+   場データページのURL探索
+   一覧ページ（全場データ）からその場へのリンクを自分で探す。
+   URL構成が変わってもリンクをたどるので壊れにくい。
+   見つかったパターンは保存し、次の場からは直接開く。
+   ================================================================== */
+const STADIUM_INDEX_URL = 'https://www.boatrace.jp/owpc/pc/extra/data/stadium/index.html';
+const STADIUM_URL_KEY = 'boatai_stadium_url_v1';
+
+/* 直接試す候補（一覧からの探索が失敗した時の保険） */
+function stadiumUrlCandidates(jcd){
+  const saved = (()=>{ try{ return localStorage.getItem(STADIUM_URL_KEY); }catch(e){ return null; } })();
+  const list = [];
+  if(saved) list.push(saved.replace(/\{jcd\}/g, jcd));
+  const custom = $('urlStadium') ? $('urlStadium').value.trim() : '';
+  if(custom) list.push(custom.replace(/\{jcd\}/g, jcd));
+  list.push(
+    `https://www.boatrace.jp/owpc/pc/extra/data/stadium/index.html?jcd=${jcd}`,
+    `https://www.boatrace.jp/owpc/pc/extra/data/stadium/detail.html?jcd=${jcd}`,
+    `https://www.boatrace.jp/owpc/pc/extra/data/stadium/?jcd=${jcd}`,
+    `https://www.boatrace.jp/owpc/pc/data/stadium?jcd=${jcd}`
+  );
+  return [...new Set(list)];
+}
+
+/* 一覧ページから、その場のページURLを探す */
+function findStadiumLink(body, jcd, venueName){
+  const base = STADIUM_INDEX_URL;
+  const abs = href => { try{ return new URL(href, base).href; }catch(e){ return null; } };
+
+  if(isHTML(body)){
+    const doc = new DOMParser().parseFromString(body, 'text/html');
+    const links = Array.from(doc.querySelectorAll('a[href]'));
+    /* 1) href に jcd=05 を含むもの */
+    let a = links.find(x=>new RegExp('jcd=0*'+Number(jcd)+'(?!\\d)').test(x.getAttribute('href')||''));
+    /* 2) リンク文字が場名のもの */
+    if(!a && venueName) a = links.find(x=>(x.textContent||'').replace(/\s/g,'').includes(venueName));
+    if(a) return abs(a.getAttribute('href'));
+  }
+  const text = String(body);
+  /* Markdown: [多摩川](URL) / [..](..jcd=05..) */
+  let m = text.match(new RegExp('\\[[^\\]]*\\]\\(([^)]*jcd=0*' + Number(jcd) + '(?!\\d)[^)]*)\\)'));
+  if(m) return abs(m[1]);
+  if(venueName){
+    m = text.match(new RegExp('\\[[^\\]]*' + venueName + '[^\\]]*\\]\\(([^)]+)\\)'));
+    if(m) return abs(m[1]);
+  }
+  return null;
+}
+/* 見つかったURLを {jcd} 入りのテンプレートとして覚える */
+function rememberStadiumUrl(url, jcd){
+  try{
+    const tpl = url.replace(new RegExp('jcd=0*'+Number(jcd)+'(?!\\d)'), 'jcd={jcd}');
+    if(tpl.includes('{jcd}')) localStorage.setItem(STADIUM_URL_KEY, tpl);
+  }catch(e){}
+}
+
 async function fetchStadiumData(){
   const jcd = $('venue').value;
   if(!jcd){ alert('先に競艇場を選んでください。'); return; }
   if(state.busy){ alert('ほかの取得を実行中です。'); return; }
   const btn = $('btnStadium'); if(btn) btn.disabled = true;
   state.busy = true;
+  const vname = VENUES[jcd] ? VENUES[jcd].name : '';
   try{
-    const url = `https://www.boatrace.jp/owpc/pc/data/stadium?jcd=${jcd}`;
-    log('[場データ] '+url);
-    setStatus(`${VENUES[jcd].name}の場データを取得中…`);
-    const body = await fetchViaProxy(url, { mustContain:['コース別','入着率','ボートレース'] });
-    const res = parseStadiumData(body, jcd);
-    if(!res.ok){
+    setStatus(`${vname}の場データを取得中…`);
+    const tried = [];
+    let res = null, usedUrl = null;
+
+    /* まず候補URLを順に試す */
+    for(const url of stadiumUrlCandidates(jcd)){
+      try{
+        log('[場データ] 試行: '+url);
+        const body = await fetchViaProxy(url, { mustContain:['コース別','入着率'] });
+        const r = parseStadiumData(body, jcd);
+        if(r.ok){ res = r; usedUrl = url; break; }
+        tried.push(`${url} → 表を読めず`);
+      }catch(e){ tried.push(`${url} → ${e.message}`); }
+    }
+
+    /* だめなら一覧ページからリンクを探す */
+    if(!res){
+      log('[場データ] 一覧ページからリンクを探索');
+      setStatus('全場データの一覧からリンクを探しています…');
+      try{
+        const idx = await fetchViaProxy(STADIUM_INDEX_URL, { mustContain:['ボートレース','場'] });
+        const link = findStadiumLink(idx, jcd, vname);
+        if(link){
+          log('[場データ] 発見: '+link);
+          const body = await fetchViaProxy(link, { mustContain:['コース別','入着率'] });
+          const r = parseStadiumData(body, jcd);
+          if(r.ok){ res = r; usedUrl = link; rememberStadiumUrl(link, jcd); }
+          else tried.push(`${link} → 表を読めず`);
+        }else{
+          tried.push('一覧ページにこの場へのリンクが見つからない');
+        }
+      }catch(e){ tried.push('一覧ページ → '+e.message); }
+    }
+
+    if(!res){
       notice('stadiumNotice','warn',
-        `場データを読み取れませんでした（コース別入着率 ${res.detail.course}/6行）。` +
-        `<br>取り込めなくても予想はできます（その場合は目安の数値を使います）。`);
+        `<b>${esc(vname)}の場データを取得できませんでした。</b>` +
+        `<br><span style="font-size:11px;color:#c9a">${tried.map(esc).join('<br>')}</span>` +
+        `<br><br>下の「ページを開いて貼り付け」でも取り込めます。` +
+        `<br><b>取り込まなくても予想はできます</b>（その場合は目安の数値を使います）。`);
+      const dt = $('stadiumPasteDetails'); if(dt) dt.open = true;
+      setStatus('場データ取得に失敗');
       return;
     }
+
     STADIUM[jcd] = res.data;
     saveStadiumCache();
     renderVenueInfo();
     validateAll();
     notice('stadiumNotice','ok',
-      `<b>${esc(res.data.name)}の場データを取り込みました。</b>この端末に保存したので次回から通信不要です。` +
+      `<b>${esc(res.data.name||vname)}の場データを取り込みました。</b>この端末に保存したので次回から通信不要です。` +
       `<br>コース別入着率 ${res.detail.course}/6 ・ 決まり手 ${res.detail.kimarite}/6 ・ ` +
       `枠なり率 ${res.detail.entry}/6 ・ 季節別 ${res.detail.season}/4`);
+    log('[場データ] 取得元: '+usedUrl);
     setStatus('場データ取得完了');
   }catch(e){
     log('[場データ] 失敗: '+e.message);
     notice('stadiumNotice','warn',
-      `場データを取得できませんでした（${esc(e.message)}）。` +
-      `<br><b>取り込めなくても予想はできます。</b>その場合は目安の数値で枠を評価します。`);
+      `場データを取得できませんでした（${esc(e.message)}）。<b>取り込まなくても予想はできます。</b>`);
     setStatus('場データ取得に失敗');
   }finally{ state.busy = false; if(btn) btn.disabled = false; }
+}
+
+/* 一覧ページ／各場ページを開く */
+function openStadiumPage(){
+  const jcd = $('venue').value;
+  const saved = (()=>{ try{ return localStorage.getItem(STADIUM_URL_KEY); }catch(e){ return null; } })();
+  window.open(jcd && saved ? saved.replace(/\{jcd\}/g,jcd) : STADIUM_INDEX_URL, '_blank');
+}
+
+/* 貼り付けから場データを取り込む（通信不要） */
+function parseStadiumPaste(){
+  const jcd = $('venue').value;
+  if(!jcd){ alert('先に競艇場を選んでください。'); return; }
+  const raw = $('stadiumPasteBox').value.trim();
+  if(!raw){ alert('貼り付け欄が空です。'); return; }
+  const res = parseStadiumData(raw, jcd);
+  if(!res.ok){
+    notice('stadiumNotice','err',
+      `貼り付け内容から読み取れませんでした（コース別入着率 ${res.detail.course}/6行）。` +
+      `<br>ページ全体をコピーできているか確認してください。` +
+      `<br>各行の合計が100%にならない行は、誤りを防ぐため採用していません。`);
+    return;
+  }
+  STADIUM[jcd] = res.data;
+  saveStadiumCache();
+  renderVenueInfo(); validateAll();
+  notice('stadiumNotice','ok',
+    `<b>${esc(res.data.name||VENUES[jcd].name)}の場データを貼り付けから取り込みました。</b>` +
+    `<br>コース別入着率 ${res.detail.course}/6 ・ 決まり手 ${res.detail.kimarite}/6 ・ ` +
+    `枠なり率 ${res.detail.entry}/6 ・ 季節別 ${res.detail.season}/4`);
+}
+
+/* 取り込み済みの場を一覧表示 */
+function stadiumSummary(){
+  const done = Object.keys(STADIUM).filter(k=>STADIUM[k] && STADIUM[k].course);
+  return { count:done.length, names:done.map(k=>VENUES[k]?VENUES[k].name:k) };
 }
 
 /* ==================================================================
@@ -2297,6 +2450,13 @@ function toggleAllDetails(open){
   document.querySelectorAll('#boats details').forEach(d=>d.open=open);
 }
 function renderVenueInfo(){
+  const done = $('stadiumDone');
+  if(done && typeof stadiumSummary === 'function'){
+    const sm = stadiumSummary();
+    done.innerHTML = sm.count
+      ? `実測データ取り込み済み: <b style="color:#79e3a5">${sm.count}場</b>（${esc(sm.names.join('・'))}）`
+      : '';
+  }
   const jcd = $('venue').value;
   const v = VENUES[jcd];
   if(!v){ notice('venueInfo','info','競艇場を選ぶと水質・イン傾向を表示します。'); return; }
