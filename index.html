@@ -250,6 +250,11 @@ BOAT RACE公式から取得します。<br>
 結果をそのまま報告いただければ原因を特定できます。</div>
 <button id="btnConnTest" class="secondary" onclick="runConnectionTest()">通信テストを実行</button>
 <div id="connResult" class="notice info">未実行</div>
+<label>自分専用の取り出し口（任意・設定すると最優先で使います）</label>
+<input id="urlCustomProxy" placeholder="https://xxxxx.workers.dev/?url={url}">
+<div class="mini">無料の共有プロキシは停止や有料化が頻繁に起こります。
+自分専用のものを用意すると安定します（READMEに手順あり）。
+<code>{url}</code> が取得先に置き換わります。</div>
 </div>
 </details>
 </div>
@@ -438,7 +443,8 @@ const state = {
   race:{ date:null, jcd:null, venueName:null, rno:null, raceType:null },
   conditions:{ windDir:null, windSpeed:null, wave:null, temp:null, waterTemp:null, tide:null },
   boats: Array.from({length:6},(_,i)=>newBoat(i+1)),
-  lastBets:null, proxyIndex:0
+  lastBets:null, proxyIndex:0,
+  busy:false          /* 同時に複数の取得を走らせない（重なるとタイムアウトを誘発する） */
 };
 /* lane(1-6) から艇を取る。配列位置に依存しない安全なアクセサ */
 function boatOf(lane){ return state.boats.find(b=>b.lane===lane) || null; }
@@ -526,16 +532,42 @@ async function fetchOneProxy(p, url, timeout){
     const res = await fetch(p.build(url), { signal:ctrl.signal, cache:'no-store', redirect:'follow' });
     if(!res.ok) throw new Error('HTTP '+res.status);
     let text = await res.text();
-    if(p.kind==='json'){
-      try{ text = JSON.parse(text).contents || ''; }
-      catch(e){ throw new Error('JSONを解釈できない'); }
+    const wantsJson = p.kind==='json' ||
+      (p.kind==='auto' && /^\s*\{\s*"(contents|data|body)"/.test(text.slice(0,60)));
+    if(wantsJson){
+      try{
+        const j = JSON.parse(text);
+        text = j.contents || j.data || j.body || '';
+      }catch(e){ if(p.kind==='json') throw new Error('JSONを解釈できない'); }
     }
     return text || '';
   }finally{ clearTimeout(timer); }
 }
 
+/* 利用者が用意した専用の取り出し口があれば最優先で使う。
+   無料の共有プロキシは停止・有料化が頻繁なため、
+   自分専用のものを設定できるようにしてある。              */
+function activeProxies(){
+  const custom = (typeof $ === 'function' && $('urlCustomProxy')) ? $('urlCustomProxy').value.trim() : '';
+  if(!custom) return PROXIES;
+  const build = custom.includes('{url}')
+    ? (u => custom.replace('{url}', encodeURIComponent(u)))
+    : (u => custom + (custom.endsWith('=') ? '' : (custom.includes('?') ? '&url=' : '?url=')) + encodeURIComponent(u));
+  return [{ name:'専用', kind:'auto', build }, ...PROXIES];
+}
+
+/* 同時に複数の取得が走ると互いにタイムアウトを起こすため、順番に実行する */
+let fetchChain = Promise.resolve();
+function serialize(fn){
+  const run = fetchChain.then(fn, fn);
+  fetchChain = run.then(()=>{}, ()=>{});
+  return run;
+}
+
 async function fetchViaProxy(url,{timeout=25000, mustContain=null}={}){
-  const order = [...PROXIES.slice(state.proxyIndex), ...PROXIES.slice(0,state.proxyIndex)];
+  const list = activeProxies();
+  const idx = Math.min(state.proxyIndex, list.length-1);
+  const order = [...list.slice(idx), ...list.slice(0,idx)];
   const errors = [];
   for(const p of order){
     try{
@@ -543,7 +575,7 @@ async function fetchViaProxy(url,{timeout=25000, mustContain=null}={}){
       const text = await fetchOneProxy(p, url, timeout);
       if(!text || text.length < 400) throw new Error('内容が短すぎる('+text.length+'文字)');
       if(mustContain && !mustContain.some(k=>text.includes(k))) throw new Error('期待する内容が無い');
-      state.proxyIndex = PROXIES.indexOf(p);
+      state.proxyIndex = Math.max(0, list.indexOf(p));
       state.lastProxy = p.name;
       log(`  ✓ ${p.name} 成功 (${text.length}文字)`);
       return text;
@@ -570,7 +602,7 @@ async function runConnectionTest(){
   log('[通信テスト] 対象: '+target);
 
   const rows = [];
-  for(const p of PROXIES){
+  for(const p of activeProxies()){
     const t0 = Date.now();
     let status='', okFlag=false, detail='';
     try{
@@ -982,12 +1014,14 @@ function regsReady(){
    使えない場合のみ選手ページを1人ずつ取得する。
    ================================================================== */
 async function lookupAllRacers(){
+  if(state.busy){ alert('ほかの取得を実行中です。終わるまでお待ちください。'); return; }
   syncRegsFromInputs();
   if(!regsReady()){
     alert('6艇すべての登録番号を4桁で入力してください（重複不可）。');
     return;
   }
   const btn = $('btnLookup'); btn.disabled = true;
+  state.busy = true;                       /* ここで確保し、必ず finally で解放する */
   try{
     if(raceParams()){
       setStatus('出走表から6艇をまとめて照合中…');
@@ -1013,7 +1047,7 @@ async function lookupAllRacers(){
     }
     setBar(100);
     finishLookup();
-  }finally{ btn.disabled=false; }
+  }finally{ btn.disabled=false; state.busy = false; }
 }
 function finishLookup(){
   const ok = state.boats.filter(b=>has(b.name) && has(b.grade)).length;
@@ -1050,6 +1084,7 @@ function parseRacerProfile(html, reg){
    ③-A 出走表取得
    ================================================================== */
 async function fetchRacelist(readRegsOnly=false, opt={}){
+  if(state.busy && !opt.silent){ alert('ほかの取得を実行中です。終わるまでお待ちください。'); return false; }
   const p = raceParams();
   if(!p){ alert('開催日・競艇場・レース番号を選択してください。'); return false; }
   if(!readRegsOnly){
@@ -1057,6 +1092,7 @@ async function fetchRacelist(readRegsOnly=false, opt={}){
     if(!regsReady()){ alert('先に6艇の登録番号を入力してください（重複不可）。'); return false; }
   }
   const btn = $('btnRacelist'); btn.disabled = true;
+  const outer = state.busy; state.busy = true;
   setStatus('BOAT RACE公式 出走表を取得中…'); setBar(10);
   log('[出走表] '+officialUrl('racelist'));
   try{
@@ -1104,17 +1140,19 @@ async function fetchRacelist(readRegsOnly=false, opt={}){
     setStatus('出走表取得に失敗しました');
     openPasteHelp();
     return false;
-  }finally{ btn.disabled=false; }
+  }finally{ btn.disabled=false; state.busy = outer; }
 }
 
 /* ==================================================================
    ③-B 直前情報取得（展示・気象）
    ================================================================== */
 async function fetchBeforeInfo(){
+  if(state.busy){ alert('ほかの取得を実行中です。終わるまでお待ちください。'); return false; }
   const p = raceParams();
   if(!p){ alert('開催日・競艇場・レース番号を選択してください。'); return false; }
   syncRegsFromInputs();
   const btn = $('btnBefore'); btn.disabled = true;
+  state.busy = true;
   setStatus('BOAT RACE公式 直前情報を取得中…'); setBar(10);
   log('[直前] '+officialUrl('beforeinfo'));
   try{
@@ -1131,7 +1169,7 @@ async function fetchBeforeInfo(){
       `直前情報を取得できませんでした（${esc(e.message)}）。<br>展示・気象はSTEP5で手入力またはOCRしてください。<br><b>出走表データと登録番号は保持しています。</b>`);
     setStatus('直前情報取得に失敗しました');
     return false;
-  }finally{ btn.disabled=false; }
+  }finally{ btn.disabled=false; state.busy = false; }
 }
 
 /* 直前情報の解析。HTMLでもコピペのテキストでも同じ結果になるようにする。
@@ -1373,9 +1411,11 @@ function parseCourseTable(html){
 }
 
 async function fetchCourseStats(){
+  if(state.busy){ alert('ほかの取得を実行中です。終わるまでお待ちください。'); return; }
   syncRegsFromInputs();
   if(!regsReady()){ alert('先に6艇の登録番号を入力してください。'); return; }
   const btn=$('btnCourse'); btn.disabled=true;
+  state.busy = true;
   const tplOfficial = $('urlOfficialCourse').value.trim();
   const tplBr       = $('urlBrRacers').value.trim();
   let ok=0;
@@ -1411,7 +1451,7 @@ async function fetchCourseStats(){
              : `コース別成績を ${ok}/6艇 取得しました。現在の艇番に対応するコース実績を評価に使います。`);
     setStatus(`コース別成績 ${ok}/6艇`);
     renderBoats(); validateAll();
-  }finally{ btn.disabled=false; }
+  }finally{ btn.disabled=false; state.busy = false; }
 }
 
 /* ==================================================================
@@ -1478,118 +1518,126 @@ async function ocrImage(im, mode='6'){
 
 /* 認識モードを変えて複数回読み、結果を全部あわせる。
    1回で6件揃わないことが多いため、取りこぼしを減らす。 */
-async function ocrImageMulti(im){
+async function ocrImageMulti(im, enough){
   const texts = [];
   for(const mode of ['6','4','11']){
-    try{ texts.push(await ocrImage(im, mode)); }
-    catch(e){ log('[OCR] mode '+mode+' 失敗: '+e.message); }
+    try{
+      texts.push(await ocrImage(im, mode));
+      /* 十分に読めたら打ち切る（スマホでは1回が数十秒かかるため） */
+      if(enough && enough(texts)){ log('[OCR] mode '+mode+' で十分に読めたため終了'); break; }
+    }catch(e){ log('[OCR] mode '+mode+' 失敗: '+e.message); }
   }
   return texts;
 }
 
 /* 展示OCR：展示タイム(6.00-8.99)と展示ST(.xx / F.xx)を抽出 */
-function extractExhibition(texts){
+/* ==================================================================
+   OCR結果の文字正規化
+   Tesseractは数字を丸囲み数字(①②③)や全角数字で返すことがある。
+   実機ログで「6.89」が「⑥.⑧⑨」、「.04」が「.0④」と出ていた。
+   \d はこれらにマッチしないため、先にASCII数字へ直す。
+   ================================================================== */
+function normalizeOcrDigits(t){
+  let s = String(t);
+  /* 丸囲み数字 ①-⑳ (U+2460-2473) と ⓪ (U+24EA) */
+  s = s.replace(/[①-⑳]/g, c => String(c.charCodeAt(0) - 0x2460 + 1));
+  s = s.replace(/⓪/g, '0');
+  /* 黒丸囲み ❶-❿ / ➀-➉ / ➊-➓ */
+  s = s.replace(/[❶-❿]/g, c => String(c.charCodeAt(0) - 0x2776 + 1));
+  s = s.replace(/[➀-➉]/g, c => String(c.charCodeAt(0) - 0x2780 + 1));
+  s = s.replace(/[➊-➓]/g, c => String(c.charCodeAt(0) - 0x278A + 1));
+  /* 括弧付き数字 ⑴-⒇ / 全角数字 */
+  s = s.replace(/[⑴-⒇]/g, c => String((c.charCodeAt(0) - 0x2474) % 10 + 1));
+  s = s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  /* 小数点として使われがちな記号 */
+  s = s.replace(/[．。・]/g, '.');
+  return s;
+}
+
+/* ==================================================================
+   展示情報の行ベース抽出
+   位置で決めず、行内の「枠番」または「選手名」で艇を特定する。
+   これにより、行が抜けても他の艇へズレない。
+   ================================================================== */
+function extractExhibitionRows(texts){
   const list = Array.isArray(texts) ? texts : [texts];
-  const times = [], sts = [];
-  for(const text of list){
-    for(const line of String(text).split(/\r?\n/)){
-      for(const m of line.matchAll(/\b([6-8]\.\d{2})\b/g)){
-        const v = Number(m[1]);
-        if(v>=6 && v<=8.99) times.push(v);
+  const rows = [];
+  for(const raw of list){
+    for(const line0 of normalizeOcrDigits(raw).split(/\r?\n/)){
+      const t = line0.trim();
+      if(!t) continue;
+
+      /* 展示タイム: 6.00〜8.99 という極めて特徴的な形 */
+      const timeM = t.match(/(?:^|[^0-9.])([6-8]\.\d{2})(?![0-9])/);
+      /* 展示ST: F/L付き（小数点が落ちても拾えるようにする）と通常表記 */
+      const flM   = t.match(/([FL])\s*[.0]*(\d{2})(?![0-9])/i);
+      const stM   = flM ? null : t.match(/(?:^|[^0-9.])\.(\d{2})(?![0-9])/);
+      if(!timeM && !flM && !stM) continue;
+
+      /* 枠番: 行頭付近の 1〜6（直後が数字や小数点でないもの） */
+      const laneM = t.match(/^\s*([1-6])(?![0-9.])/);
+      /* 選手名: 行内の日本語名らしい並び */
+      let name = null;
+      for(const cand of (t.match(/[一-龯ぁ-んァ-ヶー々]{2,8}/g) || [])){
+        if(isValidRacerName(cand)){ name = cand; break; }
       }
-      for(const m of line.matchAll(/(?:^|[^0-9.])([FL]?)\s*\.?\s*(\d{2})(?![0-9])/g)){
-        const flag = m[1] ? m[1].toUpperCase() : null;
-        const v = Number('0.'+m[2]);
-        if(v>=0 && v<=0.45) sts.push({ v, flag });
-      }
+      const stVal = flM ? Number('0.'+flM[2]) : (stM ? Number('0.'+stM[1]) : null);
+      rows.push({
+        lane: laneM ? Number(laneM[1]) : null,
+        name,
+        st:   (stVal!==null && stVal<=0.60) ? stVal : null,
+        stFlag: flM ? flM[1].toUpperCase() : null,
+        time: timeM ? Number(timeM[1]) : null
+      });
     }
   }
-  /* 複数回読んだぶんの重複をまとめ、出現回数の多い順に並べる
-     （複数モードで同じ値が読めたものほど信用できる） */
-  const rank = arr => {
-    const cnt = new Map();
-    arr.forEach(x=>{ const k=JSON.stringify(x); cnt.set(k,(cnt.get(k)||0)+1); });
-    return [...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(e=>JSON.parse(e[0]));
-  };
-  return { times: rank(times), sts: rank(sts) };
+  /* 複数モードで読んだ重複行をまとめる */
+  const seen = new Set(), uniq = [];
+  for(const r of rows){
+    const k = JSON.stringify(r);
+    if(seen.has(k)) continue;
+    seen.add(k); uniq.push(r);
+  }
+  return uniq;
 }
 
-function parseWeatherOCR(text){
-  const s = text.replace(/\s+/g,' ');
-  const got = [];
-  const defs = [
-    ['temp',      /気温[^0-9\-]{0,8}(-?\d+(?:\.\d+)?)/],
-    ['waterTemp', /水温[^0-9\-]{0,8}(-?\d+(?:\.\d+)?)/],
-    ['windSpeed', /風速[^0-9]{0,8}(\d+(?:\.\d+)?)/],
-    ['wave',      /波高[^0-9]{0,8}(\d+(?:\.\d+)?)/]
-  ];
-  defs.forEach(([k,re])=>{
-    const m = s.match(re); if(!m) return;
-    const n = toNum(m[1]);
-    if(n!==null && isSane(k,n)){
-      state.conditions[k] = { value:n, source:'ocr-medium', confidence:'ocr-medium' };
-      got.push(k);
+/* 行を艇へ割り当てる。
+   優先度は 選手名 → 枠番 → (条件を満たす時だけ)並び順。
+   選手名は6人の既知リストとの完全一致なので、1文字しかない枠番より
+   誤読に強い。両方読めて食い違う場合は選手名を採り、警告として記録する。 */
+function assignExhibitionRows(rows){
+  const assigned = new Map();
+  const used = new Set();
+  const report = { byName:0, byLane:0, byOrder:0, conflicts:[], leftover:[] };
+
+  /* 1) 選手名の完全一致（最も強い手がかり） */
+  rows.forEach((r,i)=>{
+    if(!r.name) return;
+    const b = state.boats.find(x=>V(x.name) && V(x.name)===r.name);
+    if(!b || assigned.has(b.lane)) return;
+    if(r.lane && r.lane !== b.lane){
+      report.conflicts.push(`${r.name} は${b.lane}号艇ですが、行の枠番は${r.lane}と読めました（選手名を優先）`);
     }
+    assigned.set(b.lane, r); used.add(i); report.byName++;
   });
-  const t = s.match(/(満潮|干潮|上げ潮|下げ潮)/);
-  if(t){ $('tide').value = t[1]; got.push('tide'); }
-  const w = s.match(/(向かい風|追い風|左横風|右横風|無風)/);
-  if(w){ $('windDir').value = w[1]; got.push('windDir'); }
-  return got;
-}
-
-async function runOCR(){
-  const exFile = $('fEx').files[0], weFile = $('fWeather').files[0];
-  if(!exFile && !weFile){ alert('展示情報か水面気象のスクショを選んでください。'); return; }
-  $('ocrCandidates').innerHTML = '';
-  try{
-    let msg = [];
-    if(weFile){
-      setStatus('水面気象をOCR中…'); setBar(20);
-      const got = parseWeatherOCR((await ocrImageMulti(await readFile('fWeather'))).join('\n'));
-      msg.push(got.length ? `水面気象: ${got.length}項目を反映` : '水面気象: 読み取れませんでした');
-    }
-    if(exFile){
-      setStatus('展示情報をOCR中…'); setBar(60);
-      const texts = await ocrImageMulti(await readFile('fEx'));
-      log('[OCR展示 生テキスト]\n'+texts.join('\n---\n').slice(0,2000));
-      const { times, sts } = extractExhibition(texts);
-
-      /* ★ 6件ちょうど取れた時だけ自動入力。それ以外は候補提示のみ（詰め上げ禁止） */
-      if(times.length === 6){
-        times.forEach((t,i)=>setField(boatOf(i+1),'exhibitionTime',t,'ocr-medium'));
-        msg.push('展示タイム: 6件を1〜6号艇へ反映（<b>要確認</b>）');
-      }else{
-        msg.push(`展示タイム: ${times.length}件しか検出できず<b>自動入力していません</b>`);
-      }
-      if(sts.length === 6){
-        sts.forEach((s,i)=>{
-          const b = boatOf(i+1);
-          b.exhibitionSTFlag = s.flag;
-          setField(b,'exhibitionST',s.v,'ocr-medium');
-        });
-        msg.push('展示ST: 6件を反映（<b>進入順の可能性あり。要確認</b>）');
-      }else{
-        msg.push(`展示ST: ${sts.length}件しか検出できず<b>自動入力していません</b>`);
-      }
-
-      if(times.length!==6 || sts.length!==6){
-        $('ocrCandidates').innerHTML =
-          `<div class="notice warn"><b>検出候補（手入力の参考にしてください）</b><br>` +
-          `展示タイム: ${times.length? times.join(' , ') : '—'}<br>` +
-          `展示ST: ${sts.length? sts.map(s=>(s.flag||'')+s.v.toFixed(2)).join(' , ') : '—'}</div>`;
-      }
-    }
-    setBar(100);
-    notice('ocrNotice','warn', msg.join('<br>') +
-      '<br><span style="color:#d9ad5f">OCRは補助です。艇番と値の対応を必ず目視確認してください。</span>');
-    setStatus('OCR完了');
-    renderConditions(); renderBoats(); validateAll();
-  }catch(e){
-    log('[OCR] 失敗: '+e.message);
-    notice('ocrNotice','err','OCRに失敗しました: '+esc(e.message)+'<br>手入力で続行できます。');
-    setStatus('OCR失敗');
+  /* 2) 行内の枠番 */
+  rows.forEach((r,i)=>{
+    if(used.has(i) || !r.lane || assigned.has(r.lane)) return;
+    assigned.set(r.lane, r); used.add(i); report.byLane++;
+  });
+  /* 3) どれも特定できない場合のみ、6行ちょうどで
+        既に割り当てた行の位置と艇番が矛盾しない時に限り並び順を使う */
+  const rest = rows.filter((_,i)=>!used.has(i));
+  const orderConsistent = [...assigned.entries()].every(([lane,r])=>rows.indexOf(r)+1 === lane);
+  if(rows.length===6 && orderConsistent && rest.length){
+    rest.forEach(r=>{
+      const pos = rows.indexOf(r)+1;
+      if(!assigned.has(pos)){ assigned.set(pos,r); report.byOrder++; }
+    });
+  }else{
+    report.leftover = rest;
   }
+  return { assigned, report };
 }
 
 /* ==================================================================
