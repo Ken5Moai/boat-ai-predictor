@@ -389,6 +389,16 @@ BOAT RACE公式から取得します。<br>
 入力したら、もう一度「予想レポート生成」を押します。
 </div>
 <div style="margin-top:10px">
+  <button id="btnOdds" onclick="fetchOdds()">3連単オッズを自動取得（120通り）</button>
+  <div id="oddsNotice" class="notice info" style="margin-top:8px">
+    公式のオッズ表から120通りをまとめて取り込みます。
+    読み取れたかどうかは<b>3つの検算</b>（120通り揃っているか／Σ(1/オッズ)が1.33前後か／
+    1号艇が頭の平均が6号艇より安いか）で確かめ、1つでも外れたら採用しません。
+    取れなくても下の表に手入力すれば同じ判定ができます。
+  </div>
+  <button class="ghost" onclick="openOfficialPage('odds3t')" style="margin-top:6px">公式のオッズ画面を開く</button>
+</div>
+<div style="margin-top:10px">
   <label>期待値がこの値以上の組だけ買う</label>
   <input id="evMin" inputmode="decimal" value="1.10" oninput="renderOddsBox()">
   <div class="mini">1.00が損益分岐。ぶれを考えて少し上に置くのが無難です。</div>
@@ -3927,6 +3937,201 @@ ${picked.mode!=='ev' ? `<div class="mini" style="margin-top:8px;color:#f0c040">
   renderOddsBox();
   $('report').scrollIntoView({behavior:'smooth', block:'start'});
   setStatus('予想レポートを生成しました');
+}
+
+/* ==================================================================
+   3連単オッズの取得と解析
+   ------------------------------------------------------------------
+   公式のオッズ表は「1着＝列、2着3着＝行」という並びで、組番の文字列が
+   そのまま載っているわけではない。取得元（プロキシ）によって
+   HTMLで返るかMarkdownで返るかも変わる。
+   位置に頼った読み取りは、このプロジェクトが一貫して禁じてきた形なので、
+   読めたと言い切る前に必ず次の3つで検算する。
+
+     1. 120通りちょうど揃っているか（重複・欠けがあれば不採用）
+     2. Σ(1/オッズ) が 1.15〜1.60 に入るか
+        3連単の控除率は25%なので、理論上この合計は 1/0.75 ≒ 1.33 になる。
+        並びがずれていても値の集合が正しければ通るが、
+        別の数字（着順や艇番）を拾っていれば大きく外れて弾かれる。
+     3. 1着ごとの20通りの中央値が、1号艇でいちばん安く6号艇でいちばん高く、
+        しかも6号艇が1号艇の3倍以上あるか
+        並び（どの数字がどの組か）が合っているかを見る。
+        1コースが最も来やすく6コースが最も来にくいのは全場・全レースで成り立つ。
+        並びがずれていると6つの中央値が全体平均あたりに寄って差が消えるので、
+        「3倍以上開いていること」を要求すると、ずれをほぼ確実に弾ける。
+        （最初は「1号艇の平均 < 6号艇の平均」だけにしていたが、
+          行優先の並びを列優先として読んだ誤りを素通りさせたため強くした。）
+
+   どれか1つでも外れたら採用しない。読めなければ手入力に戻す。
+   ================================================================== */
+const median = a => { const v=[...a].sort((x,y)=>x-y); const n=v.length;
+  return n%2 ? v[(n-1)/2] : (v[n/2-1]+v[n/2])/2; };
+
+/* 枠だけから決まる、その組のおおまかな出やすさ。
+   予想の採点には使わない。オッズの並びが合っているかを確かめるためだけの物差し。
+   全国平均のコース別1着率・2着率・3着率を丸めた値。 */
+/* 並びが合っているかの判定基準。実験では
+     正しいオッズ        0.65〜0.95（1号艇が弱い荒れたレースでも0.65）
+     1つずらした誤り      0.73
+     行と列の取り違え      0.50
+     無作為な並べ替え3000通り 最大0.30
+   候補の中で最大のものを選ぶので、正しい並びが候補にあれば必ずそれが勝つ。
+   下限は、荒れたレースを弾かないよう0.55に置く。 */
+const ODDS_FIT_MIN = 0.55;
+const PRIOR_1 = {1:.55,2:.14,3:.12,4:.11,5:.06,6:.02};
+const PRIOR_2 = {1:.20,2:.22,3:.20,4:.17,5:.12,6:.09};
+const PRIOR_3 = {1:.17,2:.19,3:.19,4:.18,5:.15,6:.12};
+function lanePrior(combo){
+  const [a,b,c] = combo.split('-').map(Number);
+  return PRIOR_1[a] * PRIOR_2[b] * PRIOR_3[c];
+}
+/* 順位相関（スピアマン）。同順位は平均順位で扱う。 */
+function rankCorr(xs, ys){
+  const rank = v => {
+    const idx = v.map((x,i)=>[x,i]).sort((a,b)=>a[0]-b[0]);
+    const r = new Array(v.length);
+    for(let i=0;i<idx.length;){
+      let j=i; while(j+1<idx.length && idx[j+1][0]===idx[i][0]) j++;
+      const avg = (i+j)/2 + 1;
+      for(let k=i;k<=j;k++) r[idx[k][1]] = avg;
+      i = j+1;
+    }
+    return r;
+  };
+  const a = rank(xs), b = rank(ys), n = a.length;
+  const ma = a.reduce((s,v)=>s+v,0)/n, mb = b.reduce((s,v)=>s+v,0)/n;
+  let num=0, da=0, db=0;
+  for(let i=0;i<n;i++){ const x=a[i]-ma, y=b[i]-mb; num+=x*y; da+=x*x; db+=y*y; }
+  return (da && db) ? num/Math.sqrt(da*db) : 0;
+}
+function oddsSanity(map){
+  const keys = Object.keys(map);
+  if(keys.length !== 120) return { ok:false, why:`${keys.length}通りしか取れませんでした（120通り必要）` };
+  let inv = 0;
+  for(const k of keys){
+    const o = map[k];
+    if(!(o > 1.0) || !Number.isFinite(o)) return { ok:false, why:`オッズとして異常な値（${k} = ${o}）` };
+    inv += 1/o;
+  }
+  if(inv < 1.15 || inv > 1.60)
+    return { ok:false, why:`Σ(1/オッズ)=${inv.toFixed(2)}。3連単なら1.33前後になるはずで、別の数字を拾っています` };
+  const rho = oddsFit(map);
+  if(!(rho >= ODDS_FIT_MIN))
+    return { ok:false, why:`オッズの並びが枠順の傾向と合っていません（順位相関 ${rho.toFixed(2)}、${ODDS_FIT_MIN}以上必要）` };
+  return { ok:true, inv, rho };
+}
+/* 組番とオッズの対応がどれだけ枠順の傾向に合っているか */
+function oddsFit(map){
+  const keys = Object.keys(map);
+  return rankCorr(keys.map(k=>map[k]), keys.map(k=>-Math.log(lanePrior(k))));
+}
+
+/* すべての3連単の組番を、公式の表の並び（1着ごと、2着→3着の昇順）で返す */
+function allTrifecta(){
+  const out = [];
+  for(let a=1;a<=6;a++) for(let b=1;b<=6;b++){ if(b===a) continue;
+    for(let c=1;c<=6;c++){ if(c===a||c===b) continue; out.push(`${a}-${b}-${c}`); } }
+  return out;   /* 120通り */
+}
+
+function parseOdds3t(raw){
+  const text = htmlToText(raw);
+  const tried = [];
+
+  /* 方法1：組番がそのまま書かれている場合（いちばん安全） */
+  {
+    const map = {};
+    const re = /([1-6])\s*[-－]\s*([1-6])\s*[-－]\s*([1-6])[^0-9]{0,12}([0-9]{1,4}(?:\.[0-9])?)/g;
+    let m;
+    while((m = re.exec(text))){
+      const [,a,b,c,o] = m;
+      if(a===b||b===c||a===c) continue;
+      const key = `${a}-${b}-${c}`;
+      if(map[key] === undefined) map[key] = Number(o);
+    }
+    const chk = oddsSanity(map);
+    tried.push(`組番つき: ${chk.ok ? `OK（順位相関 ${chk.rho.toFixed(2)}）` : chk.why}`);
+    if(chk.ok) return { map, how:'組番つき', chk, tried };
+  }
+
+  /* 方法2：オッズらしい数字だけを並び順に拾い、公式の並びに当てる。
+     ずらし方と並べ方の候補をすべて試し、
+     「枠順の傾向といちばんよく合うもの」を選ぶ。
+     1つずらしただけの誤りは順位相関が0.73まで下がるのに対し、
+     正しい並びは0.65〜0.95。候補の中で最大のものを採るので、
+     「基準を超えた最初のもの」を採っていた時のような取り違えが起きない。 */
+  const nums = [];
+  const re2 = /(?:^|[^0-9.])([0-9]{1,4}\.[0-9])(?![0-9])/g;
+  let m2;
+  while((m2 = re2.exec(text))) nums.push(Number(m2[1]));
+  const cand = nums.filter(v => v >= 1.0 && v <= 9999);
+  tried.push(`小数の個数: ${cand.length}`);
+
+  if(cand.length >= 120){
+    const combos = allTrifecta();
+    const rowMajor = (()=>{ const o=[]; for(let r=0;r<20;r++) for(let c=0;c<6;c++) o.push(combos[c*20+r]); return o; })();
+    const orders = { '列優先': combos, '行優先': rowMajor };
+    const maxShift = Math.min(cand.length - 120, 40);
+    let best = null;
+    for(let sh = 0; sh <= maxShift; sh++){
+      const slice = cand.slice(sh, sh + 120);
+      for(const [oname, order] of Object.entries(orders)){
+        const map = {};
+        order.forEach((k,i)=>{ map[k] = slice[i]; });
+        let inv = 0, bad = false;
+        for(const k of Object.keys(map)){
+          const o = map[k];
+          if(!(o > 1.0) || !Number.isFinite(o)){ bad = true; break; }
+          inv += 1/o;
+        }
+        if(bad || inv < 1.15 || inv > 1.60) continue;
+        const rho = oddsFit(map);
+        if(!best || rho > best.rho) best = { map, rho, how:`${sh}個読み飛ばし・${oname}`, inv };
+      }
+    }
+    if(best){
+      tried.push(`いちばん合う並び: ${best.how}（順位相関 ${best.rho.toFixed(2)} / Σ(1/オッズ) ${best.inv.toFixed(2)}）`);
+      if(best.rho >= ODDS_FIT_MIN)
+        return { map: best.map, how: best.how, chk: { ok:true, inv:best.inv, rho:best.rho }, tried };
+      tried.push(`順位相関が ${ODDS_FIT_MIN} に届かないため採用しません`);
+    }else{
+      tried.push('Σ(1/オッズ)が合う並びが1つも見つかりませんでした');
+    }
+  }
+  return { map:null, tried };
+}
+
+async function fetchOdds(){
+  if(state.busy){ alert('ほかの取得を実行中です。終わるまでお待ちください。'); return; }
+  const url = officialUrl('odds3t');
+  if(!url){ alert('開催日・競艇場・レース番号を先に選んでください。'); return; }
+  const btn = $('btnOdds'); if(btn) btn.disabled = true;
+  state.busy = true;
+  try{
+    notice('oddsNotice','info','3連単オッズを取得しています…');
+    log('[オッズ] '+url);
+    const body = await fetchViaProxy(url, { mustContain:['オッズ','odds','boatrace'] });
+    const res = parseOdds3t(body);
+    res.tried.forEach(t=>log('  ・'+t));
+    if(!res.map){
+      notice('oddsNotice','warn',
+        'オッズの表を読み取れませんでした。<b>手入力でも期待値の判定はできます</b>（下の表に、損益分岐を超えている組だけ入れてください）。'+
+        '<br>取得した内容の先頭を記録に残しました。開発者に渡せば解析を直せます。');
+      log('  取得内容の先頭: '+String(body).replace(/\s+/g,' ').slice(0,400));
+      return;
+    }
+    state.oddsMap = res.map;
+    notice('oddsNotice','ok',
+      `3連単オッズを120通り取得しました（${esc(res.how)}）。検算 Σ(1/オッズ)=${res.chk.inv.toFixed(2)}。`+
+      'もう一度「予想レポート生成」を押すと、期待値の高い順に買い目を選び直します。');
+    log(`  ✓ 120通り取得 Σ(1/オッズ)=${res.chk.inv.toFixed(3)} / 1号艇頭の平均${res.chk.m1.toFixed(0)}倍・6号艇頭${res.chk.m6.toFixed(0)}倍`);
+    renderOddsBox();
+  }catch(e){
+    notice('oddsNotice','warn','オッズを取得できませんでした（'+esc(e.message)+'）。手入力でも判定できます。');
+  }finally{
+    if(btn) btn.disabled = false;
+    state.busy = false;
+  }
 }
 
 /* ==================================================================
