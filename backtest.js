@@ -88,6 +88,21 @@ const RACES=[
  {reg:'4839',g:'A2',nat:6.18,loc:5.32,mot:43.68,bt:30.84,st:0.15,F:0,exST:0.13,exF:null,exT:6.96,tilt:0.0,wt:52.0,entry:4,rec:[[3,.10,4],[6,.14,4],[4,.28,5],[2,.12,4]]},
  {reg:'3637',g:'B1',nat:3.58,loc:3.74,mot:30.56,bt:31.46,st:0.18,F:0,exST:0.02,exF:'F',exT:6.96,tilt:-0.5,wt:52.8,entry:5,rec:[[1,.11,2],[3,.23,5],[4,.15,6]]},
  {reg:'4679',g:'A2',nat:6.09,loc:5.77,mot:35.71,bt:40.00,st:0.16,F:0,exST:0.08,exF:'F',exT:6.83,tilt:0.5,wt:56.0,entry:6,rec:[[3,.15,1],[3,.44,5],[4,.11,2],[3,.15,2]]}]},
+// 徳山6R: スタート展示の進入は 1-2-6-3-4-5（6号艇が3コースまで前づけ）。
+// ところが本番は 1-6-2-3-4-5 と、さらに動いた（石川が2コースまで入り、
+// 押し出された村松が3コースからまくって1着）。
+// entry は「賭ける時点で分かっていた展示の進入」を入れる。
+// actualEntry は本番の進入で、答え合わせ用。採点には使わない。
+// 1号艇の梅原（F1持ち）は本番ST .32 で最下位。
+{name:'徳山6R 予選',jcd:'18',rno:6,date:'2026-09-23',result:'2-3-6',pop:25,pay:5660,wind:null,ws:3,wave:3,temp:26,wtemp:26,
+ actualEntry:{1:1,2:3,3:4,4:5,5:6,6:2},
+ B:[
+ {reg:'5206',g:'B1',nat:4.62,loc:4.22,mot:29.47,bt:28.90,st:0.15,F:1,exST:0.06,exF:null,exT:6.88,tilt:0.0,wt:52.8,entry:1,rec:[[6,.15,5],[3,.18,6],[5,.13,5],[2,.13,2]]},
+ {reg:'4816',g:'A2',nat:5.63,loc:5.67,mot:21.79,bt:37.26,st:0.16,F:0,exST:0.06,exF:null,exT:6.93,tilt:0.0,wt:55.0,entry:2,rec:[[3,.07,2],[6,.15,3],[1,.03,1],[5,.16,2]]},
+ {reg:'5027',g:'B1',nat:4.38,loc:5.53,mot:28.87,bt:33.33,st:0.20,F:0,exST:0.19,exF:null,exT:6.88,tilt:-0.5,wt:53.7,entry:4,rec:[[2,.20,4],[4,.22,6],[5,.13,2]]},
+ {reg:'4159',g:'A2',nat:6.59,loc:5.36,mot:39.56,bt:28.71,st:0.17,F:0,exST:0.07,exF:null,exT:6.87,tilt:-0.5,wt:52.0,entry:5,rec:[[2,.11,2],[3,.02,2],[6,.06,4],[5,.11,5]]},
+ {reg:'5290',g:'B1',nat:3.43,loc:1.25,mot:37.38,bt:28.97,st:0.17,F:0,exST:0.05,exF:null,exT:6.92,tilt:0.0,wt:52.0,entry:6,rec:[[6,.22,6],[4,.11,2],[2,.07,4]]},
+ {reg:'3473',g:'A1',nat:6.75,loc:6.75,mot:39.58,bt:37.75,st:0.14,F:1,exST:0.19,exF:null,exT:6.93,tilt:-0.5,wt:52.5,entry:3,rec:[[2,.18,4],[1,.15,1],[1,.20,1]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -117,7 +132,7 @@ function runWith(weightPatch, bandPatch, opt){
       if(x.adj!=null) setField(b,'adjustmentWeight',x.adj,'official');
       if(x.parts) b.partsChange=x.parts;
       b.flagF=x.F; b.flagL=0;
-      if(x.entry) b.entryCourse=x.entry;
+      if(x.entry) b.entryCourse = (opt.useActualEntry && R.actualEntry) ? R.actualEntry[i+1] : x.entry;
       b.recentRaces=x.rec.map(r=>({course:r[0],st:r[1],stFlag:null,result:r[2]}));
       b.recentSource='official';
     });
@@ -232,6 +247,9 @@ if(require.main===module){
     ['チルト0.5以上',      allB.filter(b=>b.tilt>=0.5).length,
       'if(crs>=4) bump(+3.0,', 'if(false) bump(+3.0,'],
     ['部品交換',          allB.filter(b=>b.parts).length,   'if(b.partsChange) bump(', 'if(false) bump('],
+    ['進入変更（内へ/外へ）',
+      [].concat(...RACES.map(r=>r.B.filter((b,i)=>b.entry && b.entry!==i+1))).length,
+      '  if(b.entryCourse){\n    if(crs > b.lane)', '  if(false){\n    if(crs > b.lane)'],
     ['風（風速4m以上）',    allB.filter(b=>b.ws>=4 && b.wind).length, null, null],
     ['波（波高5cm以上）',   allB.filter(b=>b.wave>=5).length, null, null],
     ['潮',               0,                                null, null],
