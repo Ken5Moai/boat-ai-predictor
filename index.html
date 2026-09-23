@@ -378,6 +378,27 @@ BOAT RACE公式から取得します。<br>
 <div class="mini" style="margin-top:8px">※ 直前のオッズ・欠場・進入変更は必ず公式で確認してから購入してください。</div>
 </div>
 
+<!-- ===================== STEP 8 ===================== -->
+<div class="panel" id="p8">
+<h2><span class="stepno">8</span>結果を記録して答え合わせ</h2>
+<div class="lead">予想は自動で保存されます。レース後に着順を入れると、
+的中率・回収率・信頼度ごとの成績が出ます。<b>当たった予想だけ覚えている状態を防ぐため</b>の機能です。</div>
+<div id="recordList"></div>
+<details>
+<summary>記録の書き出し・読み込み（バックアップ）</summary>
+<div class="dbody">
+<div class="mini">記録はこの端末にだけ保存されます。機種変更やブラウザのデータ消去で消えるため、
+ときどき書き出して保存しておくと安心です。</div>
+<div class="btnrow">
+  <button class="secondary" onclick="exportRecords()">書き出す</button>
+  <button class="secondary" onclick="importRecords()">読み込む</button>
+</div>
+<textarea id="recordIO" placeholder="書き出した文字列がここに入ります／復元したい文字列を貼り付け"></textarea>
+<div id="recordIONotice" class="notice info">未実行</div>
+</div>
+</details>
+</div>
+
 <!-- ===================== LOG ===================== -->
 <details>
 <summary>診断ログ（うまくいかない時はここを確認）</summary>
@@ -2821,8 +2842,12 @@ function scoreBoat(b, ctx){
   if(has(b.boat2Rate))       add('ボート2連率',   lin(V(b.boat2Rate),20,60),   0.03);
   if(has(b.averageST))       add('平均ST', stScore(V(b.averageST)), 0.07);
 
-  /* --- 展示 --- */
-  if(has(b.exhibitionST) && !b.exhibitionSTFlag)
+  /* --- 展示 ---
+     展示でフライングした艇も「それだけ速いスタートを切った」という事実は残る。
+     従来はSTの評価から除外したうえで減点までしており、
+     速いという事実を消したうえで罰する二重の扱いになっていた。
+     速さは評価に入れ、本番で緩める分だけを後で小さく引く。       */
+  if(has(b.exhibitionST))
     add('展示ST', stScore(V(b.exhibitionST)), 0.07);
   if(has(b.exhibitionTime) && ctx.bestExTime!==null)
     add('展示タイム', clamp((ctx.bestExTime+0.20-V(b.exhibitionTime))/0.20*100,0,100), 0.08);
@@ -2882,9 +2907,13 @@ function scoreBoat(b, ctx){
   /* --- 加点・減点（正規化後の補正） --- */
   const bump = (pts,label)=>{ base += pts; (pts>=0?plus:minus).push(`${label} ${pts>0?'+':''}${pts.toFixed(1)}`); };
 
-  if(b.flagF)  bump(-Math.min(12, 7*b.flagF), `F${b.flagF}持ち（スタートが慎重になりやすい）`);
-  if(b.flagL)  bump(-Math.min(8, 4*b.flagL),  `L${b.flagL}持ち`);
-  if(b.exhibitionSTFlag) bump(-8, `展示でF/L（${b.exhibitionSTFlag}）`);
+  /* F持ち・L持ちは本番のスタートが慎重になるが、
+     走力そのものが落ちるわけではない。減点は控えめにする。
+     ※ この重みは今後の結果記録で調整する前提の暫定値 */
+  if(b.flagF)  bump(-Math.min(8, 4*b.flagF), `F${b.flagF}持ち（スタートが慎重になりやすい）`);
+  if(b.flagL)  bump(-Math.min(5, 2.5*b.flagL), `L${b.flagL}持ち`);
+  if(b.exhibitionSTFlag)
+    bump(-3, `展示で${b.exhibitionSTFlag}（本番はやや緩める可能性。ただしスタート勘は合っている）`);
 
   const tilt = V(b.tilt);
   if(tilt!==null && tilt>=0.5){
@@ -3044,6 +3073,191 @@ function allocate(points, budget, odds){
      .slice(0,Math.max(0,left))
      .forEach(x=>alloc[x.i]++);
   return alloc.map(u=>u*100);
+}
+
+/* ==================================================================
+   予想の記録と答え合わせ
+   --------------------------------------------------------------
+   結果を見てから採点の重みを変えるのは、本来やってはいけない調整。
+   予想を先に残し、後から結果を入れて集計することで、
+   「たまたま当たった」と「本当に効いている」を区別できるようにする。
+   端末に保存するだけなので通信は不要。
+   ================================================================== */
+const RECORD_KEY = 'boatai_records_v1';
+const RECORD_MAX = 300;
+
+function loadRecords(){
+  try{
+    const raw = localStorage.getItem(RECORD_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ return []; }
+}
+function saveRecords(list){
+  try{
+    localStorage.setItem(RECORD_KEY, JSON.stringify(list.slice(0, RECORD_MAX)));
+    return true;
+  }catch(e){ log('[記録] 保存できません: '+e.message); return false; }
+}
+
+/* 予想を残す。同じレースを作り直した場合は上書きする（重複を増やさない）。 */
+function savePrediction(info){
+  const list = loadRecords();
+  const key = `${info.date}_${info.jcd}_${info.rno}`;
+  const idx = list.findIndex(r=>r.id === key);
+  const rec = Object.assign({ id:key, savedAt:new Date().toISOString(), result:null }, info);
+  if(idx >= 0) rec.result = list[idx].result;      /* 入力済みの結果は残す */
+  if(idx >= 0) list[idx] = rec; else list.unshift(rec);
+  saveRecords(list);
+  renderRecords();
+  return rec;
+}
+
+/* 「154」のような入力を 1着/2着/3着 に変換する */
+function parseResultOrder(raw){
+  const d = String(raw).replace(/[^1-6]/g,'').split('').map(Number);
+  if(d.length !== 3 || new Set(d).size !== 3) return null;
+  return { first:d[0], second:d[1], third:d[2] };
+}
+
+function setResult(id, rawOrder, rawPayout){
+  const list = loadRecords();
+  const rec = list.find(r=>r.id===id);
+  if(!rec) return;
+  const order = parseResultOrder(rawOrder);
+  if(!order){
+    if(String(rawOrder).replace(/[^1-6]/g,'') === '') rec.result = null;
+    else { renderRecords(String(rawOrder)); return; }
+  }else{
+    const payout = toNum(rawPayout);
+    rec.result = { ...order, combo:`${order.first}-${order.second}-${order.third}`,
+                   payout: (payout!==null && payout>=0) ? payout : null };
+  }
+  saveRecords(list);
+  renderRecords();
+}
+function deleteRecord(id){
+  if(!confirm('この記録を削除しますか？')) return;
+  saveRecords(loadRecords().filter(r=>r.id!==id));
+  renderRecords();
+}
+
+/* ---------- 集計 ---------- */
+function recordStats(list){
+  const done = list.filter(r=>r.result);
+  const st = { total:list.length, done:done.length,
+               tri:0, trio:0, head:0, bet:0, back:0, byRank:{} };
+  for(const r of done){
+    const picks = (r.picks||[]).map(p=>p.combo);
+    const res = r.result;
+    const hitTri = picks.includes(res.combo);
+    const resSet = [res.first,res.second,res.third].sort().join('');
+    const hitTrio = picks.some(c=>c.split('-').map(Number).sort().join('')===resSet);
+    const hitHead = (r.order||[])[0] === res.first;
+    if(hitTri)  st.tri++;
+    if(hitTrio) st.trio++;
+    if(hitHead) st.head++;
+
+    const spend = (r.picks||[]).reduce((a,p)=>a+(p.amount||0),0);
+    st.bet += spend;
+    if(hitTri && res.payout!=null){
+      const unit = (r.picks||[]).find(p=>p.combo===res.combo);
+      st.back += res.payout * ((unit&&unit.amount||0)/100);
+    }
+    const k = r.rank || '—';
+    const g = st.byRank[k] || (st.byRank[k] = { n:0, tri:0, trio:0, head:0 });
+    g.n++; if(hitTri) g.tri++; if(hitTrio) g.trio++; if(hitHead) g.head++;
+  }
+  return st;
+}
+
+function renderRecords(badInput){
+  const box = $('recordList'); if(!box) return;
+  const list = loadRecords();
+  const st = recordStats(list);
+  const pct = (a,b)=> b ? (a/b*100).toFixed(0)+'%' : '—';
+
+  const head = st.done
+    ? `<div class="kpis" style="margin-bottom:10px">
+         <div class="kpi"><b>${pct(st.tri,st.done)}</b><small>3連単 的中<br>${st.tri}/${st.done}</small></div>
+         <div class="kpi"><b>${pct(st.trio,st.done)}</b><small>3連複 的中<br>${st.trio}/${st.done}</small></div>
+         <div class="kpi"><b>${pct(st.head,st.done)}</b><small>1着 的中<br>${st.head}/${st.done}</small></div>
+       </div>
+       <div class="mini" style="margin-bottom:8px">
+         購入 ${st.bet.toLocaleString()}円 / 払戻 ${Math.round(st.back).toLocaleString()}円
+         ／ 回収率 <b style="color:${st.back>=st.bet?'#3ecf74':'#ef6262'}">${pct(st.back,st.bet)}</b>
+         <span style="color:#7f8eaa">（払戻を入力した分のみ）</span>
+       </div>
+       ${Object.keys(st.byRank).length>1 ? `<table class="tbl" style="margin-bottom:10px">
+         <tr><th>信頼度</th><th>件数</th><th>3連単</th><th>3連複</th><th>1着</th></tr>
+         ${Object.entries(st.byRank).sort().map(([k,g])=>
+           `<tr><td>${esc(k)}</td><td>${g.n}</td><td>${pct(g.tri,g.n)}</td><td>${pct(g.trio,g.n)}</td><td>${pct(g.head,g.n)}</td></tr>`
+         ).join('')}</table>
+         <div class="mini" style="margin-bottom:8px">信頼度Aの的中率が本当に高いかを、ここで確認できます。</div>` : ''}`
+    : `<div class="notice info">予想レポートを作ると自動で記録されます。
+         レース後に着順を入れると、的中率と回収率が出ます。</div>`;
+
+  const rows = list.slice(0, 40).map(r=>{
+    const res = r.result;
+    const picks = (r.picks||[]).map(p=>p.combo);
+    const hitTri  = res && picks.includes(res.combo);
+    const resSet  = res ? [res.first,res.second,res.third].sort().join('') : '';
+    const hitTrio = res && picks.some(c=>c.split('-').map(Number).sort().join('')===resSet);
+    const hitHead = res && (r.order||[])[0]===res.first;
+    const mark = !res ? '<span class="chip">結果待ち</span>'
+      : hitTri  ? '<span class="chip" style="border-color:#7a6320;color:#f0c040">3連単 的中</span>'
+      : hitTrio ? '<span class="chip" style="border-color:#2a6f49;color:#79e3a5">3連複 的中</span>'
+      : hitHead ? '<span class="chip">1着のみ的中</span>'
+      : '<span class="chip" style="border-color:#4a2530;color:#ef8f8f">不的中</span>';
+    return `<div class="boatcard"><div class="bbody">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+        <b style="color:#fff">${esc(r.venueName||'')} ${esc(String(r.rno||''))}R</b>
+        <span class="mini">${esc(r.date||'')}</span>
+        <span class="chip">信頼度 ${esc(r.rank||'—')}</span>
+        ${mark}
+      </div>
+      <div class="mini" style="margin-top:5px">買い目: ${picks.map(c=>
+        res && c===res.combo ? `<b style="color:#f0c040">${c}</b>` : c).join(' / ')}</div>
+      ${res ? `<div class="mini">結果: <b style="color:#fff">${esc(res.combo)}</b>${
+        res.payout!=null?` ／ 払戻 ${res.payout.toLocaleString()}円`:''}</div>` : ''}
+      <div class="g2" style="margin-top:7px">
+        <div><label>着順（例 154）</label>
+          <input inputmode="numeric" maxlength="5" value="${res?esc(res.combo.replace(/-/g,'')):''}"
+            placeholder="1着2着3着" onchange="setResult('${r.id}',this.value,this.parentNode.parentNode.querySelector('.payout').value)"></div>
+        <div><label>3連単の払戻（円・任意）</label>
+          <input class="payout" inputmode="numeric" value="${res&&res.payout!=null?res.payout:''}"
+            placeholder="例 1400" onchange="setResult('${r.id}',this.parentNode.parentNode.querySelector('input').value,this.value)"></div>
+      </div>
+      <button class="ghost" onclick="deleteRecord('${r.id}')">この記録を削除</button>
+    </div></div>`;
+  }).join('');
+
+  box.innerHTML = head +
+    (badInput!==undefined ? `<div class="notice warn">「${esc(badInput)}」は着順として読めません。
+       1〜6を3つ、重複なしで入力してください（例 154）。</div>` : '') +
+    (rows || '');
+}
+
+/* ---------- 書き出し・読み込み（機種変更やバックアップ用） ---------- */
+function exportRecords(){
+  const t = JSON.stringify(loadRecords());
+  $('recordIO').value = t;
+  if(navigator.clipboard) navigator.clipboard.writeText(t).catch(()=>{});
+  notice('recordIONotice','ok', `${loadRecords().length}件を書き出しました。この文字列を保存しておけば復元できます。`);
+}
+function importRecords(){
+  const raw = $('recordIO').value.trim();
+  if(!raw){ alert('貼り付け欄が空です。'); return; }
+  let arr;
+  try{ arr = JSON.parse(raw); }catch(e){ notice('recordIONotice','err','読み取れませんでした。'); return; }
+  if(!Array.isArray(arr)){ notice('recordIONotice','err','記録の形式ではありません。'); return; }
+  const cur = loadRecords();
+  const map = new Map(cur.map(r=>[r.id,r]));
+  let added = 0;
+  arr.forEach(r=>{ if(r && r.id && !map.has(r.id)){ map.set(r.id,r); added++; } });
+  saveRecords([...map.values()].sort((a,b)=>String(b.savedAt||'').localeCompare(String(a.savedAt||''))));
+  renderRecords();
+  notice('recordIONotice','ok', `${added}件を追加しました（既存の記録は消していません）。`);
 }
 
 /* ==================================================================
@@ -3365,6 +3579,21 @@ ${points.map((p,i)=>{
 
   $('report').innerHTML = html;
   state.lastBets = { combos: points.map(p=>p.combo), odds: odds || points.map(()=>0), probs: points.map(p=>p.p) };
+
+  /* 予想を記録に残す（結果を見る前に保存することが大事） */
+  if(typeof savePrediction === 'function'){
+    savePrediction({
+      date: $('raceDate').value, jcd: $('venue').value,
+      venueName: venue ? venue.name : '', rno: $('raceNo').value,
+      raceType: $('raceType').value || '',
+      order: ranked.map(b=>b.lane),
+      scores: ranked.map(b=>b.score),
+      picks: points.map((p,i)=>({ combo:p.combo, amount:amounts[i], p:Number(p.p.toFixed(5)) })),
+      rank, fill, gap,
+      seriesRaces: ctx.seriesInfo ? ctx.seriesInfo.maxRaces : 0,
+      entryMoved: ctx.entryInfo ? ctx.entryInfo.movedCount : 0
+    });
+  }
   renderOddsBox();
   $('report').scrollIntoView({behavior:'smooth', block:'start'});
   setStatus('予想レポートを生成しました');
@@ -3429,6 +3658,7 @@ function init(){
   const cached = loadStadiumCache();
   if(cached) log(`保存済みの競艇場データ ${cached}場ぶんを読み込みました。`);
   renderVenueInfo();
+  if(typeof renderRecords === 'function') renderRecords();
   renderBoats();
   validateAll();
   log('v16 起動しました。STEP1から順に進めてください。');
