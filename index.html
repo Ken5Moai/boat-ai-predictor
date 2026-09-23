@@ -325,6 +325,13 @@ BOAT RACE公式から取得します。<br>
   <div><label>風速 m/s</label><input id="windSpeed" inputmode="decimal" placeholder="例 3"></div>
   <div><label>波高 cm</label><input id="wave" inputmode="decimal" placeholder="例 2"></div>
 </div>
+<div>
+  <label>進入並び（スタート展示の1コース→6コースの艇番）</label>
+  <input id="entryOrder" inputmode="numeric" placeholder="例 123564（枠なりなら 123456）"
+    oninput="applyEntryOrder(this.value)">
+  <div id="entryNotice" class="mini">スタート展示で並びが枠なりと違う場合に入力してください。
+  採点がその進入コース基準に切り替わり、荒れる要素として評価されます。</div>
+</div>
 <div class="g3">
   <div><label>気温 ℃</label><input id="temp" inputmode="decimal"></div>
   <div><label>水温 ℃</label><input id="waterTemp" inputmode="decimal"></div>
@@ -1357,6 +1364,7 @@ function applyBeforeInfo(r, source){
       else setField(b,'exhibitionST',p.st,source);
     });
     log(`[直前] 展示ST 6艇ぶん取得（進入順: ${r.stPairs.map(p=>p.lane).join('-')}）`);
+    if(typeof syncEntryOrderInput === 'function') syncEntryOrderInput();
   }else if(r.stPairs.length>0){
     log(`[直前] 展示STは ${r.stPairs.length}艇ぶんしか取れないため不採用（艇番ズレ防止）`);
   }
@@ -2446,6 +2454,46 @@ function readConditionsFromInputs(){
   state.conditions.windDir = $('windDir').value || null;
   state.conditions.tide    = $('tide').value || null;
 }
+/* 「123564」のような並びを各艇の進入コースへ反映する。
+   1文字目＝1コースの艇番、2文字目＝2コースの艇番…
+   6艇そろった正しい並びの時だけ採用する（中途半端な入力でズレないように）。 */
+function applyEntryOrder(raw){
+  const digits = String(raw).replace(/[^1-6]/g,'').split('').map(Number);
+  const el = $('entryNotice');
+  if(digits.length === 0){
+    state.boats.forEach(b=>{ b.entryCourse = null; });
+    if(el){ el.textContent='スタート展示で並びが枠なりと違う場合に入力してください。'; el.style.color=''; }
+    renderBoats(); validateAll(); return;
+  }
+  if(digits.length !== 6 || new Set(digits).size !== 6){
+    if(el){ el.textContent=`1〜6を1回ずつ、6つ入力してください（現在 ${digits.length}個）。`; el.style.color='#d9ad5f'; }
+    return;
+  }
+  state.boats.forEach(b=>{ b.entryCourse = null; });
+  digits.forEach((lane, idx)=>{
+    const b = boatOf(lane);
+    if(b) b.entryCourse = idx + 1;
+  });
+  const moved = state.boats.filter(b=>b.entryCourse !== b.lane);
+  if(el){
+    el.innerHTML = moved.length
+      ? `進入: ${digits.join('-')} ／ <b style="color:#ef6262">${moved.map(b=>`${b.lane}号艇→${b.entryCourse}コース`).join('、')}</b>` +
+        `<br>採点をこの進入コース基準に切り替えました。荒れる要素として評価します。`
+      : `進入: ${digits.join('-')}（枠なり）`;
+    el.style.color = '';
+  }
+  renderBoats(); validateAll();
+}
+/* 直前情報から取得した進入を入力欄に反映する */
+function syncEntryOrderInput(){
+  const el = $('entryOrder'); if(!el) return;
+  const known = state.boats.filter(b=>b.entryCourse);
+  if(known.length !== 6) return;
+  const order = state.boats.slice().sort((a,b)=>a.entryCourse-b.entryCourse).map(b=>b.lane);
+  el.value = order.join('');
+  applyEntryOrder(el.value);
+}
+
 function toggleAllDetails(open){
   document.querySelectorAll('#boats details').forEach(d=>d.open=open);
 }
@@ -2503,6 +2551,25 @@ function courseExpectation(rates){
   return rates.reduce((a,p,i)=>a+p*FINISH_WEIGHT[i],0)/100;
 }
 
+/* ★ 採点は「枠番」ではなく「実際に走るコース」で行う。
+   スタート展示で進入が崩れていれば、4号艇が6コースを走ることもある。
+   その場合に4コースとして評価すると実態とかけ離れてしまう。      */
+function courseOf(b){
+  const c = b.entryCourse;
+  return (c>=1 && c<=6) ? c : b.lane;
+}
+/* 進入が枠なりから崩れているか（荒れやすさの判断材料） */
+function entryDisorder(){
+  const moved = state.boats.filter(b=>b.entryCourse && b.entryCourse !== b.lane);
+  const known = state.boats.filter(b=>b.entryCourse).length;
+  return {
+    known: known === 6,
+    movedCount: moved.length,
+    moved: moved.map(b=>({ lane:b.lane, course:b.entryCourse })),
+    formation: state.boats.slice().sort((x,y)=>courseOf(x)-courseOf(y)).map(b=>b.lane)
+  };
+}
+
 const lin = (v,lo,hi) => clamp((v-lo)/(hi-lo)*100, 0, 100);
 const stScore = st => clamp((0.22-st)/0.12*100, 0, 100);
 /* コース別バンド正規化：そのコースで現実的に取りうる幅の中での位置を返す */
@@ -2517,16 +2584,18 @@ function scoreBoat(b, ctx){
 
   /* 枠：その競艇場の実測の入着率から評価する。
      実測が無い場合だけ、目安の値をイン率で補正して使う。 */
-  let laneVal = LANE_BASE[b.lane], laneLabel = '枠・場特性(目安)';
-  if(ctx.courseRates && ctx.courseRates.rates[b.lane]){
-    const ev = courseExpectation(ctx.courseRates.rates[b.lane]);
+  const crs = courseOf(b);
+  const moved = (crs !== b.lane);
+  let laneVal = LANE_BASE[crs], laneLabel = (moved?`${crs}コース(進入)`:'枠')+'・場特性(目安)';
+  if(ctx.courseRates && ctx.courseRates.rates[crs]){
+    const ev = courseExpectation(ctx.courseRates.rates[crs]);
     if(ev!==null){
       laneVal = lin(ev, 15, 80);
-      laneLabel = `枠・${ctx.venue?ctx.venue.name:''}${ctx.courseRates.label}の実測`;
+      laneLabel = `${crs}コース・${ctx.venue?ctx.venue.name:''}${ctx.courseRates.label}の実測`;
     }
   }else if(ctx.venue){
     const d = ctx.venue.inRate - 55;
-    const adj = {1:1.6, 2:0.2, 3:-0.3, 4:-0.9, 5:-0.8, 6:-0.6}[b.lane];
+    const adj = {1:1.6, 2:0.2, 3:-0.3, 4:-0.9, 5:-0.8, 6:-0.6}[crs];
     laneVal = clamp(laneVal + d*adj, 0, 100);
   }
   add(laneLabel, laneVal, 0.14);
@@ -2545,11 +2614,11 @@ function scoreBoat(b, ctx){
     add('展示タイム', clamp((ctx.bestExTime+0.20-V(b.exhibitionTime))/0.20*100,0,100), 0.08);
 
   /* --- 今の艇番に対応するコース実績（最重要の一つ） --- */
-  const cs = b.courseStats[b.lane];
+  const cs = b.courseStats[crs];
   if(cs){
-    if(cs.firstRate!=null) add(`${b.lane}コース1着率`, bandScore(cs.firstRate, COURSE_BAND_FIRST[b.lane]), 0.11);
-    if(cs.trioRate!=null)  add(`${b.lane}コース3連対率`, bandScore(cs.trioRate, COURSE_BAND_TRIO[b.lane]), 0.05);
-    if(cs.avgST!=null)     add(`${b.lane}コース平均ST`, stScore(cs.avgST), 0.04);
+    if(cs.firstRate!=null) add(`${crs}コース1着率`, bandScore(cs.firstRate, COURSE_BAND_FIRST[crs]), 0.11);
+    if(cs.trioRate!=null)  add(`${crs}コース3連対率`, bandScore(cs.trioRate, COURSE_BAND_TRIO[crs]), 0.05);
+    if(cs.avgST!=null)     add(`${crs}コース平均ST`, stScore(cs.avgST), 0.04);
   }
 
   /* --- 追加データ --- */
@@ -2579,8 +2648,8 @@ function scoreBoat(b, ctx){
 
   const tilt = V(b.tilt);
   if(tilt!==null && tilt>=0.5){
-    if(b.lane>=4) bump(+3.0, `チルト${tilt}（外枠から伸びを付けてまくり狙い）`);
-    else if(b.lane<=2) bump(-2.5, `チルト${tilt}（イン寄りで出足を犠牲にしている）`);
+    if(crs>=4) bump(+3.0, `チルト${tilt}（${crs}コースから伸びを付けてまくり狙い）`);
+    else if(crs<=2) bump(-2.5, `チルト${tilt}（イン寄りで出足を犠牲にしている）`);
   }
   if(b.partsChange) bump(-1.5, `部品交換あり（${b.partsChange}）— 調整途中の可能性`);
 
@@ -2588,29 +2657,34 @@ function scoreBoat(b, ctx){
   const ws = ctx.windSpeed, wd = ctx.windDir;
   if(ws!==null && ws>=4 && wd){
     if(wd==='追い風'){
-      const t = {1:-5,2:-2,3:+2,4:+5,5:+3,6:+2}[b.lane];
+      const t = {1:-5,2:-2,3:+2,4:+5,5:+3,6:+2}[crs];
       bump(t, `追い風${ws}m（1Mでターンが流れ、まくり差しが決まりやすい）`);
     }else if(wd==='向かい風'){
-      const t = {1:+2,2:+3,3:+3,4:-3,5:-4,6:-4}[b.lane];
+      const t = {1:+2,2:+3,3:+3,4:-3,5:-4,6:-4}[crs];
       bump(t, `向かい風${ws}m（ダッシュ勢が届きにくく差しが有効）`);
     }else if(wd==='左横風'||wd==='右横風'){
-      const t = {1:-3,2:-1,3:+1,4:+2,5:+1,6:+1}[b.lane];
+      const t = {1:-3,2:-1,3:+1,4:+2,5:+1,6:+1}[crs];
       bump(t, `${wd}${ws}m（水面が乱れイン受難）`);
     }
   }
   /* 波 */
   const wv = ctx.wave;
   if(wv!==null && wv>=5){
-    if(b.lane===1) bump(-3, `波高${wv}cm（イン逃げが決まりにくい）`);
+    if(crs===1) bump(-3, `波高${wv}cm（イン逃げが決まりにくい）`);
     if(['A1','A2'].includes(V(b.grade))) bump(+2, `荒水面は上位級が有利（${V(b.grade)}）`);
   }
   /* 潮（微調整） */
   if(ctx.venue?.tide && ctx.tide){
-    if(ctx.tide==='上げ潮' && b.lane===1) bump(+1.5, '上げ潮でイン微有利（微調整）');
-    if(ctx.tide==='下げ潮' && (b.lane===2||b.lane===3)) bump(+1.5, '下げ潮で差し微有利（微調整）');
+    if(ctx.tide==='上げ潮' && crs===1) bump(+1.5, '上げ潮でイン微有利（微調整）');
+    if(ctx.tide==='下げ潮' && (crs===2||crs===3)) bump(+1.5, '下げ潮で差し微有利（微調整）');
   }
-  /* 枠なり進入率が低い場は、その枠が想定どおりのコースに入らない可能性がある */
-  if(ctx.entry && ctx.entry[b.lane]){
+  /* 進入について。
+     実際の進入が分かっている場合はそれを事実として扱い、
+     分かっていない場合だけ「枠なりに入らないかもしれない」不確実性を見る。 */
+  if(b.entryCourse){
+    if(crs > b.lane)      bump(-3.5, `${b.lane}号艇が${crs}コースへ下げられた（不利な外へ）`);
+    else if(crs < b.lane) bump(+3.0, `${b.lane}号艇が${crs}コースを取った（前付けで内へ）`);
+  }else if(ctx.entry && ctx.entry[b.lane]){
     const nari = ctx.entry[b.lane][b.lane-1];
     if(nari!=null && nari < 80){
       bump(-2, `${b.lane}枠が${b.lane}コースに入る率 ${nari}%（進入変更の可能性）`);
@@ -2652,7 +2726,8 @@ function scoreAll(){
     windDir: state.conditions.windDir,
     wave: V(state.conditions.wave),
     tide: state.conditions.tide,
-    bestExTime: exTimes.length>=3 ? Math.min(...exTimes) : null
+    bestExTime: exTimes.length>=3 ? Math.min(...exTimes) : null,
+    entryInfo: entryDisorder()
   };
   state.boats.forEach(b=>scoreBoat(b,ctx));
   return ctx;
@@ -2664,9 +2739,18 @@ function scoreAll(){
    120通りすべての確率を算出。上位から6点に絞る。
    ================================================================== */
 const TEMPERATURE = 11;
-function buildProbabilities(){
+/* 進入隊形が崩れているほど本番も読みにくい。
+   温度を上げると確率の差が縮まり、買い目が widerに散る。 */
+function temperatureFor(ctx){
+  let t = TEMPERATURE;
+  const e = ctx && ctx.entryInfo;
+  if(e && e.movedCount >= 2) t += Math.min(4, 1.2 * e.movedCount);
+  return t;
+}
+function buildProbabilities(ctx){
+  const T = temperatureFor(ctx);
   const s = {};
-  state.boats.forEach(b=>{ s[b.lane] = Math.exp(b.score / TEMPERATURE); });
+  state.boats.forEach(b=>{ s[b.lane] = Math.exp(b.score / T); });
   const total = Object.values(s).reduce((a,c)=>a+c,0);
   state.boats.forEach(b=>{ b.winProb = s[b.lane]/total; });
 
@@ -2827,6 +2911,11 @@ function buildScenarios(ranked, ctx){
 
   let rough = `荒れる条件は、`;
   const factors = [];
+  const ei = ctx.entryInfo;
+  if(ei && ei.movedCount >= 1){
+    factors.push(`スタート展示で進入が枠なりにならず（${ei.formation.join('-')}の並び）、` +
+      `本番でもコース取りが動く可能性があること`);
+  }
   if(ctx.windSpeed!==null && ctx.windSpeed>=5) factors.push(`${windTxt}の強風で1Mが流れること`);
   if(ctx.wave!==null && ctx.wave>=5) factors.push(`波高${ctx.wave}cmで乗りづらいこと`);
   const inRealRate = ctx.courseRates && ctx.courseRates.rates[1] ? ctx.courseRates.rates[1][0] : null;
@@ -2858,7 +2947,7 @@ function generateReport(){
   state.race.rno  = $('raceNo').value;
   state.race.date = $('raceDate').value;
   const ctx = scoreAll();
-  const combos = buildProbabilities();
+  const combos = buildProbabilities(ctx);
 
   const ranked = [...state.boats].sort((x,y)=>y.score-x.score);
   const gap = Math.round((ranked[0].score - ranked[1].score)*10)/10;
@@ -2879,6 +2968,9 @@ function generateReport(){
     if(fill>=78 && gap>=8) rank='A';
     else if(fill>=58 && gap>=4) rank='B';
   }
+  /* 進入が崩れている＝本番の並びが読みにくい。信頼度を1段下げる。 */
+  const ei0 = ctx.entryInfo;
+  if(ei0 && ei0.movedCount >= 2 && rank !== 'C') rank = (rank==='A' ? 'B' : 'C');
 
   const venue = ctx.venue;
   const sd0 = ctx.stadium;
@@ -2942,6 +3034,20 @@ ${ctx.courseRates ? `
 STEP1の「この競艇場のデータを取り込む」を押すと、枠の評価が実測値ベースになります。
 （未取り込みでも目安の数値で予想はできます）</div>`}
 
+${(()=>{
+  const e = ctx.entryInfo;
+  if(!e || !e.known) return `<div class="notice info">スタート展示の進入が未取得です。枠なり進入として評価しています。<br>
+    展示で並びが変わっていた場合は、STEP5の「進入並び」に入力すると評価がその並びに切り替わります。</div>`;
+  if(e.movedCount === 0) return `<div class="notice ok"><b>進入は枠なり</b>（${e.formation.join('-')}）。枠番どおりのコースで評価しています。</div>`;
+  return `<div class="notice err">
+    <b>進入が枠なりから崩れています。</b>コース取りで荒れる可能性があります。<br>
+    並び（1コース→6コース）: <b style="font-size:15px">${e.formation.join(' - ')}</b><br>
+    ${e.moved.map(m=>`${m.lane}号艇 → <b>${m.course}コース</b>`).join(' ／ ')}<br>
+    <span style="color:#ffb3b3">採点は枠番ではなく<b>この進入コース</b>で行っています。
+    本番でさらに並びが変わることもあるため、買い目は広めに散らしています。</span>
+  </div>`;
+})()}
+
 <div class="card"><div class="chead">6艇 評価順位</div><div class="cbody">
 ${ranked.map((b,i)=>`
   <div class="pick">
@@ -2950,6 +3056,7 @@ ${ranked.map((b,i)=>`
       <span class="bno" style="width:26px;height:26px;font-size:14px;background:${LANE_BG[b.lane]};color:${LANE_FG[b.lane]}">${b.lane}</span>
       <b style="color:#fff">${esc(V(b.name)||b.lane+'号艇')}</b>
       <span class="chip">${esc(V(b.grade)||'—')}</span>
+      ${b.entryCourse && b.entryCourse!==b.lane ? `<span class="chip" style="border-color:#7a2a2a;color:#ef8f8f">進入${b.entryCourse}C</span>` : ''}
       ${markName[i]?`<span class="chip">${markName[i]}</span>`:''}
       <span class="scorepill">${b.score.toFixed(1)}</span>
     </div>
