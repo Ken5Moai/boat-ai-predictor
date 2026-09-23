@@ -604,27 +604,90 @@ function serialize(fn){
   return run;
 }
 
+/* ==================================================================
+   経路の生死を覚えておく
+   無料の共有プロキシはほとんど停止しており、毎回全部試すと
+   URL候補の数だけ待たされる。通信そのものに失敗した経路は
+   このセッション中は飛ばす。
+   ・通信失敗   → その経路は不調。次の経路へ
+   ・中身が違う → 経路は生きている。URLの方が違う
+   この2つを混同していたため、生きている経路があるのに
+   死んだ経路を何度も試し直していた。
+   ================================================================== */
+const proxyHealth = {};
+function healthOf(name){
+  return proxyHealth[name] || (proxyHealth[name] = { fail:0, ok:0, dead:false });
+}
+function resetProxyHealth(){ Object.keys(proxyHealth).forEach(k=>delete proxyHealth[k]); }
+
+/* 中身が期待と違った場合に投げるエラー（通信失敗と区別する） */
+class ContentMismatch extends Error {
+  constructor(text, proxyName){
+    super('取得できたが期待する内容ではない');
+    this.name = 'ContentMismatch';
+    this.text = text;
+    this.proxyName = proxyName;
+  }
+}
+
 async function fetchViaProxy(url,{timeout=25000, mustContain=null}={}){
   const list = activeProxies();
   const idx = Math.min(state.proxyIndex, list.length-1);
   const order = [...list.slice(idx), ...list.slice(0,idx)];
   const errors = [];
+  let mismatch = null;          /* 通信は成功したが中身が違ったもの */
+  let skipped = 0;
+  let anyReachable = false;     /* この呼び出しで1本でも中身を返したか */
+  const failedHere = [];
+
+  /* 全部が不調扱いになっていたら、一度だけ復活させて試す（自己回復） */
+  if(order.every(p=>healthOf(p.name).dead)){
+    log('  － すべての経路が不調のため、判定をやり直します');
+    resetProxyHealth();
+  }
+
   for(const p of order){
+    const h = healthOf(p.name);
+    if(h.dead){ skipped++; continue; }
     try{
       log(`  → ${p.name} 経由で取得中`);
       const text = await fetchOneProxy(p, url, timeout);
       if(!text || text.length < 400) throw new Error('内容が短すぎる('+text.length+'文字)');
-      if(mustContain && !mustContain.some(k=>text.includes(k))) throw new Error('期待する内容が無い');
+
+      /* ここまで来たら経路は生きている */
+      anyReachable = true;
+      h.ok++; h.fail = 0;
       state.proxyIndex = Math.max(0, list.indexOf(p));
       state.lastProxy = p.name;
+
+      if(mustContain && !mustContain.some(k=>text.includes(k))){
+        log(`  ! ${p.name} は取得できたが期待する内容が無い (${text.length}文字)`);
+        log(`    先頭: ${text.replace(/\s+/g,' ').slice(0,300)}`);
+        if(!mismatch) mismatch = new ContentMismatch(text, p.name);
+        continue;               /* 別の経路なら中身が違うこともあるので一応続ける */
+      }
       log(`  ✓ ${p.name} 成功 (${text.length}文字)`);
       return text;
     }catch(e){
       const msg = (e && e.message) ? e.message : String(e);
+      h.fail++;
+      failedHere.push(p.name);
+      if(h.fail >= 2){ h.dead = true; }
       errors.push(`${p.name}: ${msg}`);
       log(`  ✗ ${p.name} 失敗: ${msg}`);
     }
   }
+  /* 1本でも中身を返した＝回線は正常。今回失敗した経路はその経路の問題なので
+     以降スキップする。これをしないと毎回すべての経路を試して待たされる。 */
+  if(anyReachable){
+    failedHere.forEach(n=>{ healthOf(n).dead = true; });
+    if(failedHere.length) log(`  － ${failedHere.join(' / ')} は不調のため以降スキップします`);
+  }
+  if(skipped) log(`  （不調の経路 ${skipped}本をスキップ）`);
+
+  /* 中身が違っただけなら、URLが違うと分かる形で投げる */
+  if(mismatch) throw mismatch;
+
   const err = new Error('すべての取得経路が失敗しました');
   err.detail = errors;
   throw err;
@@ -636,6 +699,7 @@ async function fetchViaProxy(url,{timeout=25000, mustContain=null}={}){
    ================================================================== */
 async function runConnectionTest(){
   const btn = $('btnConnTest'); if(btn) btn.disabled = true;
+  resetProxyHealth();          /* 手動テスト時は不調判定をやり直す */
   const target = officialUrl('racelist') ||
     'https://www.boatrace.jp/owpc/pc/data/racersearch/profile?toban=4064';
   notice('connResult','info','テスト中… 各経路を順に試します（最大1分ほどかかります）。');
@@ -1726,20 +1790,28 @@ function parseStadiumData(body, jcd){
 const STADIUM_INDEX_URL = 'https://www.boatrace.jp/owpc/pc/extra/data/stadium/index.html';
 const STADIUM_URL_KEY = 'boatai_stadium_url_v1';
 
-/* 直接試す候補（一覧からの探索が失敗した時の保険） */
-function stadiumUrlCandidates(jcd){
-  const saved = (()=>{ try{ return localStorage.getItem(STADIUM_URL_KEY); }catch(e){ return null; } })();
+/* 一度うまくいったURLの形、または手で指定されたURL（最優先で試す） */
+function savedStadiumUrls(jcd){
   const list = [];
-  if(saved) list.push(saved.replace(/\{jcd\}/g, jcd));
+  try{
+    const saved = localStorage.getItem(STADIUM_URL_KEY);
+    if(saved) list.push(saved.replace(/\{jcd\}/g, jcd));
+  }catch(e){}
   const custom = $('urlStadium') ? $('urlStadium').value.trim() : '';
   if(custom) list.push(custom.replace(/\{jcd\}/g, jcd));
-  list.push(
-    `https://www.boatrace.jp/owpc/pc/extra/data/stadium/index.html?jcd=${jcd}`,
+  return [...new Set(list)];
+}
+/* 当てずっぽうで試す候補（最後の保険） */
+function blindStadiumUrls(jcd){
+  return [
     `https://www.boatrace.jp/owpc/pc/extra/data/stadium/detail.html?jcd=${jcd}`,
+    `https://www.boatrace.jp/owpc/pc/extra/data/stadium/index.html?jcd=${jcd}`,
     `https://www.boatrace.jp/owpc/pc/extra/data/stadium/?jcd=${jcd}`,
     `https://www.boatrace.jp/owpc/pc/data/stadium?jcd=${jcd}`
-  );
-  return [...new Set(list)];
+  ];
+}
+function stadiumUrlCandidates(jcd){
+  return [...new Set([...savedStadiumUrls(jcd), ...blindStadiumUrls(jcd)])];
 }
 
 /* 一覧ページから、その場のページURLを探す */
@@ -1781,61 +1853,89 @@ async function fetchStadiumData(){
   const btn = $('btnStadium'); if(btn) btn.disabled = true;
   state.busy = true;
   const vname = VENUES[jcd] ? VENUES[jcd].name : '';
+  const tried = [];
+  let lastText = null;                 /* 診断用：最後に取れた中身 */
+
+  /* URLを1本試して、場データとして読めたら返す */
+  const tryUrl = async (url, label) => {
+    try{
+      log(`[場データ] ${label}: ${url}`);
+      const body = await fetchViaProxy(url, { mustContain:['コース別','入着率','決まり手'] });
+      lastText = body;
+      const r = parseStadiumData(body, jcd);
+      if(r.ok) return { r, url };
+      tried.push(`${label} → 表を読めず（入着率 ${r.detail.course}/6行）`);
+    }catch(e){
+      if(e instanceof ContentMismatch){
+        lastText = e.text;
+        tried.push(`${label} → ページは開けたが場データのページではない`);
+      }else{
+        tried.push(`${label} → ${e.message}`);
+      }
+    }
+    return null;
+  };
+
   try{
     setStatus(`${vname}の場データを取得中…`);
-    const tried = [];
-    let res = null, usedUrl = null;
+    let hit = null;
 
-    /* まず候補URLを順に試す */
-    for(const url of stadiumUrlCandidates(jcd)){
-      try{
-        log('[場データ] 試行: '+url);
-        const body = await fetchViaProxy(url, { mustContain:['コース別','入着率'] });
-        const r = parseStadiumData(body, jcd);
-        if(r.ok){ res = r; usedUrl = url; break; }
-        tried.push(`${url} → 表を読めず`);
-      }catch(e){ tried.push(`${url} → ${e.message}`); }
+    /* ① 記憶しているURL・手動指定のURLがあれば最優先（2場目以降はここで終わる） */
+    for(const url of savedStadiumUrls(jcd)){
+      if(hit) break;
+      hit = await tryUrl(url, '記憶したURL');
     }
 
-    /* だめなら一覧ページからリンクを探す */
-    if(!res){
-      log('[場データ] 一覧ページからリンクを探索');
-      setStatus('全場データの一覧からリンクを探しています…');
+    /* ② 一覧ページからリンクをたどる（URL構成を知らなくても届く本命） */
+    if(!hit){
+      setStatus('全場一覧からこの競艇場のリンクを探しています…');
       try{
-        const idx = await fetchViaProxy(STADIUM_INDEX_URL, { mustContain:['ボートレース','場'] });
+        log('[場データ] 一覧: '+STADIUM_INDEX_URL);
+        const idx = await fetchViaProxy(STADIUM_INDEX_URL);   /* 一覧は内容を限定しない */
         const link = findStadiumLink(idx, jcd, vname);
         if(link){
-          log('[場データ] 発見: '+link);
-          const body = await fetchViaProxy(link, { mustContain:['コース別','入着率'] });
-          const r = parseStadiumData(body, jcd);
-          if(r.ok){ res = r; usedUrl = link; rememberStadiumUrl(link, jcd); }
-          else tried.push(`${link} → 表を読めず`);
+          log('[場データ] リンク発見: '+link);
+          hit = await tryUrl(link, '一覧から発見');
         }else{
-          tried.push('一覧ページにこの場へのリンクが見つからない');
+          tried.push('一覧ページにこの競艇場へのリンクが見つからない');
+          log('[場データ] 一覧の先頭: '+String(idx).replace(/\s+/g,' ').slice(0,400));
         }
       }catch(e){ tried.push('一覧ページ → '+e.message); }
     }
 
-    if(!res){
+    /* ③ 当てずっぽうの候補 */
+    if(!hit){
+      for(const url of blindStadiumUrls(jcd)){
+        if(hit) break;
+        hit = await tryUrl(url, '候補URL');
+      }
+    }
+
+    if(!hit){
       notice('stadiumNotice','warn',
         `<b>${esc(vname)}の場データを取得できませんでした。</b>` +
         `<br><span style="font-size:11px;color:#c9a">${tried.map(esc).join('<br>')}</span>` +
-        `<br><br>下の「ページを開いて貼り付け」でも取り込めます。` +
+        (lastText ? `<br><br><b>参考：実際に返ってきた内容の先頭</b>` +
+          `<br><span style="font-size:10px;color:#8aa">${esc(String(lastText).replace(/\s+/g,' ').slice(0,200))}…</span>` : '') +
+        `<br><br>下の「ページを開いて貼り付け」なら確実に取り込めます。` +
         `<br><b>取り込まなくても予想はできます</b>（その場合は目安の数値を使います）。`);
       const dt = $('stadiumPasteDetails'); if(dt) dt.open = true;
       setStatus('場データ取得に失敗');
       return;
     }
 
-    STADIUM[jcd] = res.data;
+    /* どの経路で当たっても、次の場のためにURLの形を覚える */
+    rememberStadiumUrl(hit.url, jcd);
+    STADIUM[jcd] = hit.r.data;
     saveStadiumCache();
     renderVenueInfo();
     validateAll();
+    const dd = hit.r.detail;
     notice('stadiumNotice','ok',
-      `<b>${esc(res.data.name||vname)}の場データを取り込みました。</b>この端末に保存したので次回から通信不要です。` +
-      `<br>コース別入着率 ${res.detail.course}/6 ・ 決まり手 ${res.detail.kimarite}/6 ・ ` +
-      `枠なり率 ${res.detail.entry}/6 ・ 季節別 ${res.detail.season}/4`);
-    log('[場データ] 取得元: '+usedUrl);
+      `<b>${esc(hit.r.data.name||vname)}の場データを取り込みました。</b>この端末に保存したので次回から通信不要です。` +
+      `<br>コース別入着率 ${dd.course}/6 ・ 決まり手 ${dd.kimarite}/6 ・ ` +
+      `枠なり率 ${dd.entry}/6 ・ 季節別 ${dd.season}/4`);
+    log('[場データ] 取得元: '+hit.url);
     setStatus('場データ取得完了');
   }catch(e){
     log('[場データ] 失敗: '+e.message);
