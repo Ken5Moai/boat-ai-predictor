@@ -369,15 +369,67 @@ ok(combosShown.every(c=>/^[1-6]-[1-6]-[1-6]$/.test(c)),'買い目の形式が3�
 ok(rep.includes('◎')&&rep.includes('○')&&rep.includes('△')&&rep.includes('▲'),'◎○△▲ が表示される');
 ok(d.querySelectorAll('.rplus,.rminus').length>0,'加点・減点の根拠が表示される');
 
-console.log('\n=== S. オッズ期待値配分 ===');
-const lb=w.eval('state').lastBets;
-ok(lb&&lb.combos.length===6,'買い目がstateに保存される');
-lb.combos.forEach((c,i)=>w.setOdds(i, [7.5,14.0,22.0,45.0,60.0,120.0][i]));
-w.generateReport();
-const betEls2=[...d.querySelectorAll('.betrow')];
-const tot2=betEls2.map(e=>Number(e.querySelector('.betamt').textContent.replace(/[^0-9]/g,''))).reduce((a,b)=>a+b,0);
-ok(tot2<=1000,`オッズ配分でも予算内 (${tot2}円)`);
-ok(d.getElementById('report').textContent.includes('期待値ベース'),'期待値ベース配分と明示される');
+console.log('\n=== S. オッズを入れて期待値で買い目を選ぶ ===');
+{
+  const st=w.eval('state');
+  ok(st.lastBets&&st.lastBets.combos.length===6,'買い目がstateに保存される');
+  ok(st.lastCombos&&st.lastCombos.length===120,'120通りすべてが候補として保持される');
+  // オッズ未入力なら従来どおり確率順
+  ok(st.lastPicked.mode==='prob','オッズが無ければ確率順で選ぶ');
+  ok(d.getElementById('report').textContent.includes('確率の高い順'),'確率順だと明示される');
+  ok(d.getElementById('report').textContent.includes('倍以上で買い'),'各買い目に損益分岐オッズを出す');
+
+  // 損益分岐オッズ＝確率の逆数
+  const c0=st.lastCombos[0];
+  ok(Math.abs(w.breakEvenOdds(c0.p)-1/c0.p)<1e-9,`損益分岐は確率の逆数 (${(1/c0.p).toFixed(1)}倍)`);
+
+  // 組番でオッズを持つ（並びが変わっても崩れない）
+  w.setOdds(c0.combo, '50');
+  ok(st.oddsMap[c0.combo]===50,'オッズは組番をキーに保存される');
+  w.setOdds(c0.combo, '');
+  ok(st.oddsMap[c0.combo]===undefined,'空にすると消える');
+
+  // 期待値が基準を超える組だけ買う
+  const top=st.lastCombos.slice(0,10);
+  // 3番目と7番目だけ、損益分岐を大きく超えるオッズを付ける
+  w.setOdds(top[2].combo, (1/top[2].p*2).toFixed(1));
+  w.setOdds(top[6].combo, (1/top[6].p*1.5).toFixed(1));
+  // 1番目は損益分岐を下回るオッズ（＝買ってはいけない組）
+  w.setOdds(top[0].combo, (1/top[0].p*0.5).toFixed(1));
+  w.generateReport();
+  const picked=w.eval('state').lastPicked;
+  ok(picked.mode==='ev','オッズを入れると期待値順に切り替わる');
+  ok(picked.checked===3,`オッズを入れた3件を評価 (${picked.checked})`);
+  ok(picked.points.length===2,`期待値1.10以上の2件だけ買う (${picked.points.length}件)`);
+  ok(picked.skipped===1,`基準に届かない1件を外す (${picked.skipped}件)`);
+  ok(picked.points[0].combo===top[2].combo,'期待値のいちばん高い組が本線になる');
+  ok(!picked.points.some(p=>p.combo===top[0].combo),'確率1位でもオッズが安ければ買わない');
+  const rep=d.getElementById('report').textContent;
+  ok(rep.includes('期待値1.10以上で選定'),'期待値で選んだと明示される');
+  ok(rep.includes('外しています'),'外した件数を伝える');
+
+  // どれも基準に届かなければ「見送り」
+  w.clearOdds();
+  [0,1,2].forEach(i=>w.setOdds(top[i].combo, (1/top[i].p*0.5).toFixed(1)));
+  w.generateReport();
+  const p2=w.eval('state').lastPicked;
+  ok(p2.points.length===0,'買う価値がある組が無ければ買い目は空');
+  ok(d.getElementById('report').textContent.includes('見送りを推めます'),'見送りを明示する');
+  ok(d.querySelectorAll('.betrow').length===0,'買い目の行を出さない');
+
+  // 基準は変えられる
+  d.getElementById('evMin').value='0.40';
+  w.generateReport();
+  ok(w.eval('state').lastPicked.points.length===3,'基準を下げれば買える');
+  d.getElementById('evMin').value='1.10';
+
+  // 金額配分は従来どおり予算内
+  w.clearOdds();
+  w.generateReport();
+  const tot2=[...d.querySelectorAll('.betrow')]
+    .map(e=>Number(e.querySelector('.betamt').textContent.replace(/[^0-9]/g,''))).reduce((a,b)=>a+b,0);
+  ok(tot2<=1000,`配分は予算内 (${tot2}円)`);
+}
 
 console.log('\n=== T. 通信失敗でも壊れない ===');
 (async()=>{

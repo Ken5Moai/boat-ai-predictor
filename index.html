@@ -378,9 +378,21 @@ BOAT RACE公式から取得します。<br>
 <div class="panel" id="p7">
 <h2><span class="stepno">7</span>予想生成</h2>
 <details>
-<summary>オッズを入れて期待値配分にする（任意）</summary>
+<summary><b style="color:#f0c040">オッズを入れて期待値で買い目を選ぶ（いちばん効きます）</b></summary>
 <div class="dbody">
-<div class="mini">先に一度「予想レポート生成」を押すと、買い目6点が決まります。そのオッズを入れて再計算すると期待値ベースで金額配分します。</div>
+<div class="mini">
+実測9レースで分かったこと：<b>当たっても負けたレースは、すべて市場のほうがモデルより自信を持っていた組</b>でした。
+黒字だった3レースは、いずれもモデルの確率が市場を上回っていた組です。<br><br>
+<b>確率の高い順に買うのをやめて、期待値（確率×オッズ）の高い順に買う。</b>これが回収率を変えます。<br><br>
+一度「予想レポート生成」を押すと、下に候補が出ます。各行の<b>「○○倍以上」</b>が損益分岐です。
+公式のオッズ画面を見て、それを超えている組だけ入力してください。全部入れる必要はありません。
+入力したら、もう一度「予想レポート生成」を押します。
+</div>
+<div style="margin-top:10px">
+  <label>期待値がこの値以上の組だけ買う</label>
+  <input id="evMin" inputmode="decimal" value="1.10" oninput="renderOddsBox()">
+  <div class="mini">1.00が損益分岐。ぶれを考えて少し上に置くのが無難です。</div>
+</div>
 <div id="oddsBox" class="mini" style="margin-top:8px">まだ買い目が生成されていません。</div>
 </div>
 </details>
@@ -520,7 +532,10 @@ const state = {
   conditions:{ windDir:null, windSpeed:null, wave:null, temp:null, waterTemp:null, tide:null },
   boats: Array.from({length:6},(_,i)=>newBoat(i+1)),
   lastBets:null, proxyIndex:0,
-  busy:false          /* 同時に複数の取得を走らせない（重なるとタイムアウトを誘発する） */
+  busy:false,         /* 同時に複数の取得を走らせない（重なるとタイムアウトを誘発する） */
+  /* 組番 → オッズ。買い目の並びが変わっても対応が崩れないよう、番号ではなく組番で持つ。 */
+  oddsMap: {},
+  lastCombos: null, lastPicked: null
 };
 /* lane(1-6) から艇を取る。配列位置に依存しない安全なアクセサ */
 function boatOf(lane){ return state.boats.find(b=>b.lane===lane) || null; }
@@ -3263,7 +3278,10 @@ function recordStats(list){
   const done = list.filter(r=>r.result);
   const st = { total:list.length, done:done.length,
                tri:0, trio:0, head:0, bet:0, back:0, byRank:{},
-               ranks:[], coverage:{} };
+               ranks:[], coverage:{},
+               /* 期待値の帯ごとの成績。モデルの確率が市場を上回っていた組が
+                  本当に儲かるのかを確かめる。ここが回収率の核心。 */
+               byEV:{}, evKnown:0 };
   for(const r of done){
     const picks = (r.picks||[]).map(p=>p.combo);
     const res = r.result;
@@ -3284,6 +3302,21 @@ function recordStats(list){
     const k = r.rank || '—';
     const g = st.byRank[k] || (st.byRank[k] = { n:0, tri:0, trio:0, head:0 });
     g.n++; if(hitTri) g.tri++; if(hitTrio) g.trio++; if(hitHead) g.head++;
+
+    /* 買った1点ずつを、買った時点の期待値の帯に振り分ける。
+       レース単位ではなく点単位で見ないと、どの帯が効いたか分からない。 */
+    for(const pk of (r.picks||[])){
+      if(pk.ev == null || !pk.amount) continue;
+      st.evKnown++;
+      const band = pk.ev >= 1.5 ? '1.50以上'
+                 : pk.ev >= 1.2 ? '1.20〜1.50'
+                 : pk.ev >= 1.0 ? '1.00〜1.20' : '1.00未満';
+      const e = st.byEV[band] || (st.byEV[band] = { n:0, hit:0, bet:0, back:0 });
+      e.n++; e.bet += pk.amount;
+      if(pk.combo === res.combo && res.payout != null){
+        e.hit++; e.back += res.payout * (pk.amount/100);
+      }
+    }
 
     const rk = resultRankOf(r);
     if(rk) st.ranks.push(rk);
@@ -3333,7 +3366,29 @@ function renderRecords(badInput){
          ${Object.entries(st.byRank).sort().map(([k,g])=>
            `<tr><td>${esc(k)}</td><td>${g.n}</td><td>${pct(g.tri,g.n)}</td><td>${pct(g.trio,g.n)}</td><td>${pct(g.head,g.n)}</td></tr>`
          ).join('')}</table>
-         <div class="mini" style="margin-bottom:8px">信頼度Aの的中率が本当に高いかを、ここで確認できます。</div>` : ''}`
+         <div class="mini" style="margin-bottom:8px">信頼度Aの的中率が本当に高いかを、ここで確認できます。</div>` : ''}
+       ${st.evKnown ? `<div class="card"><div class="chead">期待値ごとの回収率<span class="mini">買った1点ずつで集計</span></div><div class="cbody">
+         <div class="mini" style="margin-bottom:8px">
+           <b>ここがいちばん大事な表です。</b>買った時点の期待値（確率×オッズ）ごとに、
+           実際いくら返ってきたかを出します。期待値1.00以上の帯で回収率が100%を超えていれば、
+           モデルの確率は市場より正確だということ。超えなければ、期待値の計算に使っている
+           確率そのものがまだ当てになっていないということです。<br>
+           <b>点数を増やすことでも、重みをいじることでもなく、この表が100%を超えるかどうかが答えです。</b>
+         </div>
+         <table class="tbl"><tr><th>買った時の期待値</th><th>点数</th><th>的中</th><th>購入</th><th>払戻</th><th>回収率</th></tr>
+         ${['1.50以上','1.20〜1.50','1.00〜1.20','1.00未満'].map(k=>{
+           const e = st.byEV[k]; if(!e) return '';
+           const rate = e.bet ? Math.round(e.back/e.bet*100) : 0;
+           const col = rate>=100 ? '#3ecf74' : '#ef6262';
+           return `<tr><td>${k}</td><td>${e.n}</td><td>${e.hit}</td>
+             <td>${e.bet.toLocaleString()}円</td><td>${Math.round(e.back).toLocaleString()}円</td>
+             <td style="color:${col}"><b>${rate}%</b></td></tr>`;
+         }).join('')}</table>
+         <div class="mini" style="margin-top:7px">
+           ${st.evKnown < 30 ? `まだ ${st.evKnown}点ぶんしかありません。30点を超えたあたりから傾向が読めます。`
+                             : `${st.evKnown}点ぶんで集計しています。`}
+         </div>
+       </div></div>` : ''}`
     : `<div class="notice info">予想レポートを作ると自動で記録されます。
          レース後に着順を入れると、的中率と回収率が出ます。</div>`;
 
@@ -3635,10 +3690,13 @@ function generateReport(){
   const budget = Math.max(100, Number($('budget').value)||1000);
   const want = Number($('betCount') ? $('betCount').value : 6) || 6;
   const maxPoints = Math.min(want, Math.max(1, Math.floor(budget/100)));
-  const points = combos.slice(0, maxPoints);
-  const odds = state.lastBets && state.lastBets.combos.join()===points.map(p=>p.combo).join()
-             ? state.lastBets.odds : null;
-  const amounts = allocate(points, budget, odds);
+  /* オッズが入っていれば期待値順、入っていなければ従来どおり確率順。
+     期待値が基準に届く組が1つも無ければ points は空になり、「見送り」を出す。 */
+  state.lastCombos = combos;
+  const picked = choosePoints(combos, maxPoints);
+  const points = picked.points;
+  const odds = points.length && points.every(p=>p.odds) ? points.map(p=>p.odds) : null;
+  const amounts = points.length ? allocate(points, budget, odds) : [];
   const hitProb = points.reduce((a,p)=>a+p.p,0);
 
   /* --- 信頼度：データ充足率 と スコア差 を分けて表示 --- */
@@ -3778,7 +3836,15 @@ ${ranked.map((b,i)=>`
   <div class="scen" style="border-color:#ef6262"><b>荒れシナリオ</b>${esc(sc.rough)}</div>
 </div></div>
 
-<div class="card"><div class="chead">買い目（3連単 ${points.length}点）<span class="mini">予算 ${budget.toLocaleString()}円</span></div><div class="cbody">
+<div class="card"><div class="chead">買い目（3連単 ${points.length}点）<span class="mini">${
+  picked.mode==='ev' ? `期待値${evMinValue().toFixed(2)}以上で選定` : '確率の高い順'} ／ 予算 ${budget.toLocaleString()}円</span></div><div class="cbody">
+${points.length===0 ? `
+  <div class="notice warn" style="margin:0">
+    <b>買う価値のある組がありませんでした。見送りを推めます。</b><br>
+    オッズを入れた${picked.checked||0}件のうち、期待値が${evMinValue().toFixed(2)}以上の組は0件でした。
+    確率が高くてもオッズが見合っていない＝当たっても損になる形です。<br>
+    基準を下げて買うこともできますが、その場合は下の候補表の期待値を見て自分で決めてください。
+  </div>` : ''}
 ${points.map((p,i)=>{
   const kind = i===0?'本線':(i<3?'準本線':'押さえ');
   const cls  = i===0?'k-honsen':(i<3?'k-jun':'k-osae');
@@ -3786,9 +3852,19 @@ ${points.map((p,i)=>{
     <span class="betkind ${cls}">${kind}</span>
     <span class="betno">${p.combo}</span>
     <span class="betprob">${(p.p*100).toFixed(1)}%</span>
-    <span class="betamt">${amounts[i].toLocaleString()}円</span>
+    <span class="mini" style="width:96px;text-align:right">${
+      p.ev!=null ? `期待値 <b style="color:#3ecf74">${p.ev.toFixed(2)}</b>`
+                 : `<span style="color:#f0c040">${p.be.toFixed(1)}倍</span>以上で買い`}</span>
+    <span class="betamt">${(amounts[i]||0).toLocaleString()}円</span>
   </div>`;
 }).join('')}
+${picked.mode!=='ev' ? `<div class="mini" style="margin-top:8px;color:#f0c040">
+  ※ オッズを入れていないので、確率の高い順に選んでいます。
+  各行の「○倍以上」を公式のオッズと見比べて、届いていない組は外してください。
+  実測9レースでは、<b>当たっても負けた6レースはすべてこの判断で外せた組</b>でした。
+</div>` : `<div class="mini" style="margin-top:8px">
+  オッズを入れた${picked.checked}件のうち、期待値が基準に届かなかった${picked.skipped}件は外しています。
+</div>`}
 <hr>
 <div class="mini">
   合計 <b>${amounts.reduce((a,c)=>a+c,0).toLocaleString()}円</b> / 予算 ${budget.toLocaleString()}円
@@ -3801,6 +3877,7 @@ ${points.map((p,i)=>{
 
   $('report').innerHTML = html;
   state.lastBets = { combos: points.map(p=>p.combo), odds: odds || points.map(()=>0), probs: points.map(p=>p.p) };
+  state.lastPicked = picked;
 
   /* 予想を記録に残す（結果を見る前に保存することが大事） */
   if(typeof savePrediction === 'function'){
@@ -3810,7 +3887,12 @@ ${points.map((p,i)=>{
       raceType: $('raceType').value || '',
       order: ranked.map(b=>b.lane),
       scores: ranked.map(b=>b.score),
-      picks: points.map((p,i)=>({ combo:p.combo, amount:amounts[i], p:Number(p.p.toFixed(5)) })),
+      /* オッズと期待値も残す。あとで「モデルの確率が市場より上だった組は
+         本当に儲かったのか」を確かめるため。ここが回収率の核心。 */
+      picks: points.map((p,i)=>({ combo:p.combo, amount:amounts[i], p:Number(p.p.toFixed(5)),
+                                  odds: p.odds || null,
+                                  ev: p.ev != null ? Number(p.ev.toFixed(3)) : null })),
+      pickMode: picked.mode,
       rank, fill, gap,
       seriesRaces: ctx.seriesInfo ? ctx.seriesInfo.maxRaces : 0,
       entryMoved: ctx.entryInfo ? ctx.entryInfo.movedCount : 0,
@@ -3825,35 +3907,90 @@ ${points.map((p,i)=>{
   setStatus('予想レポートを生成しました');
 }
 
-/* オッズ入力欄（任意） */
+/* ==================================================================
+   オッズと期待値
+   ------------------------------------------------------------------
+   実測9レースで的中した組を、モデルの確率と市場の確率で並べたところ、
+   はっきり分かれた。
+
+     黒字だった3レース  モデル 3.1% / 4.6% / 10.9%   市場 1.8% / 1.8% / 7.4%
+     赤字だった6レース  モデル 2.9% / 4.4% / 7.2%…  市場 5.4% / 9.5% / 8.4%…
+
+   当たっても負けたレースは、すべて市場のほうが自信を持っていた組だった。
+   モデルが市場より正確である必要はない。市場と違うところで正しければよい。
+   だから確率順ではなく、期待値（確率×オッズ）順に買う。
+
+   オッズは組番をキーにして持つ。買い目の並びが変わっても対応が崩れない。
+   ================================================================== */
+const EV_DEFAULT_MIN = 1.10;
+function evMinValue(){
+  const n = toNum($('evMin') ? $('evMin').value : null);
+  return (n !== null && n > 0) ? n : EV_DEFAULT_MIN;
+}
+/* その組が損得ゼロになるオッズ。確率の逆数。 */
+function breakEvenOdds(p){ return p > 0 ? 1/p : Infinity; }
+
+/* 候補に期待値を付ける。オッズが無い組は ev=null（判断できない）。 */
+function withEV(combos){
+  return combos.map(c=>{
+    const o = state.oddsMap[c.combo];
+    return { ...c, odds: o || null, ev: o ? c.p*o : null, be: breakEvenOdds(c.p) };
+  });
+}
+/* 買う組を決める。
+   オッズを1つも入れていなければ、これまでどおり確率順。
+   入れていれば、期待値が基準以上の組だけを期待値順に選ぶ。 */
+function choosePoints(combos, want){
+  const list = withEV(combos);
+  const known = list.filter(c=>c.ev !== null);
+  if(!known.length) return { points: list.slice(0, want), mode:'prob', skipped:0 };
+  const min = evMinValue();
+  const good = known.filter(c=>c.ev >= min).sort((a,b)=>b.ev-a.ev);
+  return { points: good.slice(0, want), mode:'ev',
+           skipped: known.length - good.length, checked: known.length };
+}
+
+const ODDS_CANDIDATES = 30;   /* オッズを見てもらう候補の数 */
 function renderOddsBox(){
-  const lb = state.lastBets;
-  if(!lb){ $('oddsBox').innerHTML='まだ買い目が生成されていません。'; return; }
-  $('oddsBox').innerHTML =
-    `<div class="mini" style="margin-bottom:6px">各買い目のオッズを入力して、もう一度「予想レポート生成」を押すと期待値ベースで配分し直します。</div>` +
-    lb.combos.map((c,i)=>`
-      <div style="display:flex;align-items:center;gap:8px;margin:5px 0">
-        <span class="betno" style="font-size:15px;width:64px">${c}</span>
-        <input style="flex:1" inputmode="decimal" value="${lb.odds[i]||''}" placeholder="オッズ"
-          oninput="setOdds(${i},this.value)">
-        <span class="mini" id="ev${i}" style="width:74px;text-align:right"></span>
-      </div>`).join('');
-  lb.odds.forEach((_,i)=>updateEV(i));
+  const box = $('oddsBox'); if(!box) return;
+  const lb = state.lastCombos;
+  if(!lb || !lb.length){ box.innerHTML='まだ買い目が生成されていません。'; return; }
+  const min = evMinValue();
+  const list = withEV(lb.slice(0, ODDS_CANDIDATES));
+  const rows = list.map((c,i)=>{
+    const evTxt = c.ev===null ? '—'
+      : `<b style="color:${c.ev>=min?'#3ecf74':'#ef6262'}">${c.ev.toFixed(2)}</b>`;
+    return `<tr>
+      <td class="mini">${i+1}</td>
+      <td><span class="betno" style="font-size:15px">${c.combo}</span></td>
+      <td class="mini">${(c.p*100).toFixed(1)}%</td>
+      <td class="mini"><b style="color:#f0c040">${c.be.toFixed(1)}倍</b>以上</td>
+      <td><input style="width:72px" inputmode="decimal" value="${c.odds||''}" placeholder="倍"
+            oninput="setOdds('${c.combo}',this.value)"></td>
+      <td class="mini" style="text-align:right">${evTxt}</td>
+    </tr>`;
+  }).join('');
+  const known = list.filter(c=>c.ev!==null).length;
+  const good  = list.filter(c=>c.ev!==null && c.ev>=min).length;
+  box.innerHTML =
+    `<div class="mini" style="margin-bottom:6px">
+       「${'○'}倍以上」を超えているオッズだけ入れてください。${known}件入力済み／
+       期待値${min.toFixed(2)}以上は<b style="color:${good?'#3ecf74':'#ef6262'}">${good}件</b>。
+       ${known&&!good?'<br><b style="color:#ef6262">いまのところ買う価値のある組がありません。見送りも選択肢です。</b>':''}
+     </div>
+     <table class="tbl"><tr><th>順</th><th>組番</th><th>確率</th><th>損益分岐</th><th>オッズ</th><th>期待値</th></tr>${rows}</table>
+     <div class="mini" style="margin-top:6px">
+       入力したら、もういちど「予想レポート生成」を押してください。期待値の高い順に買い目を選び直します。<br>
+       <button onclick="clearOdds()" style="margin-top:6px;background:#1a2436">入力したオッズを消す</button>
+     </div>`;
 }
-function setOdds(i,v){
+function setOdds(combo, v){
   const n = toNum(v);
-  state.lastBets.odds[i] = (n!==null && n>0) ? n : 0;
-  updateEV(i);
+  if(n !== null && n > 0) state.oddsMap[combo] = n;
+  else delete state.oddsMap[combo];
+  renderOddsBox();
 }
-function updateEV(i){
-  const lb = state.lastBets, el = $('ev'+i);
-  if(!lb || !el) return;
-  const o = lb.odds[i];
-  if(!o){ el.textContent=''; return; }
-  const ev = lb.probs[i]*o;
-  el.textContent = '期待値 '+ev.toFixed(2);
-  el.style.color = ev>=1 ? '#3ecf74' : '#ef6262';
-}
+function clearOdds(){ state.oddsMap = {}; renderOddsBox(); }
 
 /* ==================================================================
    初期化
