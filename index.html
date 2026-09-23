@@ -2783,6 +2783,27 @@ function renderVenueInfo(){
    全国平均がおおむね50点になるよう設定している。                      */
 const COURSE_BAND_FIRST = {1:[32,78], 2:[5,24], 3:[4,21], 4:[3,20], 5:[1,12], 6:[0,6.5]};
 const COURSE_BAND_TRIO  = {1:[58,90], 2:[32,68], 3:[28,62], 4:[23,57], 5:[14,44], 6:[7,31]};
+/* 採点の重み。1か所にまとめて後から検証・調整できるようにする。
+   結果記録が貯まったら、ここを実データで最適化する。 */
+const W = {
+  grade:0.09, lane:0.14,
+  national:0.11, local:0.08,          /* 実績 */
+  motor:0.11, boat:0.03,
+  avgST:0.07,
+  exST:0.07, exTime:0.08,             /* 展示 */
+  courseFirst:0.11, courseTrio:0.05, courseST:0.04,
+  ability:0.04, termWin:0.02, term3:0.02,
+  recentForm:0.07, recentST:0.04, recentTrend:0.03
+};
+/* 各項目を0〜100へ直す時の下限・上限。
+   実際に出走する選手の分布を覆っていないと、
+   下位や上位が同じ点に潰れて差がつかなくなる。 */
+const BAND = {
+  winRate:[2.0, 7.5],      /* 勝率（全国・当地・期別） */
+  motor:[20, 70], boat:[20, 60],
+  exST:[0.20, 0.00],       /* 展示ST（小さいほど良い） */
+  avgST:[0.22, 0.10]       /* 平均ST（小さいほど良い） */
+};
 const GRADE_SCORE = { A1:100, A2:76, B1:52, B2:32 };
 /* 場データが無い時の目安。実測が取り込まれていればそちらを使う。 */
 const LANE_BASE   = {1:100, 2:72, 3:62, 4:55, 5:44, 6:34};
@@ -2815,7 +2836,14 @@ function entryDisorder(){
 }
 
 const lin = (v,lo,hi) => clamp((v-lo)/(hi-lo)*100, 0, 100);
-const stScore = st => clamp((0.22-st)/0.12*100, 0, 100);
+/* 通算・今節の平均ST用。おおむね 0.12〜0.22 に分布する。 */
+const stScore = st => clamp((BAND.avgST[0]-st)/(BAND.avgST[0]-BAND.avgST[1])*100, 0, 100);
+
+/* 展示ST用。展示は本番より攻めるため 0.00〜0.20 に分布し、
+   平均ST用の式を使うと 0.10 以下がすべて満点になって差がつかなくなる。
+   実際、3レースを調べると6艇中5艇が同じ100点になっていた。
+   展示STは別の物差しで評価する。                                  */
+const exSTScore = st => clamp((BAND.exST[0]-st)/(BAND.exST[0]-BAND.exST[1])*100, 0, 100);
 /* コース別バンド正規化：そのコースで現実的に取りうる幅の中での位置を返す */
 const bandScore = (v,band) => band ? lin(v, band[0], band[1]) : null;
 
@@ -2825,7 +2853,7 @@ function scoreBoat(b, ctx){
   const add = (label,val,w) => { if(val!==null && Number.isFinite(val)) parts.push({label,val:clamp(val,0,100),w}); };
 
   /* --- 基礎 --- */
-  add('級別', GRADE_SCORE[V(b.grade)] ?? null, 0.09);
+  add('級別', GRADE_SCORE[V(b.grade)] ?? null, W.grade);
 
   /* 枠：その競艇場の実測の入着率から評価する。
      実測が無い場合だけ、目安の値をイン率で補正して使う。 */
@@ -2843,14 +2871,14 @@ function scoreBoat(b, ctx){
     const adj = {1:1.6, 2:0.2, 3:-0.3, 4:-0.9, 5:-0.8, 6:-0.6}[crs];
     laneVal = clamp(laneVal + d*adj, 0, 100);
   }
-  add(laneLabel, laneVal, 0.14);
+  add(laneLabel, laneVal, W.lane);
 
   /* --- 成績 --- */
-  if(has(b.nationalWinRate)) add('全国勝率', lin(V(b.nationalWinRate),3.0,8.0), 0.11);
-  if(has(b.localWinRate))    add('当地勝率', lin(V(b.localWinRate),3.0,8.0),   0.08);
-  if(has(b.motor2Rate))      add('モーター2連率', lin(V(b.motor2Rate),20,70),  0.11);
-  if(has(b.boat2Rate))       add('ボート2連率',   lin(V(b.boat2Rate),20,60),   0.03);
-  if(has(b.averageST))       add('平均ST', stScore(V(b.averageST)), 0.07);
+  if(has(b.nationalWinRate)) add('全国勝率', lin(V(b.nationalWinRate),BAND.winRate[0],BAND.winRate[1]), W.national);
+  if(has(b.localWinRate))    add('当地勝率', lin(V(b.localWinRate),BAND.winRate[0],BAND.winRate[1]),   W.local);
+  if(has(b.motor2Rate))      add('モーター2連率', lin(V(b.motor2Rate),BAND.motor[0],BAND.motor[1]),  W.motor);
+  if(has(b.boat2Rate))       add('ボート2連率',   lin(V(b.boat2Rate),BAND.boat[0],BAND.boat[1]),   W.boat);
+  if(has(b.averageST))       add('平均ST', stScore(V(b.averageST)), W.avgST);
 
   /* --- 展示 ---
      展示でフライングした艇も「それだけ速いスタートを切った」という事実は残る。
@@ -2858,22 +2886,22 @@ function scoreBoat(b, ctx){
      速いという事実を消したうえで罰する二重の扱いになっていた。
      速さは評価に入れ、本番で緩める分だけを後で小さく引く。       */
   if(has(b.exhibitionST))
-    add('展示ST', stScore(V(b.exhibitionST)), 0.07);
+    add('展示ST', exSTScore(V(b.exhibitionST)), W.exST);
   if(has(b.exhibitionTime) && ctx.bestExTime!==null)
-    add('展示タイム', clamp((ctx.bestExTime+0.20-V(b.exhibitionTime))/0.20*100,0,100), 0.08);
+    add('展示タイム', clamp((ctx.bestExTime+0.20-V(b.exhibitionTime))/0.20*100,0,100), W.exTime);
 
   /* --- 今の艇番に対応するコース実績（最重要の一つ） --- */
   const cs = b.courseStats[crs];
   if(cs){
-    if(cs.firstRate!=null) add(`${crs}コース1着率`, bandScore(cs.firstRate, COURSE_BAND_FIRST[crs]), 0.11);
-    if(cs.trioRate!=null)  add(`${crs}コース3連対率`, bandScore(cs.trioRate, COURSE_BAND_TRIO[crs]), 0.05);
-    if(cs.avgST!=null)     add(`${crs}コース平均ST`, stScore(cs.avgST), 0.04);
+    if(cs.firstRate!=null) add(`${crs}コース1着率`, bandScore(cs.firstRate, COURSE_BAND_FIRST[crs]), W.courseFirst);
+    if(cs.trioRate!=null)  add(`${crs}コース3連対率`, bandScore(cs.trioRate, COURSE_BAND_TRIO[crs]), W.courseTrio);
+    if(cs.avgST!=null)     add(`${crs}コース平均ST`, stScore(cs.avgST), W.courseST);
   }
 
   /* --- 追加データ --- */
-  if(has(b.racerAbilityIndex)) add('能力指数', lin(V(b.racerAbilityIndex),40,90), 0.04);
-  if(has(b.termWinRate))       add('期別勝率', lin(V(b.termWinRate),3.0,8.0),   0.02);
-  if(has(b.term3Rate))         add('期別3連率', clamp(V(b.term3Rate)*1.25,0,100),0.02);
+  if(has(b.racerAbilityIndex)) add('能力指数', lin(V(b.racerAbilityIndex),40,90), W.ability);
+  if(has(b.termWinRate))       add('期別勝率', lin(V(b.termWinRate),BAND.winRate[0],BAND.winRate[1]),   W.termWin);
+  if(has(b.term3Rate))         add('期別3連率', clamp(V(b.term3Rate)*1.25,0,100),W.term3);
 
   /* --- 今節成績 ---
      節が進むほど材料が増えて信頼できるので、走った本数に応じて
@@ -2890,17 +2918,17 @@ function scoreBoat(b, ctx){
 
     if(finished.length){
       const avg = finished.reduce((a,c)=>a+c,0)/finished.length;
-      add('今節着順', clamp((6-avg)/5*100, 0, 100), 0.07 * ratio);
+      add('今節着順', clamp((6-avg)/5*100, 0, 100), W.recentForm * ratio);
     }
     /* 今節の平均ST。公式の平均STより新しい情報なので別項目として見る */
     const sts = races.filter(r=>r.st!=null && !r.stFlag).map(r=>r.st);
     if(sts.length >= 2){
-      add('今節平均ST', stScore(sts.reduce((a,c)=>a+c,0)/sts.length), 0.04 * ratio);
+      add('今節平均ST', stScore(sts.reduce((a,c)=>a+c,0)/sts.length), W.recentST * ratio);
     }
     /* 調子の向き */
     const tr = formTrend(races);
     if(tr !== null){
-      add('今節の調子', clamp(50 + tr*22, 0, 100), 0.03 * ratio);
+      add('今節の調子', clamp(50 + tr*22, 0, 100), W.recentTrend * ratio);
       if(tr >= 0.8)      plus.push(`今節の着順が上向き（${finished.join('→')}）`);
       else if(tr <= -0.8) minus.push(`今節の着順が下降（${finished.join('→')}）`);
     }
@@ -2987,7 +3015,7 @@ function scoreBoat(b, ctx){
   return b;
 }
 
-const TOTAL_WEIGHT = 0.09+0.14+0.11+0.08+0.11+0.03+0.07+0.07+0.08+0.11+0.05+0.04+0.04+0.02+0.02+0.07+0.04+0.03;
+const TOTAL_WEIGHT = Object.values(W).reduce((a,c)=>a+c,0);
 
 function scoreAll(){
   readConditionsFromInputs();
