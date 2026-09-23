@@ -3166,23 +3166,23 @@ function buildProbabilities(ctx){
   return combos;
 }
 
-/* 金額配分：100円単位。オッズがあれば期待値ベース、無ければ確率比例 */
+/* 金額配分：100円単位。確率に比例して配る。
+   ------------------------------------------------------------------
+   どれか1つしか当たらない（排他的な）買い目に予算を配るとき、
+   資金の伸びがいちばん大きくなるのは「確率に比例させる」配り方。
+   以前はオッズがある場合だけ 1/オッズ に比例させていた（＝どれが当たっても
+   払戻が同じになる配り方）。ぶれは小さくなるが、資金の伸びは落ちる。
+   買う組はすでに期待値で絞ってあるので、ここは確率比例に一本化する。
+
+   なお、期待値がマイナスの組に厚く張るのは損を増やすだけ。
+   「オッズが安い組だけ金額を上げる」のは逆効果になる。       */
 function allocate(points, budget, odds){
   const units = Math.floor(budget/100);
   const n = points.length;
+  if(!n) return [];
   if(units < n) return points.map((p,i)=> i<units ? 100 : 0);
 
-  let weights;
-  const hasOdds = odds && points.every((_,i)=>odds[i]>0);
-  if(hasOdds){
-    /* 期待値がプラスの点のみに、払戻しが均等になるよう配分（1/オッズ比例） */
-    const ev = points.map((p,i)=>p.p*odds[i]);
-    const keep = ev.map(e=>e>=0.85);
-    if(keep.some(Boolean)) weights = points.map((p,i)=> keep[i] ? (1/odds[i]) : 0);
-    else weights = points.map(p=>p.p);
-  }else{
-    weights = points.map(p=>p.p);
-  }
+  const weights = points.map(p=>p.p);
   const wsum = weights.reduce((a,c)=>a+c,0) || 1;
 
   /* 最低1ユニット確保 → 残りを最大剰余法で配分 */
@@ -3734,6 +3734,28 @@ function generateReport(){
 </div>
 
 ${vres.forced?`<div class="notice err"><b>重要データが不足したまま生成しています。</b>参考程度に留めてください。</div>`:''}
+
+<div class="card"><div class="chead">損益分岐は2つある（混同しやすいところ）</div><div class="cbody">
+  <div class="mini">
+  <b>① その組の分岐 ＝ 1 ÷ その組の確率</b>（各買い目の「○倍以上」）<br>
+  その値段で買って割に合うか。<b>組ごとに違います。</b>
+  確率10%の組なら10倍、確率2%の組なら50倍。<br><br>
+
+  <b>② レース全体の分岐 ＝ 点数 × 100円</b>（いまの${points.length||1}点なら${points.length||1}倍）<br>
+  そのレースで使った金額を、当たった1点で取り返せるか。<br><br>
+
+  <b style="color:#f0c040">買うかどうかを決めるのは①です。</b>
+  ②は「点数を広げすぎていないか」の目安にすぎません。<br><br>
+
+  実例：徳山3Rの 1-6-4 はオッズ10.2倍。②で見ると「12倍以下だから損」ですが、
+  ①で見ると確率10.9%＝<b>9.2倍以上なら買い</b>なので、買って良い組でした。
+  実際この1点だけに1,200円使えば払戻12,240円。12点に薄めたので−180円になりました。<br><br>
+
+  <b style="color:#ef6262">やってはいけないこと：オッズが安い組だけ金額を上げる。</b>
+  期待値がマイナスの組に厚く張ると、損が増えるだけです。
+  厚くするなら<b>期待値がプラスの組</b>を厚くします。金額配分は自動でそうしています。
+  </div>
+</div></div>
 
 <div class="card"><div class="chead">信頼度</div><div class="cbody">
   <div class="kpis">
