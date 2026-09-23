@@ -235,6 +235,32 @@ if(require.main===module){
   PAID.forEach(r=>console.log(`    ${r.name.padEnd(12)} ${r.result}  ${String(r.pay).padStart(6)}円  `+
     `${String(r.pop||'?').padStart(2)}番人気  評価${String(r.rank).padStart(3)}番目`));
 
+  console.log('\n=== モデルの確率 vs 市場の確率（回収率の核心） ===');
+  console.log('  市場の推定確率 = 0.75 ÷ オッズ（3連単の控除率25%を戻した値）');
+  console.log('  期待値 = モデルの確率 × オッズ。1.00を超える組だけが買う価値を持つ。\n');
+  console.log('  レース          結果    配当   モデル  市場   期待値');
+  let evSum = 0, evN = 0, mpSum = 0, mkSum = 0;
+  const evGood = [], evBad = [];
+  for(const x of base.filter(r=>r.pay)){
+    const odds = x.pay/100, mp = x.probs[x.rank-1], market = 0.75/odds, ev = mp*odds;
+    evSum += ev; evN++; mpSum += mp; mkSum += market;
+    (ev >= 1 ? evGood : evBad).push(x);
+    console.log(`  ${x.name.padEnd(12)} ${x.result}  ${String(x.pay).padStart(6)}円  `+
+      `${(mp*100).toFixed(1).padStart(5)}%  ${(market*100).toFixed(1).padStart(5)}%  `+
+      `${ev.toFixed(2).padStart(5)}  ${ev>=1?'★':''}`);
+  }
+  if(evN){
+    const sum = a => a.reduce((s,x)=>s+x.pay,0);
+    console.log(`\n  期待値1.00以上だった的中 ${evGood.length}件  払戻合計 ${sum(evGood).toLocaleString()}円`);
+    console.log(`  期待値1.00未満だった的中 ${evBad.length}件  払戻合計 ${sum(evBad).toLocaleString()}円`);
+    console.log(`\n  的中した組に付いていた確率の平均   モデル ${(mpSum/evN*100).toFixed(1)}%  /  市場 ${(mkSum/evN*100).toFixed(1)}%`);
+    console.log('  この2つが近ければ、モデルの確率は市場と同じくらい校正されている。');
+    console.log('  モデルが大きく低ければ自信不足、大きく高ければ自信過剰ということ。');
+    console.log('\n  ※ 当たった組のオッズしか分からないので、これは「当たったレースだけ」の集計。');
+    console.log('     買った全点での本当の回収率は、アプリのSTEP8に払戻を入れて');
+    console.log('     「期待値ごとの回収率」の表で確かめること。');
+  }
+
   console.log('\n=== 手書き補正の点検 ===');
   console.log('  採点の重み(W)と違い、下の補正は結果から決めたものではなく手で書いた値。');
   console.log('  何件に当たっていて、外すと順位がどう動くかを毎回ここで見る。\n');
