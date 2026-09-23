@@ -75,11 +75,24 @@ const RACES=[
  {reg:'4594',g:'B1',nat:6.26,loc:5.55,mot:40.63,bt:35.07,st:0.16,F:0,exST:0.13,exF:null,exT:6.95,tilt:0.0,wt:52.0,adj:0.0,entry:4,rec:[[2,.11,2],[6,.27,5],[5,.15,5]]},
  {reg:'4811',g:'B1',nat:4.97,loc:5.13,mot:38.95,bt:28.57,st:0.16,F:0,exST:0.01,exF:'F',exT:6.87,tilt:0.0,wt:50.5,adj:1.5,entry:5,rec:[[4,.11,6],[1,.18,1],[3,.13,4]]},
  {reg:'4090',g:'B2',nat:6.08,loc:6.18,mot:20.59,bt:38.14,st:0.16,F:0,exST:0.21,exF:null,exT:6.93,tilt:0.0,wt:54.0,adj:0.0,entry:6,rec:[[4,.08,5],[5,.12,6],[3,.13,1]]}]},
+// 徳山5R: 進入は枠なり。展示で5・6号艇がF。3号艇はシリンダ交換。
+// 2号艇の今節1走目は転覆、3号艇は落水（着順の平均からは除外される）。
+// 直前の水面は風速1m・波高1cmだったが、レース時は風速3m・波高3cmに変わった。
+// モデル5位（1着率6.2%）の3号艇が2着に入り、12点では取れなかった。
+// チルト+0.5 で +3.0 した6号艇は最下位。
+{name:'徳山5R 予選',jcd:'18',rno:5,date:'2026-09-23',result:'1-3-4',pop:9,pay:2060,wind:null,ws:3,wave:3,temp:26,wtemp:26,
+ B:[
+ {reg:'4323',g:'B1',nat:6.09,loc:4.13,mot:41.75,bt:36.74,st:0.17,F:0,exST:0.19,exF:null,exT:6.86,tilt:0.0,wt:55.4,entry:1,rec:[[5,.07,3],[4,.22,2],[4,.08,1]]},
+ {reg:'4677',g:'A1',nat:6.09,loc:5.82,mot:25.58,bt:29.38,st:0.15,F:0,exST:0.27,exF:null,exT:6.95,tilt:0.0,wt:52.1,entry:2,rec:[[3,.12,'転'],[1,.16,4],[4,.11,6]]},
+ {reg:'4981',g:'B1',nat:5.24,loc:5.72,mot:20.79,bt:37.09,st:0.18,F:0,exST:0.12,exF:null,exT:6.97,tilt:-0.5,wt:52.4,entry:3,parts:'シリンダ',rec:[[5,.14,'落'],[2,.19,4],[1,.32,6]]},
+ {reg:'4839',g:'A2',nat:6.18,loc:5.32,mot:43.68,bt:30.84,st:0.15,F:0,exST:0.13,exF:null,exT:6.96,tilt:0.0,wt:52.0,entry:4,rec:[[3,.10,4],[6,.14,4],[4,.28,5],[2,.12,4]]},
+ {reg:'3637',g:'B1',nat:3.58,loc:3.74,mot:30.56,bt:31.46,st:0.18,F:0,exST:0.02,exF:'F',exT:6.96,tilt:-0.5,wt:52.8,entry:5,rec:[[1,.11,2],[3,.23,5],[4,.15,6]]},
+ {reg:'4679',g:'A2',nat:6.09,loc:5.77,mot:35.71,bt:40.00,st:0.16,F:0,exST:0.08,exF:'F',exT:6.83,tilt:0.5,wt:56.0,entry:6,rec:[[3,.15,1],[3,.44,5],[4,.11,2],[3,.15,2]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
   opt=opt||{};
-  const dom=new JSDOM(HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
+  const dom=new JSDOM(opt.html||HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
    beforeParse(w){w.Tesseract={createWorker:async()=>({})};w.fetch=async()=>{throw new Error('x')};w.alert=()=>{}}});
   const w=dom.window,d=w.document;
   w.Element.prototype.scrollIntoView=function(){};
@@ -206,6 +219,40 @@ if(require.main===module){
   console.log('\n  レース別の払戻（100円あたり）');
   PAID.forEach(r=>console.log(`    ${r.name.padEnd(12)} ${r.result}  ${String(r.pay).padStart(6)}円  `+
     `${String(r.pop||'?').padStart(2)}番人気  評価${String(r.rank).padStart(3)}番目`));
+
+  console.log('\n=== 手書き補正の点検 ===');
+  console.log('  採点の重み(W)と違い、下の補正は結果から決めたものではなく手で書いた値。');
+  console.log('  何件に当たっていて、外すと順位がどう動くかを毎回ここで見る。\n');
+  const allB = [].concat(...RACES.map(r=>r.B.map(b=>({...b, ws:r.ws, wave:r.wave, wind:r.wind}))));
+  const counts = [
+    ['F持ち',            allB.filter(b=>b.F).length,       'if(b.flagF)  bump(', 'if(false)  bump('],
+    ['L持ち',            allB.filter(b=>b.L).length,       null, null],
+    ['展示F',            allB.filter(b=>b.exF).length,
+      '  if(b.exhibitionSTFlag)\n    bump(-3,', '  if(false)\n    bump(-3,'],
+    ['チルト0.5以上',      allB.filter(b=>b.tilt>=0.5).length,
+      'if(crs>=4) bump(+3.0,', 'if(false) bump(+3.0,'],
+    ['部品交換',          allB.filter(b=>b.parts).length,   'if(b.partsChange) bump(', 'if(false) bump('],
+    ['風（風速4m以上）',    allB.filter(b=>b.ws>=4 && b.wind).length, null, null],
+    ['波（波高5cm以上）',   allB.filter(b=>b.wave>=5).length, null, null],
+    ['潮',               0,                                null, null],
+  ];
+  const baseRanks = base.map(r=>r.rank);
+  const fmt = r => `[${r.map(x=>String(x).padStart(3)).join(' ')}] 平均${(r.reduce((a,c)=>a+c,0)/r.length).toFixed(1)} `+
+                   `12点${r.filter(x=>x<=12).length}/${r.length}`;
+  console.log(`  ${'補正'.padEnd(18)}該当   外した場合`);
+  console.log(`  ${'（いまのまま）'.padEnd(17)}  —   ${fmt(baseRanks)}`);
+  for(const [name, n, find, repl] of counts){
+    if(n === 0){
+      console.log(`  ${name.padEnd(18)}${String(n).padStart(3)}件  一度も発動していない（検証できない）`);
+      continue;
+    }
+    if(!find){ console.log(`  ${name.padEnd(18)}${String(n).padStart(3)}件  外し方を用意していない`); continue; }
+    const patched = HTML.split(find).join(repl);
+    if(patched === HTML){ console.log(`  ${name.padEnd(18)}${String(n).padStart(3)}件  該当箇所が見つからない（コードが変わった？）`); continue; }
+    console.log(`  ${name.padEnd(18)}${String(n).padStart(3)}件  ${fmt(runWith({},null,{html:patched}).map(r=>r.rank))}`);
+  }
+  console.log('\n  外したほうが平均が良くなる補正は、値が大きすぎる可能性がある。');
+  console.log('  ただし12点の的中数が変わらないなら、8レース程度では偶然の幅。すぐには変えないこと。');
 
   console.log('\n=== 当地勝率が無い選手（初出走）の扱い ===');
   console.log('  当地の重み 0.08（既定） '+line(summarize(runWith({}))));
