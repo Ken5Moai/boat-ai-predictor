@@ -497,6 +497,11 @@ function newBoat(lane){
     name:null, grade:null, branch:null, birthplace:null, age:null,
     nationalWinRate:null, nationalR2:null, nationalR3:null,
     localWinRate:null, localR2:null, localR3:null,
+    /* 当地記録なし（その場に初出走）。「取得できなかった」とは別物として扱う。
+       公式は当地勝率を 0.00 と表示するが 0.00 は範囲外なので採用されない。
+       そのまま未取得にすると必須項目が欠けた扱いになり、
+       1艇が初出走というだけでレース全体の信頼度がCまで落ちてしまう。 */
+    localNone:false,
     averageST:null, flagF:null, flagL:null,
     motorNumber:null, motor2Rate:null, motor3Rate:null,
     boatNumber:null, boat2Rate:null, boat3Rate:null,
@@ -1165,9 +1170,14 @@ function applyRacelistRows(rows, source){
       setField(b,'nationalR3',r.national.r3,source);
     }
     if(r.local){
-      setField(b,'localWinRate',r.local.win,source);
-      setField(b,'localR2',r.local.r2,source);
-      setField(b,'localR3',r.local.r3,source);
+      /* 当地勝率 0.00 は「まだこの場で走っていない」の意味。欠測ではない。 */
+      if(Number(r.local.win) === 0) b.localNone = true;
+      else {
+        b.localNone = false;
+        setField(b,'localWinRate',r.local.win,source);
+        setField(b,'localR2',r.local.r2,source);
+        setField(b,'localR3',r.local.r3,source);
+      }
     }
     if(r.motor){
       setField(b,'motorNumber',r.motor.no,source);
@@ -2485,7 +2495,8 @@ function applyRacelistOCR(recs){
     if(r.grade && GRADES.includes(r.grade)) put('grade', r.grade);
     if(r.name) put('name', r.name);
     put('nationalWinRate', r.nationalWinRate);
-    put('localWinRate',    r.localWinRate);
+    if(r.localWinRate === 0) b.localNone = true;
+    else put('localWinRate', r.localWinRate);
     put('motorNumber',     r.motorNumber);
     put('motor2Rate',      r.motor2Rate);
     put('boatNumber',      r.boatNumber);
@@ -2497,7 +2508,7 @@ function applyRacelistOCR(recs){
 
     /* 読めたが必須項目が欠けている艇も必ず知らせる。
        理由は艇ごとに1行だけにまとめる（同じ艇で何行も出すと読みにくい）。 */
-    const lacks = REQUIRED.filter(([k])=>!has(b[k])).map(([,label])=>label);
+    const lacks = REQUIRED.filter(([k])=>!requiredOK(b,k)).map(([,label])=>label);
     if(lacks.length){
       const why = r.ambiguous  ? '（数字の区切りが不明瞭なため）'
                 : r.unreadable ? '（見出しを読めず、推測を避けたため）' : '';
@@ -2569,12 +2580,17 @@ function fieldHTML(b,key,label,opt={}){
     <input id="fld_${b.lane}_${key}" value="${esc(shown)}" inputmode="${opt.text?'text':'decimal'}"
       placeholder="${required?'必須':'任意'}" class="${cls}"
       oninput="manualEdit(${b.lane},'${key}',this.value)">
-    <div class="src">${val===null?(required?'未取得':'—'):SRC(f)}</div>
+    <div class="src">${val===null?(opt.noneLabel||(required?'未取得':'—')):SRC(f)}</div>
   </div>`;
 }
 function manualEdit(lane,key,raw){
   const b = boatOf(lane); if(!b) return;
   const s = String(raw).trim();
+  /* 当地勝率に 0 と入れたら「当地記録なし」。空欄（未取得）とは区別する。 */
+  if(key === 'localWinRate'){
+    b.localNone = (s !== '' && toNum(s) === 0);
+    if(b.localNone){ b.localWinRate = null; paintField(lane,key); validateAll(); return; }
+  }
   if(s===''){ b[key]=null; }
   else if(RANGES[key]){
     const n = toNum(s);
@@ -2590,11 +2606,12 @@ function paintField(lane,key){
   const b = boatOf(lane); const el = $(`fld_${lane}_${key}`); if(!b||!el) return;
   const ok = has(b[key]);
   const required = ['grade','nationalWinRate','localWinRate','motor2Rate'].includes(key);
+  const none = (key === 'localWinRate' && b.localNone === true);
   el.classList.toggle('good', ok);
-  el.classList.toggle('bad', !ok && (required || el.value.trim()!==''));
-  el.classList.toggle('soft', !ok && !required && el.value.trim()==='');
+  el.classList.toggle('bad', !ok && !none && (required || el.value.trim()!==''));
+  el.classList.toggle('soft', (!ok && !required && el.value.trim()==='') || none);
   const src = el.parentElement.querySelector('.src');
-  if(src) src.textContent = ok ? SRC(b[key]) : (required?'未取得':'—');
+  if(src) src.textContent = ok ? SRC(b[key]) : (none ? '当地記録なし（初出走）' : (required?'未取得':'—'));
 }
 
 function courseHTML(b){
@@ -2642,7 +2659,8 @@ function boatCardHTML(b){
       ${fieldHTML(b,'name','選手名',{text:true})}
       ${fieldHTML(b,'grade','級別',{text:true,required:true})}
       ${fieldHTML(b,'nationalWinRate','全国勝率',{required:true,fixed:2})}
-      ${fieldHTML(b,'localWinRate','当地勝率',{required:true,fixed:2})}
+      ${fieldHTML(b,'localWinRate','当地勝率',{required:true,fixed:2,
+          noneLabel: b.localNone ? '当地記録なし（初出走）' : null})}
       ${fieldHTML(b,'motor2Rate','モーター2連率',{required:true,fixed:2})}
       ${fieldHTML(b,'averageST','平均ST',{fixed:2})}
       ${fieldHTML(b,'exhibitionST','展示ST',{fixed:2})}
@@ -3348,6 +3366,54 @@ function importRecords(){
 }
 
 /* ==================================================================
+   スコア差から配当の規模を見積もる
+   ------------------------------------------------------------------
+   実走6レースを記録したところ、1位と2位のスコア差が小さいレースほど
+   配当が高かった。モデルが迷うレースは市場も迷う、という関係。
+
+     差 2.3 → ¥4,240（17番人気）    差12.2 → ¥4,100
+     差 3.5 → ¥10,960（33番人気）   差12.6 → ¥1,400
+     差11.4 → ¥790（1番人気）       差19.2 → ¥1,020（4番人気）
+
+   差が大きいレースは的中しても配当が安いので、点数を広げると
+   当たっても赤字になる。実際、徳山3Rは買い目の1番手で決まったのに
+   12点均等では 投資¥1,200 → 払戻¥1,020 で負けた。
+
+   ただし n=6 では偶然の幅が大きいので、これは「点数を自動で変える」
+   のではなく「損益分岐点を先に見せる」だけにとどめる。判断は人間が行う。
+   ================================================================== */
+function payoutHintHTML(gap, amounts){
+  const g = Number(gap) || 0;
+  const list = (amounts||[]).filter(a=>a>0);
+  if(!list.length) return '';
+  const total = list.reduce((a,c)=>a+c,0);
+  /* その点が当たったときに元が取れる配当 = 総投資 ÷ (その点の金額/100) */
+  const be = list.map(a=>Math.ceil(total*100/a/10)*10);
+  const beMin = Math.min(...be), beMax = Math.max(...be);
+  const points = list.length;
+  let scale, note;
+  if(g >= 15){
+    scale = '安い配当（〜2,000円）になりやすい';
+    note  = '点数を広げると<b>当たっても赤字</b>になりやすい形です。絞るか、見送りも選択肢。';
+  }else if(g >= 8){
+    scale = '中くらいの配当（1,000〜5,000円）';
+    note  = '点数はそのままで問題ない形です。';
+  }else{
+    scale = '高い配当（5,000円〜）になりやすい';
+    note  = '評価が割れている＝荒れやすいレース。点数を広げる価値があります。';
+  }
+  return `<div class="mini">
+    <b style="color:#f0c040">配当の目安</b>：1位と2位の差が <b>${g}</b> なので、${scale}。<br>
+    いまの<b>${points}点・合計${total.toLocaleString()}円</b>だと、3連単の配当が
+    <b>${beMin===beMax ? `${beMin.toLocaleString()}円` : `${beMin.toLocaleString()}〜${beMax.toLocaleString()}円`}</b>
+    を超えないと、当たっても損になります。<br>
+    ${note}<br>
+    <span style="color:#7f8eaa">※ 実走6レースから見た傾向です。件数が少ないので目安として扱ってください。
+    STEP8に払戻を入力していくほど、この見積もりは正確になります。</span>
+  </div>`;
+}
+
+/* ==================================================================
    データ検証（必須項目の充足チェック）
    ================================================================== */
 /* 予想の計算に実際に使う項目だけを必須とする。
@@ -3358,6 +3424,14 @@ const REQUIRED = [
   ['nationalWinRate','全国勝率'], ['localWinRate','当地勝率'], ['motor2Rate','モーター2連率']
 ];
 const NICE_TO_HAVE = [['name','選手名']];
+/* 必須項目が満たされているか。当地勝率だけは「記録なし」も満たしたとみなす。
+   採点では当地を項目ごと外して重みを配り直すので、予想の精度は落ちない。
+   「データが取れなかった」と「その選手にまだ当地成績が存在しない」を
+   同じ扱いにすると、新人が1人いるだけで信頼度が下がってしまう。   */
+function requiredOK(b,key){
+  if(key === 'localWinRate') return has(b.localWinRate) || b.localNone === true;
+  return has(b[key]);
+}
 function validateAll(){
   syncRegsFromInputs();
   const missing = [];
@@ -3365,7 +3439,7 @@ function validateAll(){
     if(!b.registrationNumber || b.registrationNumber.length!==4){
       missing.push(`${b.lane}号艇: 登録番号`); return;
     }
-    const lacks = REQUIRED.filter(([k])=>!has(b[k])).map(([,label])=>label);
+    const lacks = REQUIRED.filter(([k])=>!requiredOK(b,k)).map(([,label])=>label);
     if(lacks.length) missing.push(`${b.lane}号艇: ${lacks.join('・')}`);
   });
 
@@ -3561,6 +3635,8 @@ ${vres.forced?`<div class="notice err"><b>重要データが不足したまま�
   })()}
   ${venue?`${esc(venue.name)}の1コース1着率の目安 ${venue.inRate}% を枠評価に反映済み。`:''}
   <br>信頼度Aは「当たりやすい」ではなく「<b>データが揃っていて評価差がはっきりしている</b>」という意味です。</div>
+  <hr>
+  ${payoutHintHTML(gap, amounts)}
 </div></div>
 
 ${ctx.courseRates ? `

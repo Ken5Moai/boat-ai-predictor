@@ -8,7 +8,7 @@ const HTML=fs.readFileSync(HTML_PATH,'utf8');
 // ---- 実際に走ったレース（結果つき） ----
 // rec は [進入コース, ST, 着順] の並び。新しい順ではなく出走表の並び（古い→新しい）。
 const RACES=[
-{name:'桐生8R 女子',jcd:'01',rno:1,date:'2026-09-23',result:'1-5-4',pop:null,wind:'向かい風',ws:2,wave:1,
+{name:'桐生8R 女子',jcd:'01',rno:1,date:'2026-09-23',result:'1-5-4',pop:null,pay:1400,wind:'向かい風',ws:2,wave:1,
  B:[
  {reg:'4373',g:'A1',nat:6.14,loc:7.40,mot:38.31,bt:37.84,st:0.17,F:1,exST:0.22,exF:null,exT:6.74,tilt:-0.5,wt:46.5,rec:[[2,.18,4],[6,.26,3],[3,.24,3],[1,.24,1],[5,.23,4]]},
  {reg:'4720',g:'B1',nat:3.33,loc:5.70,mot:29.89,bt:37.70,st:0.20,F:1,exST:0.15,exF:null,exT:6.74,tilt:0.0,wt:47.8,rec:[[6,.23,6],[3,.08,4],[5,.26,6],[4,.17,3],[1,.23,6]]},
@@ -16,7 +16,7 @@ const RACES=[
  {reg:'5213',g:'B1',nat:5.24,loc:5.09,mot:37.58,bt:37.31,st:0.20,F:0,exST:0.03,exF:'F',exT:6.69,tilt:-0.5,wt:46.5,rec:[[4,.11,'失'],[3,.15,2],[2,.25,1],[5,.30,2],[1,.22,2]]},
  {reg:'5195',g:'A2',nat:5.28,loc:4.22,mot:34.31,bt:31.28,st:0.15,F:1,exST:0.02,exF:'F',exT:6.87,tilt:0.0,wt:48.0,rec:[[4,.18,5],[6,.08,3],[3,.04,1],[1,.18,1],[2,.17,1]]},
  {reg:'5437',g:'B2',nat:1.61,loc:null,mot:29.65,bt:28.65,st:0.23,F:1,exST:0.05,exF:null,exT:6.71,tilt:-0.5,wt:51.4,rec:[[6,.17,5],[6,.19,6],[6,.23,5],[6,.21,'失']]}]},
-{name:'桐生9R 男子',jcd:'01',rno:9,date:'2026-09-23',result:'1-3-2',pop:null,wind:'向かい風',ws:1,wave:1,
+{name:'桐生9R 男子',jcd:'01',rno:9,date:'2026-09-23',result:'1-3-2',pop:null,pay:4100,wind:'向かい風',ws:1,wave:1,
  B:[
  {reg:'4311',g:'A1',nat:6.34,loc:6.81,mot:34.41,bt:39.01,st:0.15,F:1,exST:0.02,exF:null,exT:6.80,tilt:-0.5,wt:54.2,rec:[[1,.22,1],[5,.28,4],[4,.18,5],[3,.18,5],[6,.19,4]]},
  {reg:'4228',g:'A2',nat:6.50,loc:5.75,mot:27.89,bt:32.80,st:0.17,F:1,exST:0.02,exF:'F',exT:6.84,tilt:-0.5,wt:54.3,rec:[[2,.21,6],[5,.17,5],[6,.22,6],[3,.12,3],[1,.20,2]]},
@@ -24,7 +24,7 @@ const RACES=[
  {reg:'4351',g:'A1',nat:6.94,loc:7.18,mot:27.84,bt:31.09,st:0.13,F:1,exST:0.07,exF:'F',exT:6.83,tilt:-0.5,wt:52.0,rec:[[6,.08,3],[3,.16,4],[2,.12,1],[1,.18,3],[2,.17,1]]},
  {reg:'5427',g:'B1',nat:3.04,loc:2.35,mot:36.79,bt:34.36,st:0.22,F:0,exST:0.05,exF:'F',exT:6.74,tilt:-0.5,wt:52.0,rec:[[6,.15,4],[5,.21,5],[4,.14,3],[5,.18,3],[6,.03,6]]},
  {reg:'3538',g:'B2',nat:3.92,loc:5.48,mot:41.54,bt:34.55,st:0.21,F:0,exST:0.11,exF:null,exT:6.94,tilt:-0.5,wt:52.0,rec:[[1,.18,5],[4,.07,5],[2,.21,5],[5,.14,5],[3,.15,5]]}]},
-{name:'桐生12R 特選',jcd:'01',rno:12,date:'2026-09-23',result:'1-5-4',pop:33,wind:'向かい風',ws:2,wave:1,
+{name:'桐生12R 特選',jcd:'01',rno:12,date:'2026-09-23',result:'1-5-4',pop:33,pay:10960,wind:'向かい風',ws:2,wave:1,
  B:[
  {reg:'4627',g:'A2',nat:6.29,loc:5.27,mot:28.18,bt:34.02,st:0.15,F:0,exST:0.02,exF:null,exT:6.77,tilt:-0.5,wt:47.1,rec:[[3,.12,5],[1,.15,1],[5,.11,1],[2,.19,1],[6,.19,5],[3,.21,'失']]},
  {reg:'4478',g:'A1',nat:5.94,loc:6.04,mot:30.93,bt:40.44,st:0.16,F:0,exST:0.06,exF:null,exT:6.71,tilt:-0.5,wt:47.2,rec:[[5,.15,2],[1,.13,1],[2,.13,3],[6,.12,5],[3,.17,1],[1,.13,3]]},
@@ -33,7 +33,7 @@ const RACES=[
  {reg:'5335',g:'B1',nat:3.10,loc:2.78,mot:37.31,bt:38.59,st:0.18,F:0,exST:0.01,exF:'F',exT:6.67,tilt:-0.5,wt:47.0,rec:[[5,.05,1],[1,.23,2],[4,.18,5],[2,.19,6],[6,.05,5]]},
  {reg:'4642',g:'A2',nat:6.98,loc:5.40,mot:33.49,bt:33.88,st:0.16,F:0,exST:0.01,exF:null,exT:6.71,tilt:-0.5,wt:46.5,rec:[[1,.22,3],[4,.11,2],[6,.23,5],[5,.21,3],[3,.17,1],[2,.17,1]]}]},
 // 徳山1R: 1号艇の展示STが最悪(.24)なのに本番.05で逃げ切った。実績と展示が正面から対立した例。
-{name:'徳山1R 一般',jcd:'18',rno:1,date:'2026-09-23',result:'1-2-4',pop:1,wind:null,ws:3,wave:3,temp:27,wtemp:27,
+{name:'徳山1R 一般',jcd:'18',rno:1,date:'2026-09-23',result:'1-2-4',pop:1,pay:790,wind:null,ws:3,wave:3,temp:27,wtemp:27,
  B:[
  {reg:'4388',g:'A2',nat:6.22,loc:4.96,mot:35.59,bt:29.61,st:0.17,F:0,exST:0.24,exF:null,exT:6.91,tilt:-0.5,wt:52.0,rec:[[5,.32,3],[3,.17,2],[5,.09,4],[5,.16,5]]},
  {reg:'5206',g:'B1',nat:4.62,loc:4.22,mot:29.47,bt:28.90,st:0.15,F:1,exST:0.08,exF:null,exT:6.83,tilt:0.0,wt:52.8,rec:[[6,.15,5],[3,.18,3],[5,.13,5]]},
@@ -44,7 +44,7 @@ const RACES=[
 // 徳山2R: 修正後ロジックの初実戦。1号艇の展示ST .28(最悪)を理由に
 // 3号艇を頭にした判断が当たった。決まり手は3号艇のまくり差し。
 // 6号艇の展示ST .74 は範囲外として不採用（スタート練習をしていない数字）。
-{name:'徳山2R 特選',jcd:'18',rno:2,date:'2026-09-23',result:'3-1-2',pop:17,wind:null,ws:1,wave:1,temp:25,wtemp:26,
+{name:'徳山2R 特選',jcd:'18',rno:2,date:'2026-09-23',result:'3-1-2',pop:17,pay:4240,wind:null,ws:1,wave:1,temp:25,wtemp:26,
  B:[
  {reg:'4375',g:'A2',nat:5.75,loc:5.47,mot:22.11,bt:34.27,st:0.17,F:0,exST:0.28,exF:null,exT:6.95,tilt:0.0,wt:52.2,rec:[[3,.15,3],[4,.13,1],[5,.12,3]]},
  {reg:'4583',g:'B1',nat:5.52,loc:3.17,mot:34.82,bt:37.14,st:0.15,F:1,exST:0.13,exF:null,exT:7.00,tilt:0.0,wt:52.0,rec:[[3,.19,2],[6,.37,6],[4,.02,3]]},
@@ -52,6 +52,17 @@ const RACES=[
  {reg:'4163',g:'A2',nat:5.65,loc:4.72,mot:28.93,bt:28.16,st:0.16,F:0,exST:0.12,exF:null,exT:6.83,tilt:0.0,wt:52.0,rec:[[5,.30,3],[2,.27,3],[6,.16,3]]},
  {reg:'4159',g:'A2',nat:6.59,loc:5.36,mot:39.56,bt:28.71,st:0.17,F:0,exST:0.17,exF:null,exT:6.93,tilt:0.0,wt:52.0,rec:[[2,.11,2],[3,.02,2],[6,.06,4]]},
  {reg:'3772',g:'B1',nat:4.87,loc:4.95,mot:37.07,bt:32.04,st:0.16,F:0,exST:0.74,exF:null,exT:7.00,tilt:0.0,wt:53.1,parts:'リング4',rec:[[4,.17,3],[1,.32,4],[2,.10,4]]}]},
+// 徳山3R: スタート展示で5号艇と6号艇が入れ替わり（entry を指定）。
+// 1・2・3号艇は展示でF。5号艇は当地勝率も平均STも記録なし。
+// 買い目の1番手で決まったが、12点均等では払戻¥1,020 < 投資¥1,200 で赤字だった。
+{name:'徳山3R 特賞',jcd:'18',rno:3,date:'2026-09-23',result:'1-6-4',pop:4,pay:1020,wind:null,ws:2,wave:2,temp:25,wtemp:26,
+ B:[
+ {reg:'4529',g:'A1',nat:5.66,loc:5.08,mot:50.93,bt:27.96,st:0.14,F:0,exST:0.06,exF:'F',exT:6.90,tilt:0.0,wt:53.4,entry:1,rec:[[1,.12,1],[5,.20,2],[4,.12,2],[3,.17,2]]},
+ {reg:'3577',g:'B1',nat:4.36,loc:3.44,mot:24.27,bt:27.75,st:0.17,F:0,exST:0.06,exF:'F',exT:6.96,tilt:-0.5,wt:58.6,entry:2,rec:[[1,.29,4],[5,.09,5],[3,.07,2]]},
+ {reg:'4173',g:'B1',nat:5.31,loc:4.80,mot:24.73,bt:24.73,st:0.17,F:0,exST:0.04,exF:'F',exT:6.96,tilt:0.0,wt:55.9,entry:3,rec:[[5,.24,5],[2,.20,1],[4,.13,3]]},
+ {reg:'4079',g:'A2',nat:5.95,loc:5.94,mot:29.11,bt:31.75,st:0.19,F:0,exST:0.06,exF:null,exT:6.92,tilt:-0.5,wt:52.2,entry:4,rec:[[2,.13,1],[6,.09,5],[5,.14,4]]},
+ {reg:'5460',g:'B2',nat:1.70,loc:null,mot:32.48,bt:31.16,st:null,F:0,exST:0.19,exF:null,exT:6.95,tilt:0.0,wt:52.8,entry:6,rec:[[6,.16,6],[6,.25,5]]},
+ {reg:'4883',g:'A2',nat:6.35,loc:4.71,mot:47.00,bt:27.27,st:0.16,F:0,exST:0.08,exF:null,exT:6.92,tilt:-0.5,wt:52.1,entry:5,rec:[[5,.18,3],[2,.26,1],[1,.06,1],[4,.17,6]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -72,14 +83,16 @@ function runWith(weightPatch, bandPatch, opt){
       const b=w.boatOf(i+1);
       setField(b,'name','選手'+(i+1),'official'); setField(b,'grade',x.g,'official');
       setField(b,'nationalWinRate',x.nat,'official');
-      if(x.loc) setField(b,'localWinRate',x.loc,'official');
+      if(x.loc!=null) setField(b,'localWinRate',x.loc,'official');
       setField(b,'motor2Rate',x.mot,'official'); setField(b,'boat2Rate',x.bt,'official');
-      setField(b,'averageST',x.st,'official'); setField(b,'exhibitionTime',x.exT,'official');
+      if(x.st!=null) setField(b,'averageST',x.st,'official');
+      setField(b,'exhibitionTime',x.exT,'official');
       b.exhibitionSTFlag=x.exF; setField(b,'exhibitionST',x.exST,'official');
       setField(b,'tilt',x.tilt,'official'); setField(b,'weight',x.wt,'official');
       if(x.adj!=null) setField(b,'adjustmentWeight',x.adj,'official');
       if(x.parts) b.partsChange=x.parts;
       b.flagF=x.F; b.flagL=0;
+      if(x.entry) b.entryCourse=x.entry;
       b.recentRaces=x.rec.map(r=>({course:r[0],st:r[1],stFlag:null,result:r[2]}));
       b.recentSource='official';
     });
@@ -92,7 +105,8 @@ function runWith(weightPatch, bandPatch, opt){
     const ctx=w.scoreAll();
     const combos=w.buildProbabilities(ctx);
     const rank=combos.findIndex(c=>c.combo===R.result)+1;
-    const rec={name:R.name, result:R.result, pop:R.pop, rank};
+    const rec={name:R.name, result:R.result, pop:R.pop, pay:R.pay, rank,
+               probs:combos.map(c=>c.p)};
     if(opt.detail){
       rec.order=[...state.boats].sort((a,b)=>b.score-a.score).map(b=>`${b.lane}(${b.score.toFixed(1)})`);
       rec.head=combos[0].combo.split('-')[0];
@@ -140,6 +154,44 @@ if(require.main===module){
   [[3.0,8.0],[2.5,7.5],[2.0,7.5],[1.5,7.5],[2.0,8.0]].forEach(bd=>{
     console.log(`  勝率 ${bd[0].toFixed(1)}〜${bd[1].toFixed(1)}  `+line(summarize(runWith({}, {winRate:bd}))));
   });
+
+  console.log('\n=== 買い方ごとの回収率（1レース1,200円で統一） ===');
+  console.log('  ※ n=6 では偶然の幅が大きい。傾向を見るだけで、これで買い方を決めない。');
+  const PAID = base.filter(r=>r.pay);
+  const stakeTable = [];
+  /* 均等買い */
+  for(const n of [3,4,6,8,10,12,15]){
+    const unit = Math.floor(1200/n/100)*100;
+    if(unit<100) continue;
+    let inv=0, ret=0, hits=0;
+    for(const r of PAID){ inv += unit*n;
+      if(r.rank<=n){ ret += r.pay/100*unit; hits++; } }
+    stakeTable.push({label:`${n}点 均等 ${unit}円`, inv, ret, hits});
+  }
+  /* 確率に応じて傾ける（100円単位、最低100円） */
+  for(const n of [6,8,12]){
+    let inv=0, ret=0, hits=0;
+    for(const r of PAID){
+      const ps = r.probs.slice(0,n), sum = ps.reduce((a,c)=>a+c,0);
+      let amt = ps.map(p=>Math.max(100, Math.round(1200*p/sum/100)*100));
+      /* 合計が1200円を超えたら後ろから削る */
+      let total = amt.reduce((a,c)=>a+c,0);
+      for(let i=n-1;i>=0 && total>1200;i--){
+        while(amt[i]>100 && total>1200){ amt[i]-=100; total-=100; }
+      }
+      inv += total;
+      if(r.rank<=n){ ret += r.pay/100*amt[r.rank-1]; hits++; }
+    }
+    stakeTable.push({label:`${n}点 確率比例`, inv, ret, hits});
+  }
+  console.log('  買い方              投資      払戻      回収率   的中');
+  for(const t of stakeTable){
+    console.log(`  ${t.label.padEnd(18)}${String(t.inv).padStart(7)}円${String(Math.round(t.ret)).padStart(8)}円`+
+      `${(t.ret/t.inv*100).toFixed(0).padStart(8)}%   ${t.hits}/${PAID.length}`);
+  }
+  console.log('\n  レース別の払戻（100円あたり）');
+  PAID.forEach(r=>console.log(`    ${r.name.padEnd(12)} ${r.result}  ${String(r.pay).padStart(6)}円  `+
+    `${String(r.pop||'?').padStart(2)}番人気  評価${String(r.rank).padStart(3)}番目`));
 
   console.log('\n=== 当地勝率が無い選手（初出走）の扱い ===');
   console.log('  当地の重み 0.08（既定） '+line(summarize(runWith({}))));

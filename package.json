@@ -1,0 +1,12 @@
+{
+  "name": "boat-ai-predictor",
+  "private": true,
+  "description": "競艇AI予想ツール。index.html 単体で動くので、ここの依存はテストと検証のためだけに使う。",
+  "scripts": {
+    "test": "node tests/run.js",
+    "backtest": "node backtest.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.1"
+  }
+}
