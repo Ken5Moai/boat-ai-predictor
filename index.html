@@ -446,7 +446,7 @@ const VENUES = {
 /* ---------- 値の妥当範囲（異常値は採用しない） ---------- */
 const RANGES = {
   nationalWinRate:[1.00,9.99], localWinRate:[1.00,9.99],
-  averageST:[0.05,0.35],
+  averageST:[0.05,0.35], recentST:[0.01,0.45],
   motor2Rate:[0,100], motor3Rate:[0,100], boat2Rate:[0,100], boat3Rate:[0,100],
   motorNumber:[1,999], boatNumber:[1,999],
   exhibitionTime:[6.00,9.50], exhibitionST:[0.00,0.60],
@@ -471,7 +471,7 @@ function newBoat(lane){
     boatNumber:null, boat2Rate:null, boat3Rate:null,
     weight:null, adjustmentWeight:null, tilt:null, propeller:null, partsChange:null,
     exhibitionST:null, exhibitionSTFlag:null, exhibitionTime:null, entryCourse:null,
-    recentForm:null, recentST:null,
+    recentForm:null, recentST:null, recentRaces:null, recentSource:null,
     racerAbilityIndex:null, termWinRate:null, term2Rate:null, term3Rate:null,
     courseStats:{1:null,2:null,3:null,4:null,5:null,6:null},
     score:0, scoreBreakdown:[], plus:[], minus:[], winProb:0
@@ -879,6 +879,44 @@ function isAmbiguousNumberRun(chunk){
 }
 
 /* ==================================================================
+   今節成績の抽出
+   出走表には、その節で走った各レースの
+   「進入コース / ST / 着順」が3点セットで並ぶ。
+   この3点そろいという形は、勝率・モーター番号・展示タイムなど
+   他のどの数値とも衝突しないため、位置に頼らず安全に拾える。
+   （1〜6の単独数字 → .xx形式のST → 着順 という並びは他に無い）
+   ================================================================== */
+function parseRecentRaces(text){
+  const re = /(?:^|[^0-9.])([1-6])[ \t|｜]+([FL]?\.\d{2})[ \t|｜]+([1-6]|F|L|欠|失|転|不|妨)(?![0-9.])/g;
+  const races = [];
+  let m;
+  while((m = re.exec(String(text))) !== null){
+    const stRaw = m[2].toUpperCase();
+    const flag  = /^[FL]/.test(stRaw) ? stRaw[0] : null;
+    const st    = Number('0.' + stRaw.replace(/\D/g,''));
+    if(!(st >= 0 && st <= 0.60)) continue;
+    const resRaw = m[3];
+    races.push({
+      course: Number(m[1]),
+      st, stFlag: flag,
+      result: /^[1-6]$/.test(resRaw) ? Number(resRaw) : resRaw
+    });
+    if(races.length >= 14) break;      /* 1節は最大12走程度 */
+  }
+  return races;
+}
+
+/* 着順の並びから調子の向きを測る。
+   古い方と新しい方の平均を比べ、着順の数字が小さくなっていれば上向き。 */
+function formTrend(races){
+  const nums = (races||[]).map(r=>r.result).filter(r=>typeof r === 'number');
+  if(nums.length < 3) return null;
+  const half = Math.floor(nums.length/2);
+  const avg = a => a.reduce((x,y)=>x+y,0)/a.length;
+  return avg(nums.slice(0, half)) - avg(nums.slice(nums.length - half));
+}
+
+/* ==================================================================
    出走表の解析（DOM版）
    各艇 = 1 tbody。登録番号を絶対キーにして lane を決める。
    ================================================================== */
@@ -947,8 +985,12 @@ function parseRacelistDOM(html){
       if(n){ numGroups.push(n); }
     }
 
+    /* 今節成績は行の後半にまとまっているので、この艇の行全体から拾う */
+    const wholeRow = cells.map(td=>cellLines(td).join(' ')).join(' | ');
+    const recent = parseRecentRaces(wholeRow);
+
     found.push({ reg, grade, name, branch, lane, tbIdx,
-                 fCount, lCount, avgST,
+                 fCount, lCount, avgST, recent,
                  national:winGroups[0]||null, local:winGroups[1]||null,
                  motor:numGroups[0]||null,    boat:numGroups[1]||null });
   });
@@ -964,14 +1006,28 @@ function parseRacelistDOM(html){
 function parseRacelistText(text){
   const found = [];
   const re = /(\d{4})\s*[\/|｜]\s*(A1|A2|B1|B2)/g;
-  let m;
-  while((m = re.exec(text)) !== null){
-    const reg = m[1], grade = m[2];
-    const rawWin = text.slice(m.index, m.index + 900);
+
+  /* 先に全選手の位置を調べ、1人ぶんの範囲を
+     「次の選手の手前まで」に区切る。
+     固定の文字数で切ると隣の選手の今節成績まで拾ってしまう。 */
+  const marks = [];
+  let mm;
+  while((mm = re.exec(text)) !== null){
+    marks.push({ reg:mm[1], grade:mm[2], index:mm.index, len:mm[0].length });
+  }
+
+  for(let i=0;i<marks.length;i++){
+    const m0 = marks[i];
+    const reg = m0.reg, grade = m0.grade;
+    const stop = (i+1 < marks.length) ? marks[i+1].index : text.length;
+    const rawWin = text.slice(m0.index, Math.min(stop, m0.index + 1200));
     const win = splitConcatNumbers(rawWin);
+    const m = [m0.reg+' / '+m0.grade];   /* 以降の処理が m[0].length を使うため */
+    m[0] = rawWin.slice(0, m0.len);
+    m.index = m0.index;
 
     /* 選手名: まず toban付きリンクから、無ければ文面から拾う */
-    const name = nameFromProfileLink(text.slice(Math.max(0,m.index-200), m.index+400), reg)
+    const name = nameFromProfileLink(rawWin.slice(0, 500), reg)
               || pickRacerName(win.slice(m[0].length, m[0].length+200));
 
     /* F/L/平均ST */
@@ -1009,7 +1065,9 @@ function parseRacelistText(text){
       if(national && motor){ best = {national,local,motor,boat}; break; }
     }
 
-    found.push({ reg, grade, name, lane:null, fCount, lCount, avgST,
+    const recent = parseRecentRaces(win);
+
+    found.push({ reg, grade, name, lane:null, fCount, lCount, avgST, recent,
                  national: best?best.national:null,
                  local:    best?best.local:null,
                  motor:    best?best.motor:null,
@@ -1060,6 +1118,15 @@ function applyRacelistRows(rows, source){
     if(r.avgST!=null) setField(b,'averageST',r.avgST,source);
     if(r.fCount!=null) b.flagF = r.fCount;
     if(r.lCount!=null) b.flagL = r.lCount;
+
+    /* 今節成績。手入力があればそちらを優先する */
+    if(r.recent && r.recent.length && b.recentSource !== 'manual'){
+      b.recentRaces  = r.recent;
+      b.recentSource = source;
+      b.recentForm   = r.recent.map(x=>x.result).join(',');
+      const sts = r.recent.filter(x=>!x.stFlag).map(x=>x.st);
+      if(sts.length) setField(b,'recentST', sts.reduce((a,c)=>a+c,0)/sts.length, source);
+    }
 
     if(r.national){
       setField(b,'nationalWinRate',r.national.win,source);
@@ -2538,6 +2605,7 @@ function boatCardHTML(b){
       ${flTxt?`<span class="chip" style="border-color:#7a2a2a;color:#ef8f8f">${flTxt}</span>`:''}
       ${b.entryCourse?`<span class="chip">進入 ${b.entryCourse}C</span>`:''}
       ${b.partsChange?`<span class="chip">部品 ${esc(b.partsChange)}</span>`:''}
+      ${(b.recentRaces&&b.recentRaces.length)?`<span class="chip" style="border-color:#2a6f49;color:#79e3a5">今節 ${b.recentRaces.map(r=>r.result).join('-')}</span>`:''}
     </div>
     <div class="fields">
       ${fieldHTML(b,'name','選手名',{text:true})}
@@ -2570,7 +2638,14 @@ function boatCardHTML(b){
 }
 function setRecentForm(lane,v){
   const b = boatOf(lane); if(!b) return;
-  b.recentForm = String(v).replace(/[^0-9,、\s]/g,'') || null;
+  const cleaned = String(v).replace(/[^0-9,、\s]/g,'');
+  b.recentForm = cleaned || null;
+  /* 手入力したら以降は自動取得で上書きしない。
+     自動取得ぶんは表示も含めて破棄し、画面と採点を一致させる。 */
+  b.recentSource = cleaned ? 'manual' : null;
+  b.recentRaces  = null;
+  renderBoats();
+  validateAll();
 }
 function renderBoats(){
   $('boats').innerHTML = state.boats.map(boatCardHTML).join('');
@@ -2715,6 +2790,7 @@ const bandScore = (v,band) => band ? lin(v, band[0], band[1]) : null;
 
 function scoreBoat(b, ctx){
   const parts = [];
+  const plus = [], minus = [];      /* 加点・減点の理由（採点中どこからでも書けるよう先に用意） */
   const add = (label,val,w) => { if(val!==null && Number.isFinite(val)) parts.push({label,val:clamp(val,0,100),w}); };
 
   /* --- 基礎 --- */
@@ -2764,20 +2840,46 @@ function scoreBoat(b, ctx){
   if(has(b.termWinRate))       add('期別勝率', lin(V(b.termWinRate),3.0,8.0),   0.02);
   if(has(b.term3Rate))         add('期別3連率', clamp(V(b.term3Rate)*1.25,0,100),0.02);
 
-  /* --- 今節成績 --- */
-  const rf = (b.recentForm||'').split(/[,、\s]+/).map(x=>Number(x)).filter(n=>n>=1&&n<=6);
-  if(rf.length){
-    const avg = rf.reduce((a,c)=>a+c,0)/rf.length;
-    add('今節着順', clamp((6-avg)/5*100,0,100), 0.05);
+  /* --- 今節成績 ---
+     節が進むほど材料が増えて信頼できるので、走った本数に応じて
+     重みを増やす。初日(0走)は0、4走以上で満額になる。
+     これにより「日を追うほど今節成績が効く」評価になる。        */
+  const races = (b.recentSource === 'manual' || !b.recentRaces)
+    ? (b.recentForm||'').split(/[,、\s]+/).map(x=>Number(x))
+        .filter(n=>n>=1&&n<=6).map(n=>({result:n, st:null, stFlag:null}))
+    : b.recentRaces;
+
+  if(races && races.length){
+    const finished = races.map(r=>r.result).filter(r=>typeof r === 'number');
+    const ratio = clamp(races.length / 4, 0, 1);      /* 節の進行度 */
+
+    if(finished.length){
+      const avg = finished.reduce((a,c)=>a+c,0)/finished.length;
+      add('今節着順', clamp((6-avg)/5*100, 0, 100), 0.07 * ratio);
+    }
+    /* 今節の平均ST。公式の平均STより新しい情報なので別項目として見る */
+    const sts = races.filter(r=>r.st!=null && !r.stFlag).map(r=>r.st);
+    if(sts.length >= 2){
+      add('今節平均ST', stScore(sts.reduce((a,c)=>a+c,0)/sts.length), 0.04 * ratio);
+    }
+    /* 調子の向き */
+    const tr = formTrend(races);
+    if(tr !== null){
+      add('今節の調子', clamp(50 + tr*22, 0, 100), 0.03 * ratio);
+      if(tr >= 0.8)      plus.push(`今節の着順が上向き（${finished.join('→')}）`);
+      else if(tr <= -0.8) minus.push(`今節の着順が下降（${finished.join('→')}）`);
+    }
+    /* 今節のフライング・失格は直接の減点 */
+    const bad = races.filter(r=>r.stFlag==='F' || r.result==='F').length;
+    if(bad) minus.push(`今節F ${bad}回`);
   }
-  if(has(b.recentST)) add('今節平均ST', stScore(V(b.recentST)), 0.03);
+  if(has(b.recentST) && !(races && races.length)) add('今節平均ST', stScore(V(b.recentST)), 0.03);
 
   /* --- 重み再正規化（取得できた項目だけで100%にする） --- */
   const wsum = parts.reduce((a,p)=>a+p.w,0);
   let base = wsum>0 ? parts.reduce((a,p)=>a+p.val*p.w,0)/wsum : 50;
 
   /* --- 加点・減点（正規化後の補正） --- */
-  const plus = [], minus = [];
   const bump = (pts,label)=>{ base += pts; (pts>=0?plus:minus).push(`${label} ${pts>0?'+':''}${pts.toFixed(1)}`); };
 
   if(b.flagF)  bump(-Math.min(12, 7*b.flagF), `F${b.flagF}持ち（スタートが慎重になりやすい）`);
@@ -2846,7 +2948,7 @@ function scoreBoat(b, ctx){
   return b;
 }
 
-const TOTAL_WEIGHT = 0.09+0.14+0.11+0.08+0.11+0.03+0.07+0.07+0.08+0.11+0.05+0.04+0.04+0.02+0.02+0.05+0.03;
+const TOTAL_WEIGHT = 0.09+0.14+0.11+0.08+0.11+0.03+0.07+0.07+0.08+0.11+0.05+0.04+0.04+0.02+0.02+0.07+0.04+0.03;
 
 function scoreAll(){
   readConditionsFromInputs();
@@ -2865,7 +2967,14 @@ function scoreAll(){
     wave: V(state.conditions.wave),
     tide: state.conditions.tide,
     bestExTime: exTimes.length>=3 ? Math.min(...exTimes) : null,
-    entryInfo: entryDisorder()
+    entryInfo: entryDisorder(),
+    seriesInfo: (()=>{
+      const counts = state.boats.map(b=>(b.recentRaces||[]).length);
+      const max = Math.max(0, ...counts);
+      const withData = counts.filter(n=>n>0).length;
+      return { maxRaces:max, boatsWithData:withData,
+               weightRatio: Math.min(1, max/4) };
+    })()
   };
   state.boats.forEach(b=>scoreBoat(b,ctx));
   return ctx;
@@ -3143,6 +3252,11 @@ ${vres.forced?`<div class="notice err"><b>重要データが不足したまま�
   </div>
   <hr>
   <div class="mini">買い目6点の合計的中確率（モデル推定）: <b style="color:#f0c040">${(hitProb*100).toFixed(1)}%</b><br>
+  ${(()=>{ const si = ctx.seriesInfo;
+    if(!si || !si.maxRaces) return '今節成績は未取得です。節が進むほど判断材料が増え、予想の精度が上がります。<br>';
+    return `今節成績: 最大<b>${si.maxRaces}走</b>ぶんを${si.boatsWithData}艇から取得（今節評価の重み ${Math.round(si.weightRatio*100)}%）。` +
+      (si.weightRatio < 1 ? '節が進むほどこの比重が上がります。<br>' : '節が進んで判断材料が揃っています。<br>');
+  })()}
   ${venue?`${esc(venue.name)}の1コース1着率の目安 ${venue.inRate}% を枠評価に反映済み。`:''}
   <br>信頼度Aは「当たりやすい」ではなく「<b>データが揃っていて評価差がはっきりしている</b>」という意味です。</div>
 </div></div>
@@ -3200,6 +3314,14 @@ ${ranked.map((b,i)=>`
     </div>
     <div class="barline"><i style="width:${b.score}%"></i></div>
     <div class="mini">1着確率の推定 ${(b.winProb*100).toFixed(1)}%</div>
+    ${(b.recentRaces && b.recentRaces.length) ? `<div class="mini" style="margin-top:3px">
+      今節 ${b.recentRaces.map(r=>{
+        const col = (typeof r.result==='number' && r.result<=2) ? '#3ecf74'
+                  : (r.result==='F'||r.stFlag==='F') ? '#ef6262' : '#8291aa';
+        return `<span style="color:${col}">${esc(String(r.result))}</span>`;
+      }).join('-')}　平均ST ${(()=>{ const s2=b.recentRaces.filter(r=>r.st!=null&&!r.stFlag).map(r=>r.st);
+        return s2.length ? (s2.reduce((a,c)=>a+c,0)/s2.length).toFixed(2) : '—'; })()}
+    </div>` : ''}
     <div class="reason">
       ${b.plus.slice(0,5).map(t=>`<div class="rplus">＋ ${esc(t)}</div>`).join('')}
       ${b.minus.slice(0,5).map(t=>`<div class="rminus">− ${esc(t)}</div>`).join('')}
