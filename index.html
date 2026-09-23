@@ -188,6 +188,16 @@ BOAT RACE公式から取得します。<br>
   <div><label>レース種別（自動取得・修正可）</label><input id="raceType" placeholder="一般 / 予選 など"></div>
   <div><label>購入予算（円）</label><input id="budget" type="number" value="1000" min="100" step="100"></div>
 </div>
+<div class="g2">
+  <div><label>買い目の点数</label><select id="betCount">
+    <option value="4">4点（絞る）</option>
+    <option value="6" selected>6点（標準）</option>
+    <option value="8">8点</option>
+    <option value="10">10点（広く取る）</option>
+    <option value="12">12点</option></select></div>
+  <div><label>&nbsp;</label><div class="mini" style="padding-top:11px">
+    点数を増やすと的中率は上がりますが、1点あたりの金額は下がります。</div></div>
+</div>
 <div id="venueInfo" class="notice info">競艇場を選ぶと水質・イン傾向を表示します。</div>
 <button id="btnStadium" class="secondary" onclick="fetchStadiumData()">この競艇場のデータを取り込む（1回だけ）</button>
 <div id="stadiumNotice" class="notice info">
@@ -3143,10 +3153,18 @@ function deleteRecord(id){
 }
 
 /* ---------- 集計 ---------- */
+/* 実際の着順が、予想では何番目に評価されていたかを返す（1〜120） */
+function resultRankOf(rec){
+  if(!rec || !rec.result || !rec.ranking) return null;
+  const i = rec.ranking.split(',').indexOf(rec.result.combo);
+  return i >= 0 ? i+1 : null;
+}
+
 function recordStats(list){
   const done = list.filter(r=>r.result);
   const st = { total:list.length, done:done.length,
-               tri:0, trio:0, head:0, bet:0, back:0, byRank:{} };
+               tri:0, trio:0, head:0, bet:0, back:0, byRank:{},
+               ranks:[], coverage:{} };
   for(const r of done){
     const picks = (r.picks||[]).map(p=>p.combo);
     const res = r.result;
@@ -3167,6 +3185,17 @@ function recordStats(list){
     const k = r.rank || '—';
     const g = st.byRank[k] || (st.byRank[k] = { n:0, tri:0, trio:0, head:0 });
     g.n++; if(hitTri) g.tri++; if(hitTrio) g.trio++; if(hitHead) g.head++;
+
+    const rk = resultRankOf(r);
+    if(rk) st.ranks.push(rk);
+  }
+  /* 何点買っていれば当たっていたかを数える */
+  if(st.ranks.length){
+    [6,8,10,12,15,20,30].forEach(n=>{
+      st.coverage[n] = st.ranks.filter(x=>x<=n).length;
+    });
+    st.avgRank = st.ranks.reduce((a,c)=>a+c,0)/st.ranks.length;
+    st.medRank = [...st.ranks].sort((a,b)=>a-b)[Math.floor(st.ranks.length/2)];
   }
   return st;
 }
@@ -3188,6 +3217,18 @@ function renderRecords(badInput){
          ／ 回収率 <b style="color:${st.back>=st.bet?'#3ecf74':'#ef6262'}">${pct(st.back,st.bet)}</b>
          <span style="color:#7f8eaa">（払戻を入力した分のみ）</span>
        </div>
+       ${st.ranks.length ? `<div class="card" style="margin:0 0 10px"><div class="chead">結果は何番目に評価されていたか</div><div class="cbody">
+         <div class="mini">120通りのうち、実際の着順が何番目だったかの記録です。
+         <b>この数字が小さければ評価は合っており、点数を増やせば当たります。</b>
+         大きいままなら採点の重みを見直す必要があります。</div>
+         <table class="tbl" style="margin-top:8px"><tr><th>買い目の点数</th><th>当たっていた率</th></tr>
+         ${[6,8,10,12,15,20,30].map(n=>{
+           const c = st.coverage[n]||0;
+           return `<tr><td>${n}点</td><td>${pct(c,st.ranks.length)} (${c}/${st.ranks.length})</td></tr>`;
+         }).join('')}</table>
+         <div class="mini" style="margin-top:7px">平均 <b>${st.avgRank?st.avgRank.toFixed(1):'—'}番目</b>
+         ／ 中央 <b>${st.medRank||'—'}番目</b></div>
+       </div></div>` : ''}
        ${Object.keys(st.byRank).length>1 ? `<table class="tbl" style="margin-bottom:10px">
          <tr><th>信頼度</th><th>件数</th><th>3連単</th><th>3連複</th><th>1着</th></tr>
          ${Object.entries(st.byRank).sort().map(([k,g])=>
@@ -3219,7 +3260,8 @@ function renderRecords(badInput){
       <div class="mini" style="margin-top:5px">買い目: ${picks.map(c=>
         res && c===res.combo ? `<b style="color:#f0c040">${c}</b>` : c).join(' / ')}</div>
       ${res ? `<div class="mini">結果: <b style="color:#fff">${esc(res.combo)}</b>${
-        res.payout!=null?` ／ 払戻 ${res.payout.toLocaleString()}円`:''}</div>` : ''}
+        res.payout!=null?` ／ 払戻 ${res.payout.toLocaleString()}円`:''}${
+        (()=>{ const rk=resultRankOf(r); return rk?` ／ 予想では <b>${rk}番目</b>の評価`:''; })()}</div>` : ''}
       <div class="g2" style="margin-top:7px">
         <div><label>着順（例 154）</label>
           <input inputmode="numeric" maxlength="5" value="${res?esc(res.combo.replace(/-/g,'')):''}"
@@ -3415,7 +3457,8 @@ function generateReport(){
 
   /* --- 買い目：上位6点（予算が少なければ自動で点数を減らす） --- */
   const budget = Math.max(100, Number($('budget').value)||1000);
-  const maxPoints = Math.min(6, Math.max(1, Math.floor(budget/100)));
+  const want = Number($('betCount') ? $('betCount').value : 6) || 6;
+  const maxPoints = Math.min(want, Math.max(1, Math.floor(budget/100)));
   const points = combos.slice(0, maxPoints);
   const odds = state.lastBets && state.lastBets.combos.join()===points.map(p=>p.combo).join()
              ? state.lastBets.odds : null;
@@ -3591,7 +3634,11 @@ ${points.map((p,i)=>{
       picks: points.map((p,i)=>({ combo:p.combo, amount:amounts[i], p:Number(p.p.toFixed(5)) })),
       rank, fill, gap,
       seriesRaces: ctx.seriesInfo ? ctx.seriesInfo.maxRaces : 0,
-      entryMoved: ctx.entryInfo ? ctx.entryInfo.movedCount : 0
+      entryMoved: ctx.entryInfo ? ctx.entryInfo.movedCount : 0,
+      /* 120通りすべての評価順。あとで「実際の結果が何番目だったか」を
+         調べるために残す。買い目を増やせば当たるのか、
+         評価そのものがズレているのかを切り分けるため。 */
+      ranking: combos.map(c=>c.combo).join(',')
     });
   }
   renderOddsBox();
