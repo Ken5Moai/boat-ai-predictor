@@ -3366,50 +3366,71 @@ function importRecords(){
 }
 
 /* ==================================================================
-   スコア差から配当の規模を見積もる
+   買い目の損益分岐を示す
    ------------------------------------------------------------------
-   実走6レースを記録したところ、1位と2位のスコア差が小さいレースほど
-   配当が高かった。モデルが迷うレースは市場も迷う、という関係。
+   当たっても負けることがある。実測7レースのうち、的中した6レースで
+   払戻が 12点均等（投資1,200円）を上回ったのは3件だけだった。
 
-     差 2.3 → ¥4,240（17番人気）    差12.2 → ¥4,100
-     差 3.5 → ¥10,960（33番人気）   差12.6 → ¥1,400
-     差11.4 → ¥790（1番人気）       差19.2 → ¥1,020（4番人気）
+     ¥790  ¥890  ¥1,020  ¥1,400  ¥4,100  ¥4,240
 
-   差が大きいレースは的中しても配当が安いので、点数を広げると
-   当たっても赤字になる。実際、徳山3Rは買い目の1番手で決まったのに
-   12点均等では 投資¥1,200 → 払戻¥1,020 で負けた。
+   買う前にこの分岐点が見えていれば、点数を絞る判断ができる。
 
-   ただし n=6 では偶然の幅が大きいので、これは「点数を自動で変える」
-   のではなく「損益分岐点を先に見せる」だけにとどめる。判断は人間が行う。
-   ================================================================== */
-function payoutHintHTML(gap, amounts){
-  const g = Number(gap) || 0;
+   以前ここで「1位と2位のスコア差が小さいほど高配当」という見立てから
+   点数の増減を助言していたが、徳山4R（差4.8＝荒れる想定）が
+   ¥890（2番人気）で決まり、外れた。7レースでの相関は -0.53 と弱く、
+   方向を断定できる強さではない。よって規模の予測はやめ、
+   計算で必ず正しいこと（損益分岐）と、実測の分布だけを出す。
+   判断は人間が行う。                                              */
+/* 点数を変えたときの的中確率と損益分岐を並べる。
+   点数は自動で変えない。選ぶための材料を出すだけ。 */
+function pointsTableHTML(combos){
+  if(!combos || !combos.length) return '';
+  const now = Number($('betCount') ? $('betCount').value : 6) || 6;
+  const rows = [4,6,8,10,12,15,20].map(n=>{
+    const p = combos.slice(0,n).reduce((a,c)=>a+c.p,0);
+    const here = (n === now);
+    return `<tr${here?' style="background:#16203a"':''}>
+      <td>${n}点${here?' ←いま':''}</td><td>${(p*100).toFixed(1)}%</td>
+      <td>${(n*100).toLocaleString()}円</td><td>${(n*100).toLocaleString()}円</td></tr>`;
+  }).join('');
+  return `<table class="tbl"><tr><th>点数</th><th>的中確率</th><th>投資(1点100円)</th><th>この配当以下は損</th></tr>${rows}</table>`;
+}
+function payoutSamples(){
+  /* 自分の記録があればそれを使う。無ければ開発時の実測7レースを使う。 */
+  try{
+    const mine = loadRecords()
+      .filter(r=>r.result && r.result.payout!=null && r.result.payout>0 &&
+                 r.picks && r.picks.some(p=>p.combo===r.result.combo))
+      .map(r=>r.result.payout);
+    if(mine.length >= 5) return { list: mine, mine: true };
+  }catch(e){ /* localStorage が使えなくても止めない */ }
+  return { list: [790,890,1020,1400,4100,4240], mine: false };
+}
+function payoutHintHTML(amounts){
   const list = (amounts||[]).filter(a=>a>0);
   if(!list.length) return '';
   const total = list.reduce((a,c)=>a+c,0);
   /* その点が当たったときに元が取れる配当 = 総投資 ÷ (その点の金額/100) */
   const be = list.map(a=>Math.ceil(total*100/a/10)*10);
   const beMin = Math.min(...be), beMax = Math.max(...be);
-  const points = list.length;
-  let scale, note;
-  if(g >= 15){
-    scale = '安い配当（〜2,000円）になりやすい';
-    note  = '点数を広げると<b>当たっても赤字</b>になりやすい形です。絞るか、見送りも選択肢。';
-  }else if(g >= 8){
-    scale = '中くらいの配当（1,000〜5,000円）';
-    note  = '点数はそのままで問題ない形です。';
-  }else{
-    scale = '高い配当（5,000円〜）になりやすい';
-    note  = '評価が割れている＝荒れやすいレース。点数を広げる価値があります。';
-  }
+  const sm = payoutSamples();
+  const over = sm.list.filter(v=>v >= beMax).length;
+  const sorted = [...sm.list].sort((a,b)=>a-b);
+  const median = sorted[Math.floor(sorted.length/2)];
   return `<div class="mini">
-    <b style="color:#f0c040">配当の目安</b>：1位と2位の差が <b>${g}</b> なので、${scale}。<br>
-    いまの<b>${points}点・合計${total.toLocaleString()}円</b>だと、3連単の配当が
+    <b style="color:#f0c040">当たっても負ける配当</b><br>
+    いまの<b>${list.length}点・合計${total.toLocaleString()}円</b>だと、3連単の配当が
     <b>${beMin===beMax ? `${beMin.toLocaleString()}円` : `${beMin.toLocaleString()}〜${beMax.toLocaleString()}円`}</b>
-    を超えないと、当たっても損になります。<br>
-    ${note}<br>
-    <span style="color:#7f8eaa">※ 実走6レースから見た傾向です。件数が少ないので目安として扱ってください。
-    STEP8に払戻を入力していくほど、この見積もりは正確になります。</span>
+    を超えないと、<b>当たっても損</b>になります。<br>
+    ${sm.mine
+      ? `あなたの記録では、的中した${sm.list.length}レースのうち
+         <b>${over}件</b>がこの金額を超えていました（配当の中央値 ${median.toLocaleString()}円）。`
+      : `開発時の実測では、的中した${sm.list.length}レースのうち
+         <b>${over}件</b>しかこの金額を超えていません（配当の中央値 ${median.toLocaleString()}円）。`}<br>
+    点数を減らすと分岐点は下がりますが、的中率も下がります。上の表で見比べてください。<br>
+    <span style="color:#7f8eaa">※ 配当の高さを事前に当てることはできません。
+    スコア差から配当を予想する方法は試しましたが、7レースでは当たりませんでした。
+    STEP8に払戻を入力していくほど、この分布はあなた自身の実績に置き換わります。</span>
   </div>`;
 }
 
@@ -3636,7 +3657,8 @@ ${vres.forced?`<div class="notice err"><b>重要データが不足したまま�
   ${venue?`${esc(venue.name)}の1コース1着率の目安 ${venue.inRate}% を枠評価に反映済み。`:''}
   <br>信頼度Aは「当たりやすい」ではなく「<b>データが揃っていて評価差がはっきりしている</b>」という意味です。</div>
   <hr>
-  ${payoutHintHTML(gap, amounts)}
+  ${pointsTableHTML(combos)}
+  ${payoutHintHTML(amounts)}
 </div></div>
 
 ${ctx.courseRates ? `

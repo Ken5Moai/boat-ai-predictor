@@ -63,6 +63,18 @@ const RACES=[
  {reg:'4079',g:'A2',nat:5.95,loc:5.94,mot:29.11,bt:31.75,st:0.19,F:0,exST:0.06,exF:null,exT:6.92,tilt:-0.5,wt:52.2,entry:4,rec:[[2,.13,1],[6,.09,5],[5,.14,4]]},
  {reg:'5460',g:'B2',nat:1.70,loc:null,mot:32.48,bt:31.16,st:null,F:0,exST:0.19,exF:null,exT:6.95,tilt:0.0,wt:52.8,entry:6,rec:[[6,.16,6],[6,.25,5]]},
  {reg:'4883',g:'A2',nat:6.35,loc:4.71,mot:47.00,bt:27.27,st:0.16,F:0,exST:0.08,exF:null,exT:6.92,tilt:-0.5,wt:52.1,entry:5,rec:[[5,.18,3],[2,.26,1],[1,.06,1],[4,.17,6]]}]},
+// 徳山4R: 進入は枠なり。展示で1・2・5号艇がF。1号艇は通算F1持ちで今節も2,6,6。
+// モデルは2号艇を頭にしたが1号艇が逃げ切り。上位3艇の顔ぶれ{1,2,4}は当てた。
+// スコア差4.8（小さい＝荒れる想定）だったのに配当は¥890（2番人気）。
+// 「差が小さい＝高配当」の見立てが初めて外れたレース。
+{name:'徳山4R 予選',jcd:'18',rno:4,date:'2026-09-23',result:'1-2-4',pop:2,pay:890,wind:null,ws:2,wave:2,temp:25,wtemp:26,
+ B:[
+ {reg:'4911',g:'A2',nat:4.72,loc:5.43,mot:38.21,bt:37.56,st:0.14,F:1,exST:0.06,exF:'F',exT:6.96,tilt:0.0,wt:52.5,adj:0.0,entry:1,rec:[[3,.33,2],[3,.12,6],[6,.19,6]]},
+ {reg:'4757',g:'A1',nat:6.64,loc:6.46,mot:30.17,bt:28.84,st:0.15,F:0,exST:0.01,exF:'F',exT:6.97,tilt:0.0,wt:52.1,adj:0.0,entry:2,rec:[[5,.12,1],[1,.10,1],[5,.08,2]]},
+ {reg:'5286',g:'B1',nat:4.67,loc:3.77,mot:24.75,bt:21.48,st:0.16,F:1,exST:0.08,exF:null,exT:6.94,tilt:0.0,wt:51.0,adj:1.0,entry:3,rec:[[4,.13,4],[2,.09,6],[6,.14,3]]},
+ {reg:'4594',g:'B1',nat:6.26,loc:5.55,mot:40.63,bt:35.07,st:0.16,F:0,exST:0.13,exF:null,exT:6.95,tilt:0.0,wt:52.0,adj:0.0,entry:4,rec:[[2,.11,2],[6,.27,5],[5,.15,5]]},
+ {reg:'4811',g:'B1',nat:4.97,loc:5.13,mot:38.95,bt:28.57,st:0.16,F:0,exST:0.01,exF:'F',exT:6.87,tilt:0.0,wt:50.5,adj:1.5,entry:5,rec:[[4,.11,6],[1,.18,1],[3,.13,4]]},
+ {reg:'4090',g:'B2',nat:6.08,loc:6.18,mot:20.59,bt:38.14,st:0.16,F:0,exST:0.21,exF:null,exT:6.93,tilt:0.0,wt:54.0,adj:0.0,entry:6,rec:[[4,.08,5],[5,.12,6],[3,.13,1]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -105,7 +117,9 @@ function runWith(weightPatch, bandPatch, opt){
     const ctx=w.scoreAll();
     const combos=w.buildProbabilities(ctx);
     const rank=combos.findIndex(c=>c.combo===R.result)+1;
+    const sorted=[...state.boats].sort((a,b)=>b.score-a.score);
     const rec={name:R.name, result:R.result, pop:R.pop, pay:R.pay, rank,
+               gap: Math.round((sorted[0].score-sorted[1].score)*10)/10,
                probs:combos.map(c=>c.p)};
     if(opt.detail){
       rec.order=[...state.boats].sort((a,b)=>b.score-a.score).map(b=>`${b.lane}(${b.score.toFixed(1)})`);
@@ -156,7 +170,7 @@ if(require.main===module){
   });
 
   console.log('\n=== 買い方ごとの回収率（1レース1,200円で統一） ===');
-  console.log('  ※ n=6 では偶然の幅が大きい。傾向を見るだけで、これで買い方を決めない。');
+  console.log('  ※ 件数が少ないうちは偶然の幅が大きい。傾向を見るだけで、これで買い方を決めない。');
   const PAID = base.filter(r=>r.pay);
   const stakeTable = [];
   /* 均等買い */
