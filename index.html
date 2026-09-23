@@ -2850,7 +2850,11 @@ const bandScore = (v,band) => band ? lin(v, band[0], band[1]) : null;
 function scoreBoat(b, ctx){
   const parts = [];
   const plus = [], minus = [];      /* 加点・減点の理由（採点中どこからでも書けるよう先に用意） */
-  const add = (label,val,w) => { if(val!==null && Number.isFinite(val)) parts.push({label,val:clamp(val,0,100),w}); };
+  /* 採点項目を1つ積む。採用できたら true を返す（重みの引き継ぎ判定に使う） */
+  const add = (label,val,w) => {
+    if(val===null || !Number.isFinite(val)) return false;
+    parts.push({label,val:clamp(val,0,100),w}); return true;
+  };
 
   /* --- 基礎 --- */
   add('級別', GRADE_SCORE[V(b.grade)] ?? null, W.grade);
@@ -2871,7 +2875,21 @@ function scoreBoat(b, ctx){
     const adj = {1:1.6, 2:0.2, 3:-0.3, 4:-0.9, 5:-0.8, 6:-0.6}[crs];
     laneVal = clamp(laneVal + d*adj, 0, 100);
   }
-  add(laneLabel, laneVal, W.lane);
+  /* コースに関する重みの合計は、データが取れたかどうかに関わらず一定に保つ。
+     以前は選手のコース別成績（0.20）が取れないと再正規化でそのぶんが消え、
+     コースの比重が 0.34 → 0.14/0.80 = 0.175 とほぼ半分に縮んでいた。
+     その結果、6コースの艇が「モーターと展示と今節が良い」だけで
+     2番手評価まで上がってしまう（徳山1Rの6号艇は最下位に敗れた）。
+     取れなかったぶんの重みは、枠（＝その場の実測入着率）が引き継ぐ。   */
+  const POS_W = W.lane + W.courseFirst + W.courseTrio + W.courseST;
+  let courseW = 0;
+  const cs = b.courseStats[crs];
+  if(cs){
+    if(cs.firstRate!=null && add(`${crs}コース1着率`, bandScore(cs.firstRate, COURSE_BAND_FIRST[crs]), W.courseFirst)) courseW += W.courseFirst;
+    if(cs.trioRate!=null  && add(`${crs}コース3連対率`, bandScore(cs.trioRate, COURSE_BAND_TRIO[crs]), W.courseTrio))  courseW += W.courseTrio;
+    if(cs.avgST!=null     && add(`${crs}コース平均ST`, stScore(cs.avgST), W.courseST))                                  courseW += W.courseST;
+  }
+  add(laneLabel, laneVal, Math.max(W.lane, POS_W - courseW));
 
   /* --- 成績 --- */
   if(has(b.nationalWinRate)) add('全国勝率', lin(V(b.nationalWinRate),BAND.winRate[0],BAND.winRate[1]), W.national);
@@ -2890,14 +2908,6 @@ function scoreBoat(b, ctx){
   if(has(b.exhibitionTime) && ctx.bestExTime!==null)
     add('展示タイム', clamp((ctx.bestExTime+0.20-V(b.exhibitionTime))/0.20*100,0,100), W.exTime);
 
-  /* --- 今の艇番に対応するコース実績（最重要の一つ） --- */
-  const cs = b.courseStats[crs];
-  if(cs){
-    if(cs.firstRate!=null) add(`${crs}コース1着率`, bandScore(cs.firstRate, COURSE_BAND_FIRST[crs]), W.courseFirst);
-    if(cs.trioRate!=null)  add(`${crs}コース3連対率`, bandScore(cs.trioRate, COURSE_BAND_TRIO[crs]), W.courseTrio);
-    if(cs.avgST!=null)     add(`${crs}コース平均ST`, stScore(cs.avgST), W.courseST);
-  }
-
   /* --- 追加データ --- */
   if(has(b.racerAbilityIndex)) add('能力指数', lin(V(b.racerAbilityIndex),40,90), W.ability);
   if(has(b.termWinRate))       add('期別勝率', lin(V(b.termWinRate),BAND.winRate[0],BAND.winRate[1]),   W.termWin);
@@ -2905,7 +2915,7 @@ function scoreBoat(b, ctx){
 
   /* --- 今節成績 ---
      節が進むほど材料が増えて信頼できるので、走った本数に応じて
-     重みを増やす。初日(0走)は0、4走以上で満額になる。
+     重みを増やす。初日(0走)は0、6走(節の全レース)で満額になる。
      これにより「日を追うほど今節成績が効く」評価になる。        */
   const races = (b.recentSource === 'manual' || !b.recentRaces)
     ? (b.recentForm||'').split(/[,、\s]+/).map(x=>Number(x))
@@ -2914,7 +2924,11 @@ function scoreBoat(b, ctx){
 
   if(races && races.length){
     const finished = races.map(r=>r.result).filter(r=>typeof r === 'number');
-    const ratio = clamp(races.length / 4, 0, 1);      /* 節の進行度 */
+    /* 節の進行度。以前は 4走で満額だったが、3走の時点で ratio=0.75 と
+       ほぼ満額になり、3本しかない材料が過大に効いていた。
+       1走0.17 / 2走0.33 / 3走0.50 / 4走0.67 / 5走0.83 / 6走1.0 と、
+       節が終わりに近づくほど効くようにする。                       */
+    const ratio = clamp(races.length / 6, 0, 1);
 
     if(finished.length){
       const avg = finished.reduce((a,c)=>a+c,0)/finished.length;
@@ -2925,10 +2939,13 @@ function scoreBoat(b, ctx){
     if(sts.length >= 2){
       add('今節平均ST', stScore(sts.reduce((a,c)=>a+c,0)/sts.length), W.recentST * ratio);
     }
-    /* 調子の向き */
+    /* 調子の向き。3走だと「1.5走 対 1.5走」の比較でほぼ雑音になる。
+       徳山1Rでは3走の6号艇が94点・3号艇が100点を取り、どちらも下位に敗れた。
+       4走以上で初めて採点に入れ、走った本数に応じて効かせる。        */
     const tr = formTrend(races);
+    const trRatio = clamp((finished.length - 3) / 3, 0, 1);
     if(tr !== null){
-      add('今節の調子', clamp(50 + tr*22, 0, 100), W.recentTrend * ratio);
+      if(trRatio > 0) add('今節の調子', clamp(50 + tr*22, 0, 100), W.recentTrend * ratio * trRatio);
       if(tr >= 0.8)      plus.push(`今節の着順が上向き（${finished.join('→')}）`);
       else if(tr <= -0.8) minus.push(`今節の着順が下降（${finished.join('→')}）`);
     }
@@ -3040,7 +3057,7 @@ function scoreAll(){
       const max = Math.max(0, ...counts);
       const withData = counts.filter(n=>n>0).length;
       return { maxRaces:max, boatsWithData:withData,
-               weightRatio: Math.min(1, max/4) };
+               weightRatio: Math.min(1, max/6) };
     })()
   };
   state.boats.forEach(b=>scoreBoat(b,ctx));
