@@ -329,12 +329,14 @@ BOAT RACE公式から取得します。<br>
 <div class="lead">STEP3の直前情報で取れていれば入力不要です。取れない時だけスクショOCRか手入力を使います。</div>
 
 <div class="g3">
-  <div><label>風向</label><select id="windDir">
+  <div><label>風向</label><select id="windDir" onchange="readConditionsFromInputs()">
     <option value="">未設定</option><option>向かい風</option><option>追い風</option>
     <option>左横風</option><option>右横風</option><option>無風</option></select></div>
-  <div><label>風速 m/s</label><input id="windSpeed" inputmode="decimal" placeholder="例 3"></div>
+  <div><label>風速 m/s</label><input id="windSpeed" inputmode="decimal" placeholder="例 3"
+    oninput="readConditionsFromInputs()"></div>
   <div><label>波高 cm</label><input id="wave" inputmode="decimal" placeholder="例 2"></div>
 </div>
+<div id="windNotice" class="mini"></div>
 <div>
   <label>進入並び（スタート展示の1コース→6コースの艇番）</label>
   <input id="entryOrder" inputmode="numeric" placeholder="例 123564（枠なりなら 123456）"
@@ -2757,6 +2759,7 @@ function renderConditions(){
     const f = state.conditions[k];
     if(has(f) && !$(k).value) $(k).value = f.value;
   });
+  updateWindNotice();
 }
 function readConditionsFromInputs(){
   const map = { windSpeed:'windSpeed', wave:'wave', temp:'temp', waterTemp:'waterTemp' };
@@ -2768,6 +2771,33 @@ function readConditionsFromInputs(){
   });
   state.conditions.windDir = $('windDir').value || null;
   state.conditions.tide    = $('tide').value || null;
+  updateWindNotice();
+}
+/* 風の補正は風速だけでは効かない。風向きが要る。
+   公式サイトは風向きを矢印の画像でしか出していないので自動では取れない。
+   黙って効かないままにすると「風速4mなのに何も変わらない」理由が分からないので、
+   ここで「あと風向きだけ足りない」と言う。 */
+function updateWindNotice(){
+  const el = $('windNotice'); if(!el) return;
+  const ws = state.conditions.windSpeed?.value ?? null;
+  const wd = state.conditions.windDir;
+  if(ws !== null && ws >= 4 && !wd){
+    el.className = 'notice warn';
+    el.innerHTML = `風速${ws}m ですが<b>風向きが未設定</b>です。`+
+      `風向きを選ぶと、その分だけ採点が変わります（追い風はアウト有利、向かい風はイン有利）。`+
+      `公式サイトは風向きを矢印の絵でしか出しておらず、自動では取れません。`+
+      `<b>直前情報の水面気象の矢印を見て選んでください。</b>`;
+    return;
+  }
+  if(ws !== null && ws >= 4 && wd){
+    el.className = 'mini';
+    el.textContent = `風速${ws}m・${wd}。風の補正が効いています。`;
+    return;
+  }
+  el.className = 'mini';
+  el.textContent = ws !== null && ws < 4
+    ? `風速${ws}m。4m未満なので風の補正は効きません。`
+    : '';
 }
 /* 「123564」のような並びを各艇の進入コースへ反映する。
    1文字目＝1コースの艇番、2文字目＝2コースの艇番…
