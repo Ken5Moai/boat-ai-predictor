@@ -334,6 +334,32 @@ const RACES=[
  {reg:'3284',g:'B1',nat:5.71,loc:5.81,mot:39.58,bt:28.26,st:0.18,F:1,exST:0.08,exF:null,exT:6.92,tilt:0.0,wt:52.4,entry:4,rec:[]},
  {reg:'5078',g:'B1',nat:4.46,loc:4.33,mot:29.70,bt:47.25,st:0.19,F:1,exST:0.01,exF:null,exT:6.87,tilt:0.0,wt:47.3,entry:5,rec:[]},
  {reg:'4750',g:'B1',nat:5.13,loc:3.91,mot:29.17,bt:27.47,st:0.16,F:1,exST:0.06,exF:null,exT:6.79,tilt:0.0,wt:52.1,entry:6,rec:[]}]},
+// 徳山1R 朝トク予選（9/24）: 枠の天井バグを直したあと、
+// 初めて入った徳山のレース。修正が効く場（イン率60%）での実地確認になる。
+//   モデルの1号艇 77.9% / 市場 79.1% / 結果 1号艇の逃げ
+// 修正前の徳山はモデル平均41.0%だった。ほぼ市場と並んだ。
+//
+// 期待値方式がこれまで0/10だったが、このレースで初めて的中した。
+//   買った8点のうち 1-2-6（24.9倍・確率5.7%・期待値1.43）が来た
+//   投資 8点×100円 = 800円 → 払戻 2,490円
+// オッズ24.9倍 → 払戻¥2,490、人気順も公式の「10番人気」と一致（9例目）。
+//
+// 天候の読み取りで注意が要った点:
+// 直前情報のスクショは17:42に撮ったもので、水面気象が「14:23現在」と出ていた。
+// これは1R（締切08:40）の天候ではなく、見た時点の天候。
+// レース時の値は結果画面にある 風速1m・波高1cm を採った。
+// 直前情報を後から見ると、別のレースの天候を拾ってしまう。
+{name:'徳山1R 朝トク予選',jcd:'18',rno:1,date:'2026-09-24',result:'1-2-6',pop:10,pay:2490,
+ pays:{tan:130, ni:500, nifuku:240, sanfuku:1740},
+ actualST:{1:.18,2:.15,3:.13,4:.12,5:.14,6:.22},
+ wind:null,ws:1,wave:1,temp:24,wtemp:26,
+ B:[
+ {reg:'4159',g:'A2',nat:6.59,loc:5.36,mot:39.56,bt:28.71,st:0.17,F:0,exST:0.16,exF:null,exT:6.85,tilt:0.0,wt:52.0,entry:1,rec:[]},
+ {reg:'3637',g:'B1',nat:3.58,loc:3.74,mot:30.56,bt:31.46,st:0.18,F:0,exST:0.01,exF:null,exT:6.91,tilt:-0.5,wt:52.6,entry:2,rec:[]},
+ {reg:'3577',g:'B1',nat:4.36,loc:3.44,mot:24.27,bt:27.75,st:0.17,F:0,exST:0.01,exF:'F',exT:6.92,tilt:-0.5,wt:58.4,entry:3,rec:[]},
+ {reg:'3808',g:'B1',nat:4.01,loc:4.16,mot:38.20,bt:29.77,st:0.17,F:0,exST:0.11,exF:null,exT:6.99,tilt:0.0,wt:57.7,entry:4,rec:[]},
+ {reg:'5338',g:'B1',nat:4.58,loc:2.89,mot:36.61,bt:35.38,st:0.16,F:0,exST:0.12,exF:'F',exT:6.89,tilt:0.0,wt:52.0,entry:5,rec:[]},
+ {reg:'4981',g:'B1',nat:5.24,loc:5.72,mot:20.79,bt:37.09,st:0.18,F:0,exST:0.04,exF:null,exT:6.98,tilt:-0.5,wt:52.6,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -852,14 +878,35 @@ if(require.main===module){
         const picks = allCombos.map(k=>({k, p:x.probOf[k], o:O[k], ev:x.probOf[k]*O[k]}))
           .filter(c=>c.p>=0.02 && c.ev>=1.10).sort((a,b)=>b.ev-a.ev).slice(0,12);
         const hit = picks.find(c=>c.k===x.result);
-        const spend = picks.length ? 1200 : 0;
-        const back = hit ? x.pay/100*(Math.floor(1200/picks.length/100)*100) : 0;
+        /* 1点あたりは100円単位に丸める。実際に出す金額は「丸めた単価×点数」で、
+           予算1,200円ではない。以前はここで予算をまるごと使ったことにしていて、
+           買っていない分まで損に数えていた（8点なら800円しか出していないのに
+           1,200円払ったことになっていた）。 */
+        const unit = picks.length ? Math.max(100, Math.floor(1200/picks.length/100)*100) : 0;
+        const spend = unit * picks.length;
+        const back = hit ? x.pay/100*unit : 0;
         console.log(`  ${x.name.padEnd(12)} ${top.d>=0 ? (top.d*100).toFixed(1).padStart(5) : ''}pt  ${top.a}号艇  `+
           `${(top.mp*100).toFixed(1).padStart(5)}% ${(top.mk*100).toFixed(1).padStart(5)}%  ${win}号艇  `+
           `${picks.length}点 ${hit?'的中':'不的中'} ${String(back-spend).padStart(6)}円`);
       }
       console.log('\n  ※ 差が大きくても、賭けているのが2着3着の並びなら当たらない。');
       console.log('     モデルが市場より正しかったレース（三国3R）でも、買った点は全部外れている。');
+      {
+        let inv=0, ret=0, hits=0, n=0;
+        for(const x of withOdds){
+          const O = ODDS[x.name];
+          const picks = allCombos.map(k=>({k, p:x.probOf[k], o:O[k], ev:x.probOf[k]*O[k]}))
+            .filter(c=>c.p>=0.02 && c.ev>=1.10).sort((a,b)=>b.ev-a.ev).slice(0,12);
+          if(!picks.length) continue;
+          n++;
+          const unit = Math.max(100, Math.floor(1200/picks.length/100)*100);
+          inv += unit*picks.length;
+          const hit = picks.find(c=>c.k===x.result);
+          if(hit){ ret += x.pay/100*unit; hits++; }
+        }
+        console.log(`\n  期待値方式の通算  ${n}レース  投資${inv.toLocaleString()}円  `+
+          `払戻${ret.toLocaleString()}円  回収率${(ret/inv*100).toFixed(0)}%  的中${hits}/${n}`);
+      }
     }
   }
 
