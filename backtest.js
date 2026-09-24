@@ -201,6 +201,28 @@ const RACES=[
  {reg:'5190',g:'B1',nat:4.00,loc:3.97,mot:33.59,bt:41.32,st:0.18,F:1,exST:0.11,exF:null,exT:6.86,tilt:-0.5,wt:52.0,entry:4,rec:[[3,.25,3]]},
  {reg:'5090',g:'B1',nat:5.16,loc:null,mot:32.03,bt:30.43,st:0.15,F:1,exST:0.08,exF:null,exT:6.77,tilt:-0.5,wt:52.9,entry:5,rec:[[2,.16,1]]},
  {reg:'4197',g:'B1',nat:3.66,loc:3.97,mot:25.86,bt:37.30,st:0.19,F:0,exST:0.01,exF:'F',exT:6.84,tilt:-0.5,wt:54.6,entry:6,rec:[]}]},
+// 三国9R: 1号艇の逃げ。モデルも市場も1号艇が本命で、そこは両方当たり。
+// 2着が5号艇（モデル4番手・市場3番手）で、組としては14番人気 ¥3,110。
+// モデルはこの組を24番目に置いていた。
+// オッズ31.1倍 → 払戻¥3,110、しかも人気順も公式の「14番人気」と一致。
+// 組番1つではなく120個の並び全体が正しかったことの裏付け（4例目）。
+//
+// 展示STと本番STが大きく食い違ったレースでもある。
+//   枠     1     2     3     4     5     6
+//   展示  .07   .26   .08   .11   .29   .04
+//   本番  .03   .11   .06   .02   .05   .01
+// 展示で最も遅かった5号艇が本番.05で2着に来た。
+// 展示STの重みが妥当かを測るため、ここから本番STも記録する（actualST）。
+{name:'三国9R 一般',jcd:'10',rno:9,date:'2026-09-24',result:'1-5-3',pop:14,pay:3110,pays:{tan:420, ni:610, nifuku:510, sanfuku:830},
+ actualST:{1:.03,2:.11,3:.06,4:.02,5:.05,6:.01},
+ wind:null,ws:4,wave:4,temp:24,wtemp:24,
+ B:[
+ {reg:'4241',g:'A2',nat:5.71,loc:5.50,mot:31.78,bt:40.74,st:0.17,F:0,exST:0.07,exF:null,exT:6.96,tilt:-0.5,wt:52.0,entry:1,rec:[[6,.11,5]]},
+ {reg:'4424',g:'A2',nat:5.50,loc:6.00,mot:19.49,bt:37.10,st:0.16,F:0,exST:0.26,exF:null,exT:6.82,tilt:-0.5,wt:52.0,entry:2,rec:[]},
+ {reg:'5345',g:'B1',nat:3.42,loc:1.83,mot:19.35,bt:38.52,st:0.20,F:0,exST:0.08,exF:null,exT:6.88,tilt:0.0,wt:52.0,entry:3,rec:[]},
+ {reg:'4675',g:'A2',nat:5.69,loc:6.60,mot:12.04,bt:34.68,st:0.14,F:0,exST:0.11,exF:null,exT:6.85,tilt:-0.5,wt:51.0,adj:1.0,entry:4,rec:[[3,.12,3]]},
+ {reg:'4150',g:'A2',nat:5.94,loc:5.89,mot:33.07,bt:32.84,st:0.15,F:0,exST:0.29,exF:null,exT:6.81,tilt:0.0,wt:55.9,entry:5,rec:[[2,.15,3]]},
+ {reg:'5465',g:'B2',nat:1.07,loc:1.11,mot:34.53,bt:33.08,st:null,F:1,exST:0.04,exF:null,exT:6.89,tilt:-0.5,wt:55.4,entry:6,rec:[[6,.25,6]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -478,6 +500,58 @@ if(require.main===module){
       console.log(`  ${lm > lk ? 'いまのところモデルのほうが上。' : 'いまのところ市場のほうが上。'}`+
                   ` ただし${rows.length}件では偶然の幅のほうが大きい。`);
       console.log('  10件そろうまで、この数字を根拠に賭け方を変えないこと。');
+    }
+  }
+
+  console.log('\n=== 展示STは本番STを言い当てているか ===');
+  console.log('  展示STは採点の中でも重い項目のひとつ。');
+  console.log('  「展示で遅い艇は本番でも遅い」が本当かどうかは、両方を並べないと分からない。');
+  console.log('  結果画面のスタート情報から本番STを写した回だけが対象（actualST）。\n');
+  {
+    const withST = RACES.filter(r=>r.actualST);
+    if(!withST.length){
+      console.log('  本番STを記録したレースがまだ無い。');
+      console.log('  結果画面の「スタート情報」の6つの数字を actualST に写すと、ここで測れる。');
+    } else {
+      const pairs = [];
+      for(const R of withST){
+        R.B.forEach((b,i)=>{
+          const a = R.actualST[i+1];
+          if(b.exST==null || a==null) return;
+          /* 展示でFだった艇は、本番の出方と別物なので外す */
+          if(b.exF === 'F') return;
+          pairs.push({race:R.name, lane:i+1, ex:b.exST, ac:a});
+        });
+      }
+      console.log('  レース          枠   展示ST  本番ST   差');
+      pairs.forEach(x=>console.log(`  ${x.race.padEnd(14)}${x.lane}   `+
+        `${x.ex.toFixed(2).padStart(5)}  ${x.ac.toFixed(2).padStart(5)}  ${(x.ac-x.ex>=0?'+':'')}${(x.ac-x.ex).toFixed(2)}`));
+      const n = pairs.length;
+      const mean = a => a.reduce((t,v)=>t+v,0)/a.length;
+      const ex = pairs.map(x=>x.ex), ac = pairs.map(x=>x.ac);
+      const mx = mean(ex), my = mean(ac);
+      let num=0, dx=0, dy=0;
+      for(let i=0;i<n;i++){ num+=(ex[i]-mx)*(ac[i]-my); dx+=(ex[i]-mx)**2; dy+=(ac[i]-my)**2; }
+      const r = (dx&&dy) ? num/Math.sqrt(dx*dy) : 0;
+      console.log(`\n  ${n}艇分。展示STの平均 ${mx.toFixed(3)} / 本番STの平均 ${my.toFixed(3)}`);
+      console.log(`  相関 ${r.toFixed(2)}（1に近いほど「展示が速い艇は本番も速い」）`);
+      const shift = my - mx;
+      const allFaster = pairs.every(x=>x.ac < x.ex);
+      console.log(`  本番のほうが速い艇 ${pairs.filter(x=>x.ac<x.ex).length}/${n}`+
+                  `（平均で ${shift>=0?'+':''}${shift.toFixed(3)} 秒）`);
+      if(allFaster && n >= 6){
+        console.log('  ※ 全艇が本番のほうが速い。展示のスタートは競っていないので');
+        console.log('     押していないだけ、という説明が付く。ただし件数が要る。');
+        console.log('     もしこれが続くなら、展示STは「絶対値」ではなく');
+        console.log('     「そのレースの中での速い遅い」として使うほうが筋が通る。');
+      }
+      if(n < 30){
+        console.log('  ※ 30艇分に満たないので、この相関はまだ読まないこと。');
+        console.log('     符号が逆でも偶然の幅に入る。');
+      } else if(r < 0.2){
+        console.log('  ※ 展示STは本番STをほとんど言い当てていない。');
+        console.log('     展示STの重み(W.exST)を下げるか外すかを検討する材料になる。');
+      }
     }
   }
 
