@@ -146,6 +146,27 @@ const RACES=[
  {reg:'4894',g:'B1',nat:4.64,loc:null,mot:32.80,bt:35.34,st:0.19,F:0,exST:0.13,exF:null,exT:6.71,tilt:-0.5,wt:52.0,entry:5,rec:[]},
  {reg:'5009',g:'A2',nat:5.17,loc:5.09,mot:25.00,bt:41.23,st:0.16,F:1,exST:0.08,exF:null,exT:6.75,tilt:-0.5,wt:54.7,entry:6,rec:[]},
  {reg:'4418',g:'A1',nat:7.47,loc:8.60,mot:35.51,bt:35.04,st:0.13,F:0,exST:0.25,exF:null,exT:6.67,tilt:-0.5,wt:52.7,entry:3,rec:[]}]},
+{name:'三国6R 一般',jcd:'10',rno:6,date:'2026-09-24',result:'1-4-6',pop:null,pay:1300,
+ pays:{nifuku:1300},
+ wind:null,ws:3,wave:3,temp:24,wtemp:23,
+ /* 進入は枠なり。展示ST 1:.06 2:.03 3:.02 4:.02 5:.03 6:.11
+    モデルと市場が過去最大に食い違ったレース（1号艇で 32.3pt）。
+      1号艇 谷口丞   モデル18.8% / 市場51.2%  ← 当地2.47・当地2連率6.98%・F1持ち
+      2号艇 庄司孝輔 モデル25.6% / 市場 9.7%
+      3号艇 伊藤啓三 モデル16.9% / 市場 7.4%
+      6号艇 田中和也 モデル13.6% / 市場 5.4%  ← 当地7.88・当地3連率90.91%（A1）
+    市場は「1号艇だから」で51.2%を付けている。モデルは当地成績を見て下げている。
+    結果は 1-4-6（¥1,300）。1号艇が勝ち、市場が正しかった。
+    モデルが当地成績を根拠に1号艇を大きく下げたのは外れ。
+    ※ アプリ上でのモデルの1着確率は10.3%（ここでの手計算は18.8%）。
+       アプリは出走表から今節成績も自動で取り込んでいるための差。 */
+ B:[
+ {reg:'5344',g:'B1',nat:5.34,loc:2.47,mot:27.91,bt:32.80,st:0.15,F:1,exST:0.06,exF:null,exT:6.76,tilt:-0.5,wt:52.0,entry:1,rec:[]},
+ {reg:'4360',g:'A2',nat:5.54,loc:5.23,mot:32.80,bt:35.59,st:0.18,F:0,exST:0.03,exF:null,exT:6.75,tilt:-0.5,wt:53.1,entry:2,rec:[]},
+ {reg:'3838',g:'B1',nat:5.40,loc:5.95,mot:37.50,bt:29.93,st:0.16,F:0,exST:0.02,exF:null,exT:6.81,tilt:-0.5,wt:52.3,entry:3,rec:[]},
+ {reg:'4441',g:'A2',nat:5.81,loc:6.92,mot:29.17,bt:31.15,st:0.14,F:0,exST:0.02,exF:null,exT:6.80,tilt:-0.5,wt:52.6,entry:4,rec:[]},
+ {reg:'3965',g:'A1',nat:5.86,loc:5.81,mot:29.93,bt:39.32,st:0.17,F:1,exST:0.03,exF:null,exT:6.87,tilt:-0.5,wt:52.0,entry:5,rec:[]},
+ {reg:'4357',g:'A1',nat:6.71,loc:7.88,mot:37.01,bt:33.06,st:0.18,F:0,exST:0.11,exF:null,exT:6.76,tilt:-0.5,wt:52.1,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
