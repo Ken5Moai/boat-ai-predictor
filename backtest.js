@@ -443,6 +443,27 @@ const RACES=[
  {reg:'4158',g:'B1',nat:4.50,loc:5.33,mot:38.39,bt:32.67,st:0.16,F:0,exST:0.03,exF:null,exT:6.89,tilt:-0.5,wt:55.3,entry:4,rec:[]},
  {reg:'3772',g:'B1',nat:4.87,loc:4.95,mot:37.07,bt:32.04,st:0.16,F:0,exST:0.13,exF:null,exT:6.92,tilt:0.0,wt:53.1,entry:5,rec:[]},
  {reg:'3804',g:'B1',nat:5.03,loc:4.52,mot:30.00,bt:26.96,st:0.16,F:0,exST:0.01,exF:'F',exT:6.89,tilt:-0.5,wt:52.0,entry:6,rec:[]}]},
+// 徳山5R 予選（9/24・4日目）: 名前が9/23の「徳山5R 予選」と重なるため
+// 「徳山5R 予選 4日目」にした。前日に入れた重複チェックが実際に止めてくれた。
+//
+// 市場が1号艇を38.0%しか見なかった、これまでで最も評価の低いインのレース。
+// 1号艇 八木治樹は当地3.44・当地2連率0.00・当地3連率0.00。
+// モデルはさらに低く29.0%と見て、2号艇を1番手に置いた。結果は1号艇の逃げ。
+//   モデル 2(69.9) 1(68.5) 4(64.2) …  実際の着順 1 → 4 → 3
+// 当地成績が悪いインでも勝つ、という三国6Rと同じ形。これで3例目。
+// オッズ25.4倍 → 払戻¥2,540、人気順も公式の「11番人気」と一致（14例目）。
+// 期待値方式は5点買って不的中（通算 2/17）。
+{name:'徳山5R 予選 4日目',jcd:'18',rno:5,date:'2026-09-24',result:'1-4-3',pop:11,pay:2540,
+ pays:{tan:160, ni:650, nifuku:640, sanfuku:700},
+ actualST:{1:.08,2:.04,3:.06,4:.06,5:.14,6:.11},
+ wind:null,ws:2,wave:2,temp:26,wtemp:26,
+ B:[
+ {reg:'4943',g:'B1',nat:4.50,loc:3.44,mot:38.00,bt:36.28,st:0.15,F:0,exST:0.13,exF:null,exT:6.87,tilt:-0.5,wt:52.4,entry:1,rec:[]},
+ {reg:'4679',g:'A2',nat:6.09,loc:5.77,mot:35.71,bt:40.00,st:0.16,F:0,exST:0.02,exF:null,exT:6.83,tilt:0.0,wt:56.5,entry:2,rec:[]},
+ {reg:'4594',g:'B1',nat:6.26,loc:5.55,mot:40.63,bt:35.07,st:0.16,F:0,exST:0.04,exF:null,exT:6.93,tilt:0.0,wt:52.0,entry:3,rec:[]},
+ {reg:'4702',g:'A1',nat:5.85,loc:5.92,mot:42.27,bt:41.06,st:0.14,F:0,exST:0.02,exF:null,exT:6.92,tilt:-0.5,wt:52.0,entry:4,rec:[]},
+ {reg:'3808',g:'B1',nat:4.01,loc:4.16,mot:38.20,bt:29.77,st:0.17,F:0,exST:0.02,exF:null,exT:7.01,tilt:0.0,wt:57.7,entry:5,rec:[[4,.12,5]]},
+ {reg:'4811',g:'B1',nat:4.97,loc:5.13,mot:38.95,bt:28.57,st:0.16,F:0,exST:0.05,exF:'F',exT:6.88,tilt:0.0,wt:50.5,adj:1.5,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -1046,6 +1067,69 @@ if(require.main===module){
       console.log('       展示STは本番STそのものではなく、別の何か（気合い・');
       console.log('       仕上がり）を映している可能性がある。'); 
     }
+  }
+
+  console.log('\n=== 当地勝率は効いているか ===');
+  console.log('  1号艇の当地勝率で全レースを半分に割り、実際の勝率とモデルの見方を比べる。');
+  console.log('  当地の記録が無い艇（loc が null）は対象外。\n');
+  {
+    const rows = [];
+    for(const x of base){
+      const R = RACES.find(r=>r.name===x.name);
+      const b1 = R.B[0];
+      if(b1.loc == null) continue;
+      rows.push({ loc:b1.loc, won:Number(R.result.split('-')[0])===1,
+                  p:Object.keys(x.probOf).filter(k=>k[0]==='1')
+                          .reduce((t,k)=>t + x.probOf[k], 0) });
+    }
+    rows.sort((a,b)=>a.loc-b.loc);
+    const half = Math.floor(rows.length/2);
+    const lo = rows.slice(0, half), hi = rows.slice(half);
+    const show = (label, a) => {
+      const w = a.filter(x=>x.won).length;
+      console.log(`  ${label.padEnd(24)}実際に1着 ${w}/${a.length} (${(w/a.length*100).toFixed(0)}%)`+
+        `   モデルの平均 ${(a.reduce((t,x)=>t+x.p,0)/a.length*100).toFixed(1)}%`);
+    };
+    show(`当地が低い${lo.length}レース（〜${lo[lo.length-1].loc.toFixed(2)}）`, lo);
+    show(`当地が高い${hi.length}レース（${hi[0].loc.toFixed(2)}〜）`, hi);
+    const wl = lo.filter(x=>x.won).length/lo.length, wh = hi.filter(x=>x.won).length/hi.length;
+    const pl = lo.reduce((t,x)=>t+x.p,0)/lo.length, ph = hi.reduce((t,x)=>t+x.p,0)/hi.length;
+    console.log(`\n  実際の差 ${((wh-wl)*100>=0?'+':'')}${((wh-wl)*100).toFixed(0)}pt   `+
+                `モデルが付けている差 ${((ph-pl)*100>=0?'+':'')}${((ph-pl)*100).toFixed(1)}pt`);
+    if(wh <= wl && ph > pl + 0.05){
+      console.log('  → 実際には差が出ていないのに、モデルは大きな差を付けている。');
+    }
+
+    /* 効いていないように見えても、重みを下げた結果を測るまで動かさない。
+       展示STのときは相関0.11でも下げると悪くなった。 */
+    console.log('\n  当地の重みを下げたらどうなるか（減らしたぶんは全国勝率へ回す）');
+    console.log('    設定                        1着の対数  平均順位  6点     12点');
+    const L0 = 0.08, N0 = 0.11;
+    const showW = (label, patch) => {
+      const r2 = runWith(patch, null, {});
+      const st = summarize(r2);
+      const a = [];
+      for(const y of r2){
+        const R2 = RACES.find(q=>q.name===y.name); const m2 = ODDS[R2.name];
+        if(!m2 || Object.keys(m2).length !== 120) continue;
+        const w2 = Number(R2.result.split('-')[0]);
+        a.push(Object.keys(y.probOf).filter(k=>k[0]===String(w2))
+                     .reduce((t,k)=>t + y.probOf[k], 0));
+      }
+      const l = a.reduce((t,v)=>t + Math.log(Math.max(v,1e-6)), 0)/a.length;
+      console.log(`    ${label.padEnd(26)}${l.toFixed(3).padStart(8)}  `+
+        `${st.avg.toFixed(1).padStart(7)}  ${st.in6}/${st.n}   ${st.in12}/${st.n}`);
+    };
+    showW('いまのまま local 0.08', {});
+    for(const v of [0.04, 0]) showW(`local ${v.toFixed(2)} / national ${(L0+N0-v).toFixed(2)}`,
+                                    { local:v, national:L0+N0-v });
+    console.log('');
+    console.log('    【先に決めておく】いまは変えない。差が小さすぎて件数の中に埋もれている。');
+    console.log('    40レースそろった時点で、local 0.04 が 0.08 より');
+    console.log('      ・1着の対数が良い');
+    console.log('      ・3連単の12点的中が落ちていない');
+    console.log('    の両方を満たしていたら 0.04 に下げる。満たさなければ据え置く。');
+    console.log('    （結果を見てから基準を決めないために、先に書いておく）');
   }
 
   console.log('\n=== 市場と食い違ったレースは儲かるのか ===');
