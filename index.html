@@ -4360,12 +4360,17 @@ async function fetchOdds(){
     }
     state.oddsMap = res.map;
     notice('oddsNotice','ok',
-      `3連単オッズを120通り取得しました（${esc(res.how)}）。検算 Σ(1/オッズ)=${res.chk.inv.toFixed(2)}。`+
+      `3連単オッズを120通り取得しました（${esc(res.how)}）。`+
+      `検算 Σ(1/オッズ)=${res.chk.inv.toFixed(2)} / ${esc(res.chk.how||'')}との順位相関 ${res.chk.rho.toFixed(2)}。`+
       'もう一度「予想レポート生成」を押すと、期待値の高い順に買い目を選び直します。');
-    log(`  ✓ 120通り取得 Σ(1/オッズ)=${res.chk.inv.toFixed(3)} / 1号艇頭の平均${res.chk.m1.toFixed(0)}倍・6号艇頭${res.chk.m6.toFixed(0)}倍`);
+    log(`  ✓ 120通り取得 Σ(1/オッズ)=${res.chk.inv.toFixed(3)} / ${res.chk.how||''}との順位相関 ${res.chk.rho.toFixed(2)}`);
     renderOddsBox();
   }catch(e){
+    /* ここに来るのは取得や解析が失敗したときだけにする。
+       表示を作る途中で落ちて「取得できませんでした」と出すと、
+       本当は取れているのに取れていないように見えてしまう（実際に起きた）。 */
     notice('oddsNotice','warn','オッズを取得できませんでした（'+esc(e.message)+'）。手入力でも判定できます。');
+    log('  ✗ オッズ取得エラー: '+(e && e.stack ? e.stack : e));
   }finally{
     if(btn) btn.disabled = false;
     state.busy = false;
