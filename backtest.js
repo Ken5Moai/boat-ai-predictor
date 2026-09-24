@@ -554,11 +554,22 @@ if(require.main===module){
       console.error('  名前を分けてください（例「徳山2R 特選」「徳山2R 狙いトク特選」）。');
       process.exit(1);
     }
-    const missing = Object.keys(ODDS).filter(k=>!RACES.some(r=>r.name===k));
+    /* 結果待ちのレースは pending.js にあり、RACES にはまだ無い。
+       それは正しい状態なので、pending も見てから判断する。
+       （この判定を入れた直後に、自分で誤検知を出した） */
+    const known = new Set([...RACES, ...PENDING].map(r=>r.name));
+    const missing = Object.keys(ODDS).filter(k=>!known.has(k));
     if(missing.length){
-      console.error(`★ odds.js にあるのに RACES に無いレース: ${missing.join(', ')}`);
+      console.error(`★ odds.js にあるのに RACES にも pending.js にも無いレース: ${missing.join(', ')}`);
       console.error('  名前の書き間違いか、RACES への移し忘れです。');
       process.exit(1);
+    }
+    for(const r of PENDING){
+      if(RACES.some(q=>q.name===r.name)){
+        console.error(`★ pending.js のレース名が RACES と重複しています: ${r.name}`);
+        console.error('  すでに結果を入れたレースを二重に数えます。');
+        process.exit(1);
+      }
     }
   }
   console.log(`検証レース ${RACES.length}件\n`);
