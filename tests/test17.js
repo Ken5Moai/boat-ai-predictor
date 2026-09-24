@@ -92,6 +92,36 @@ console.log('\n=== B2. ずらし誤りは「いちばん合う並び」で正さ
   ok(r.map && Math.abs(r.map['6-5-4']-truth['6-5-4'])<0.05, '6-5-4 も正しい');
 }
 
+console.log('\n=== B3. 枠順の目安が通じないレースでも、モデルの確率で通す ===');
+{
+  /* 三国5R：A1が外枠から3コースへ前づけし、市場は6号艇を本命にした。
+     枠順の傾向との順位相関は -0.21 まで落ちるが、
+     モデルの確率と突き合わせれば 0.86 で通る。
+     期待値を探したいのはこういうレースなので、弾いてはいけない。 */
+  const upside = mk([.05,.06,.07,.03,.03,.76],[.20,.19,.19,.17,.13,.12],W3);
+  const noRef = w.oddsSanity(upside);
+  ok(!noRef.ok, `枠順の目安だけだと弾かれる（順位相関 ${noRef.rho.toFixed(2)}）`);
+  const probs = {};
+  Object.keys(upside).forEach(k=>{ probs[k] = 0.75/upside[k]; });   /* 市場と同じ形の確率 */
+  const withRef = w.oddsSanity(upside, probs);
+  ok(withRef.ok, `モデルの確率を渡せば通る（順位相関 ${withRef.rho.toFixed(2)}）`);
+  ok(withRef.how==='モデルの確率', `どちらの物差しで通ったか分かる: ${withRef.how}`);
+  /* モデルの確率を渡しても、並びがめちゃくちゃなら通さない */
+  const keys=Object.keys(upside), vals=keys.map(k=>upside[k]);
+  let seed=7; const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff;};
+  let through=0;
+  for(let t=0;t<300;t++){
+    for(let i=vals.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[vals[i],vals[j]]=[vals[j],vals[i]];}
+    const m={}; keys.forEach((k,i)=>{m[k]=vals[i];});
+    if(w.oddsSanity(m, probs).ok) through++;
+  }
+  ok(through===0, `モデルの確率を渡しても、並べ替えた300通りは全部弾く（素通り ${through}件）`);
+  /* 普通のレースでは、これまでどおり枠順の目安で通る */
+  const normal = mk([.55,.14,.12,.11,.06,.02],W2,W3);
+  ok(w.oddsSanity(normal).ok && w.oddsSanity(normal).how==='枠順の傾向',
+     '普通のレースは参照なしでも通る');
+}
+
 console.log('\n=== C. 組番つきのページを読む ===');
 {
   const rows=combos.map(k=>`<tr><td>${k}</td><td>${trueOdds[k].toFixed(1)}</td></tr>`).join('');

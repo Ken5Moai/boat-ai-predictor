@@ -4056,7 +4056,13 @@ function rankCorr(xs, ys){
   for(let i=0;i<n;i++){ const x=a[i]-ma, y=b[i]-mb; num+=x*y; da+=x*x; db+=y*y; }
   return (da && db) ? num/Math.sqrt(da*db) : 0;
 }
-function oddsSanity(map){
+/* refProbs を渡すと、枠順の傾向に加えて「モデルの確率」とも突き合わせ、
+   よく合うほうで判定する。
+   三国5Rのように A1 が外枠から前づけして市場が6号艇を本命にしたレースでは、
+   枠順の傾向との相関が -0.21 まで落ち、正しいオッズを弾いてしまった。
+   同じオッズをモデルの確率と突き合わせると 0.86 で通る。
+   期待値を探したいのはこういう荒れたレースなので、ここで弾いては意味がない。 */
+function oddsSanity(map, refProbs){
   const keys = Object.keys(map);
   if(keys.length !== 120) return { ok:false, why:`${keys.length}通りしか取れませんでした（120通り必要）` };
   let inv = 0;
@@ -4067,15 +4073,33 @@ function oddsSanity(map){
   }
   if(inv < 1.15 || inv > 1.60)
     return { ok:false, why:`Σ(1/オッズ)=${inv.toFixed(2)}。3連単なら1.33前後になるはずで、別の数字を拾っています` };
-  const rho = oddsFit(map);
-  if(!(rho >= ODDS_FIT_MIN))
-    return { ok:false, why:`オッズの並びが枠順の傾向と合っていません（順位相関 ${rho.toFixed(2)}、${ODDS_FIT_MIN}以上必要）` };
-  return { ok:true, inv, rho };
+  const fit = oddsFit(map, refProbs);
+  if(!(fit.rho >= ODDS_FIT_MIN))
+    return { ok:false, rho:fit.rho,
+      why:`オッズの並びが${fit.how}と合っていません（順位相関 ${fit.rho.toFixed(2)}、${ODDS_FIT_MIN}以上必要）` };
+  return { ok:true, inv, rho:fit.rho, how:fit.how };
 }
-/* 組番とオッズの対応がどれだけ枠順の傾向に合っているか */
-function oddsFit(map){
+/* 組番とオッズの対応が、どれだけ「起こりやすさの順」に合っているか。
+   物差しは2つ。枠順から決まる目安と、モデルが出した確率。
+   合っているほうを採る。どちらかが合えば、並びは正しいと判断してよい。 */
+function oddsFit(map, refProbs){
   const keys = Object.keys(map);
-  return rankCorr(keys.map(k=>map[k]), keys.map(k=>-Math.log(lanePrior(k))));
+  const odds = keys.map(k=>map[k]);
+  let best = { rho: rankCorr(odds, keys.map(k=>-Math.log(lanePrior(k)))), how:'枠順の傾向' };
+  if(refProbs && keys.every(k=>refProbs[k] > 0)){
+    const r = rankCorr(odds, keys.map(k=>-Math.log(refProbs[k])));
+    if(r > best.rho) best = { rho:r, how:'モデルの確率' };
+  }
+  return best;
+}
+/* いまの採点から、組番→確率の対応表を作る（オッズの検算に使う） */
+function modelProbMap(){
+  try{
+    const ctx = scoreAll();
+    const combos = buildProbabilities(ctx);
+    const m = {}; combos.forEach(c=>{ m[c.combo] = c.p; });
+    return m;
+  }catch(e){ return null; }
 }
 
 /* すべての3連単の組番を、公式の表の並び（1着ごと、2着→3着の昇順）で返す */
@@ -4086,7 +4110,7 @@ function allTrifecta(){
   return out;   /* 120通り */
 }
 
-function parseOdds3t(raw){
+function parseOdds3t(raw, refProbs){
   const text = htmlToText(raw);
   const tried = [];
 
@@ -4101,8 +4125,8 @@ function parseOdds3t(raw){
       const key = `${a}-${b}-${c}`;
       if(map[key] === undefined) map[key] = Number(o);
     }
-    const chk = oddsSanity(map);
-    tried.push(`組番つき: ${chk.ok ? `OK（順位相関 ${chk.rho.toFixed(2)}）` : chk.why}`);
+    const chk = oddsSanity(map, refProbs);
+    tried.push(`組番つき: ${chk.ok ? `OK（${chk.how}との順位相関 ${chk.rho.toFixed(2)}）` : chk.why}`);
     if(chk.ok) return { map, how:'組番つき', chk, tried };
   }
 
@@ -4137,14 +4161,15 @@ function parseOdds3t(raw){
           inv += 1/o;
         }
         if(bad || inv < 1.15 || inv > 1.60) continue;
-        const rho = oddsFit(map);
-        if(!best || rho > best.rho) best = { map, rho, how:`${sh}個読み飛ばし・${oname}`, inv };
+        const fit = oddsFit(map, refProbs);
+        if(!best || fit.rho > best.rho)
+          best = { map, rho:fit.rho, how:`${sh}個読み飛ばし・${oname}`, ref:fit.how, inv };
       }
     }
     if(best){
-      tried.push(`いちばん合う並び: ${best.how}（順位相関 ${best.rho.toFixed(2)} / Σ(1/オッズ) ${best.inv.toFixed(2)}）`);
+      tried.push(`いちばん合う並び: ${best.how}（${best.ref}との順位相関 ${best.rho.toFixed(2)} / Σ(1/オッズ) ${best.inv.toFixed(2)}）`);
       if(best.rho >= ODDS_FIT_MIN)
-        return { map: best.map, how: best.how, chk: { ok:true, inv:best.inv, rho:best.rho }, tried };
+        return { map: best.map, how: best.how, chk: { ok:true, inv:best.inv, rho:best.rho, how:best.ref }, tried };
       tried.push(`順位相関が ${ODDS_FIT_MIN} に届かないため採用しません`);
     }else{
       tried.push('Σ(1/オッズ)が合う並びが1つも見つかりませんでした');
@@ -4163,7 +4188,10 @@ async function fetchOdds(){
     notice('oddsNotice','info','3連単オッズを取得しています…');
     log('[オッズ] '+url);
     const body = await fetchViaProxy(url, { mustContain:['オッズ','odds','boatrace'] });
-    const res = parseOdds3t(body);
+    /* 先に採点してモデルの確率を作っておく。
+       外枠のA1が前づけしたレースなど、枠順の目安が通じない並びでも
+       オッズの検算が通るようにするため。 */
+    const res = parseOdds3t(body, modelProbMap());
     res.tried.forEach(t=>log('  ・'+t));
     if(!res.map){
       notice('oddsNotice','warn',
