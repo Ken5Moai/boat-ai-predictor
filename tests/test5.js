@@ -42,7 +42,10 @@ const ids=new Set();
 (html.match(/\$\('([a-zA-Z0-9_]+)'\)/g)||[]).forEach(m=>ids.add(m.slice(3,-2)));
 (html.match(/getElementById\('([a-zA-Z0-9_]+)'\)/g)||[]).forEach(m=>ids.add(m.slice(16,-2)));
 // 動的生成される要素は除外
-const dynamicIds=['reg1','reg2','reg3','reg4','reg5','reg6','forceGen'];
+/* 予想レポートを出したときだけ作られる要素。静的なHTMLには無い。
+   postText / postNotice は配信用の書き出し欄で、買い目があるときだけ出る。 */
+const dynamicIds=['reg1','reg2','reg3','reg4','reg5','reg6','forceGen',
+                  'postText','postNotice'];
 const missIds=[...ids].filter(id=>!dynamicIds.includes(id) && !/^(ev|fld_|rf_)/.test(id) && !d.getElementById(id));
 ok(missIds.length===0, missIds.length? `存在しないID: ${missIds.join(', ')}` : `${ids.size}個のIDを検査し全て存在`);
 
