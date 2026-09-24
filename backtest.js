@@ -133,7 +133,7 @@ const RACES=[
 // モデルが市場と食い違った方向は、1・2・3号艇すべてで正しかった。
 // それでも結果 2-4-3 はモデル65番目（0.27%）で、4号艇の2着はまったく読めていない。
 // 「1着は当てられるが2着3着の並びは当てられない」がまた出た。
-{name:'三国3R 一般',pays:{tan:370, ni:5850, nifuku:2060, sanfuku:2960},jcd:'10',rno:3,date:'2026-09-24',result:'2-4-3',pop:43,pay:26460,wind:null,ws:1,wave:1,temp:24,wtemp:23,
+{name:'三国3R 一般',preClose:'9:02（締切9:24）',pays:{tan:370, ni:5850, nifuku:2060, sanfuku:2960},jcd:'10',rno:3,date:'2026-09-24',result:'2-4-3',pop:43,pay:26460,wind:null,ws:1,wave:1,temp:24,wtemp:23,
  B:[
  {reg:'3641',g:'A1',nat:6.09,loc:2.00,mot:34.38,bt:32.09,st:0.17,F:0,exST:0.32,exF:null,exT:6.68,tilt:-0.5,wt:52.2,adj:0.0,entry:1,rec:[]},
  {reg:'5090',g:'B1',nat:5.16,loc:null,mot:32.03,bt:30.43,st:0.15,F:1,exST:0.18,exF:null,exT:6.68,tilt:-0.5,wt:52.9,adj:0.0,entry:2,rec:[]},
@@ -464,6 +464,20 @@ const RACES=[
  {reg:'4702',g:'A1',nat:5.85,loc:5.92,mot:42.27,bt:41.06,st:0.14,F:0,exST:0.02,exF:null,exT:6.92,tilt:-0.5,wt:52.0,entry:4,rec:[]},
  {reg:'3808',g:'B1',nat:4.01,loc:4.16,mot:38.20,bt:29.77,st:0.17,F:0,exST:0.02,exF:null,exT:7.01,tilt:0.0,wt:57.7,entry:5,rec:[[4,.12,5]]},
  {reg:'4811',g:'B1',nat:4.97,loc:5.13,mot:38.95,bt:28.57,st:0.16,F:0,exST:0.05,exF:'F',exT:6.88,tilt:0.0,wt:50.5,adj:1.5,entry:6,rec:[]}]},
+// 下関10R 予選特賞: オッズと払戻が初めて食い違ったレース。
+// 書き写した 1-2-5 は 10.9倍（=¥1,090）だったが、実際の払戻は ¥1,110（=11.1倍）。
+// 原因はスクショが「オッズ更新時間 19:29」＝締切19:33の4分前の生オッズだったこと。
+// 他のレースは赤い「締切時オッズ」表示の最終値を使っている。
+// 差は+1.8%。締切前オッズであることを preClose で記録する。
+{name:'下関10R 予選特賞',jcd:'19',rno:10,date:'2026-09-24',result:'1-2-5',pop:3,pay:1110,preClose:'19:29（締切19:33）',
+ wind:null,ws:2,wave:2,temp:23,wtemp:26,
+ B:[
+ {reg:'5081',g:'A2',nat:5.67,loc:5.86,mot:30.77,bt:22.22,st:0.17,F:0,exST:0.16,exF:null,exT:6.79,tilt:0.0,wt:52.3,entry:1,rec:[]},
+ {reg:'3746',g:'A2',nat:5.75,loc:5.06,mot:44.68,bt:40.45,st:0.18,F:0,exST:0.15,exF:null,exT:6.83,tilt:0.0,wt:53.1,entry:2,rec:[[6,.23,2]]},
+ {reg:'3920',g:'B1',nat:4.71,loc:5.35,mot:28.87,bt:46.67,st:0.17,F:0,exST:0.02,exF:'F',exT:6.83,tilt:0.5,wt:52.5,entry:3,rec:[[2,.12,5]]},
+ {reg:'4750',g:'B1',nat:5.13,loc:3.91,mot:29.17,bt:27.47,st:0.16,F:1,exST:0.01,exF:null,exT:6.79,tilt:0.0,wt:52.1,entry:4,rec:[[6,.26,4]]},
+ {reg:'4180',g:'A2',nat:5.33,loc:5.08,mot:25.56,bt:35.16,st:0.17,F:0,exST:0.41,exF:null,exT:6.82,tilt:0.0,wt:54.1,parts:'プロペラ新',entry:5,rec:[[2,.13,4]]},
+ {reg:'4142',g:'A2',nat:5.67,loc:null,mot:38.89,bt:22.58,st:0.18,F:0,exST:0.11,exF:null,exT:6.86,tilt:0.0,wt:53.4,entry:6,rec:[[2,.16,4]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -571,6 +585,41 @@ if(require.main===module){
         process.exit(1);
       }
     }
+  }
+  /* 書き写したオッズと、実際の払戻が合っているかを毎回照合する。
+     3連単の払戻は「当たった組のオッズ×100円」なので、
+     odds.js の値が正しければ pay と必ず一致する。
+     ここまで14レース連続で一致していたが、それを確かめていたのは手作業だった。
+     1つでもズレたら、書き写しの誤りか、締切前のオッズを拾っている。 */
+  {
+    const bad = [], drift = [];
+    for(const R of RACES){
+      const m = ODDS[R.name]; if(!m || !R.result || !R.pay) continue;
+      const o = m[R.result]; if(o == null) continue;
+      const expect = Math.round(o*100);
+      if(Math.abs(expect - R.pay) <= 0.5) continue;
+      const rec = { name:R.name, combo:R.result, odds:o, expect, pay:R.pay,
+                    gap:(R.pay/expect-1)*100, pre:R.preClose };
+      (R.preClose ? drift : bad).push(rec);
+    }
+    const n = RACES.filter(R=>ODDS[R.name] && R.result && R.pay).length;
+    const okN = n - bad.length - drift.length;
+    console.log(`オッズと払戻の照合  ${n}レース中 ${okN}レース一致`);
+    if(drift.length){
+      console.log('  締切前のオッズを使っているレース（ズレは想定内）');
+      for(const b of drift)
+        console.log(`    ${b.name}  ${b.combo}  ${b.odds}倍→¥${b.expect}  `+
+                    `実際¥${b.pay}  ${b.gap>=0?'+':''}${b.gap.toFixed(1)}%  [${b.pre}]`);
+      console.log('    締切前の市場は未完成なので、モデルとの比較では不利に働く。');
+    }
+    if(bad.length){
+      console.log('■ 説明のつかないズレ（書き写しの誤りの可能性）');
+      for(const b of bad)
+        console.log(`    ${b.name}  ${b.combo}  書き写し${b.odds}倍→¥${b.expect}  `+
+                    `実際¥${b.pay}  差${b.gap>=0?'+':''}${b.gap.toFixed(1)}%`);
+      console.log('    該当レースのオッズを読み直すこと。');
+    }
+    console.log('');
   }
   console.log(`検証レース ${RACES.length}件\n`);
   console.log('=== 現在の重み ===');
@@ -791,7 +840,7 @@ if(require.main===module){
       const nm = Object.values(md).reduce((a,c)=>a+c,0);
       const nk = Object.values(mk).reduce((a,c)=>a+c,0);
       const win = Number(R.result.split('-')[0]);
-      rows.push({ name:R.name, win,
+      rows.push({ name:R.name, win, pre: R.preClose || null,
                   m: md[win]/nm, k: mk[win]/nk, p: PRIOR[win],
                   top: Math.max(...Object.values(mk))/nk });
     }
@@ -806,6 +855,16 @@ if(require.main===module){
       const better = rows.filter(r=>r.m > r.k).length;
       console.log(`  来た艇に市場より高い確率を置けた回数  ${better}/${rows.length}`);
       console.log(`  ${lm > lk ? 'いまのところモデルのほうが上。' : 'いまのところ市場のほうが上。'}`);
+
+      /* 締切前のオッズは市場が未完成なので、市場に不利。除いた数字も出す。 */
+      const fin = rows.filter(r=>!r.pre);
+      if(fin.length && fin.length < rows.length){
+        const lnf = a => a.reduce((t,v)=>t + Math.log(Math.max(v,1e-6)), 0) / a.length;
+        console.log(`\n  締切時オッズだけの${fin.length}レースに絞ると  `+
+          `モデル ${lnf(fin.map(r=>r.m)).toFixed(3)}  市場 ${lnf(fin.map(r=>r.k)).toFixed(3)}`);
+        console.log(`  （締切前オッズの${rows.length-fin.length}レースを除いた。`+
+                    `市場を正しく評価するため）`);
+      }
 
       /* 合計だけ見ると「どの1レースが効いているか」が隠れる。
          1レースで大きく勝った回が全体をひっくり返していないかを必ず確かめる。 */
