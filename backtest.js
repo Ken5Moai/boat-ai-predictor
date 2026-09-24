@@ -33,7 +33,7 @@ const RACES=[
  {reg:'5335',g:'B1',nat:3.10,loc:2.78,mot:37.31,bt:38.59,st:0.18,F:0,exST:0.01,exF:'F',exT:6.67,tilt:-0.5,wt:47.0,rec:[[5,.05,1],[1,.23,2],[4,.18,5],[2,.19,6],[6,.05,5]]},
  {reg:'4642',g:'A2',nat:6.98,loc:5.40,mot:33.49,bt:33.88,st:0.16,F:0,exST:0.01,exF:null,exT:6.71,tilt:-0.5,wt:46.5,rec:[[1,.22,3],[4,.11,2],[6,.23,5],[5,.21,3],[3,.17,1],[2,.17,1]]}]},
 // 徳山1R: 1号艇の展示STが最悪(.24)なのに本番.05で逃げ切った。実績と展示が正面から対立した例。
-{name:'徳山1R 一般',jcd:'18',rno:1,date:'2026-09-23',result:'1-2-4',pop:1,pay:790,wind:null,ws:3,wave:3,temp:27,wtemp:27,
+{name:'徳山1R 一般',pays:{tan:130, ni:300, nifuku:280, sanfuku:370},jcd:'18',rno:1,date:'2026-09-23',result:'1-2-4',pop:1,pay:790,wind:null,ws:3,wave:3,temp:27,wtemp:27,
  B:[
  {reg:'4388',g:'A2',nat:6.22,loc:4.96,mot:35.59,bt:29.61,st:0.17,F:0,exST:0.24,exF:null,exT:6.91,tilt:-0.5,wt:52.0,rec:[[5,.32,3],[3,.17,2],[5,.09,4],[5,.16,5]]},
  {reg:'5206',g:'B1',nat:4.62,loc:4.22,mot:29.47,bt:28.90,st:0.15,F:1,exST:0.08,exF:null,exT:6.83,tilt:0.0,wt:52.8,rec:[[6,.15,5],[3,.18,3],[5,.13,5]]},
@@ -44,7 +44,7 @@ const RACES=[
 // 徳山2R: 修正後ロジックの初実戦。1号艇の展示ST .28(最悪)を理由に
 // 3号艇を頭にした判断が当たった。決まり手は3号艇のまくり差し。
 // 6号艇の展示ST .74 は範囲外として不採用（スタート練習をしていない数字）。
-{name:'徳山2R 特選',jcd:'18',rno:2,date:'2026-09-23',result:'3-1-2',pop:17,pay:4240,wind:null,ws:1,wave:1,temp:25,wtemp:26,
+{name:'徳山2R 特選',pays:{tan:290, ni:450, nifuku:280, sanfuku:520},jcd:'18',rno:2,date:'2026-09-23',result:'3-1-2',pop:17,pay:4240,wind:null,ws:1,wave:1,temp:25,wtemp:26,
  B:[
  {reg:'4375',g:'A2',nat:5.75,loc:5.47,mot:22.11,bt:34.27,st:0.17,F:0,exST:0.28,exF:null,exT:6.95,tilt:0.0,wt:52.2,rec:[[3,.15,3],[4,.13,1],[5,.12,3]]},
  {reg:'4583',g:'B1',nat:5.52,loc:3.17,mot:34.82,bt:37.14,st:0.15,F:1,exST:0.13,exF:null,exT:7.00,tilt:0.0,wt:52.0,rec:[[3,.19,2],[6,.37,6],[4,.02,3]]},
@@ -55,7 +55,7 @@ const RACES=[
 // 徳山3R: スタート展示で5号艇と6号艇が入れ替わり（entry を指定）。
 // 1・2・3号艇は展示でF。5号艇は当地勝率も平均STも記録なし。
 // 買い目の1番手で決まったが、12点均等では払戻¥1,020 < 投資¥1,200 で赤字だった。
-{name:'徳山3R 特賞',jcd:'18',rno:3,date:'2026-09-23',result:'1-6-4',pop:4,pay:1020,wind:null,ws:2,wave:2,temp:25,wtemp:26,
+{name:'徳山3R 特賞',pays:{tan:110, ni:430, nifuku:310, sanfuku:360},jcd:'18',rno:3,date:'2026-09-23',result:'1-6-4',pop:4,pay:1020,wind:null,ws:2,wave:2,temp:25,wtemp:26,
  B:[
  {reg:'4529',g:'A1',nat:5.66,loc:5.08,mot:50.93,bt:27.96,st:0.14,F:0,exST:0.06,exF:'F',exT:6.90,tilt:0.0,wt:53.4,entry:1,rec:[[1,.12,1],[5,.20,2],[4,.12,2],[3,.17,2]]},
  {reg:'3577',g:'B1',nat:4.36,loc:3.44,mot:24.27,bt:27.75,st:0.17,F:0,exST:0.06,exF:'F',exT:6.96,tilt:-0.5,wt:58.6,entry:2,rec:[[1,.29,4],[5,.09,5],[3,.07,2]]},
@@ -67,7 +67,7 @@ const RACES=[
 // モデルは2号艇を頭にしたが1号艇が逃げ切り。上位3艇の顔ぶれ{1,2,4}は当てた。
 // スコア差4.8（小さい＝荒れる想定）だったのに配当は¥890（2番人気）。
 // 「差が小さい＝高配当」の見立てが初めて外れたレース。
-{name:'徳山4R 予選',jcd:'18',rno:4,date:'2026-09-23',result:'1-2-4',pop:2,pay:890,wind:null,ws:2,wave:2,temp:25,wtemp:26,
+{name:'徳山4R 予選',pays:{tan:120, ni:250, nifuku:140, sanfuku:250},jcd:'18',rno:4,date:'2026-09-23',result:'1-2-4',pop:2,pay:890,wind:null,ws:2,wave:2,temp:25,wtemp:26,
  B:[
  {reg:'4911',g:'A2',nat:4.72,loc:5.43,mot:38.21,bt:37.56,st:0.14,F:1,exST:0.06,exF:'F',exT:6.96,tilt:0.0,wt:52.5,adj:0.0,entry:1,rec:[[3,.33,2],[3,.12,6],[6,.19,6]]},
  {reg:'4757',g:'A1',nat:6.64,loc:6.46,mot:30.17,bt:28.84,st:0.15,F:0,exST:0.01,exF:'F',exT:6.97,tilt:0.0,wt:52.1,adj:0.0,entry:2,rec:[[5,.12,1],[1,.10,1],[5,.08,2]]},
@@ -80,7 +80,7 @@ const RACES=[
 // 直前の水面は風速1m・波高1cmだったが、レース時は風速3m・波高3cmに変わった。
 // モデル5位（1着率6.2%）の3号艇が2着に入り、12点では取れなかった。
 // チルト+0.5 で +3.0 した6号艇は最下位。
-{name:'徳山5R 予選',jcd:'18',rno:5,date:'2026-09-23',result:'1-3-4',pop:9,pay:2060,wind:null,ws:3,wave:3,temp:26,wtemp:26,
+{name:'徳山5R 予選',pays:{tan:120, ni:670, nifuku:800, sanfuku:1150},jcd:'18',rno:5,date:'2026-09-23',result:'1-3-4',pop:9,pay:2060,wind:null,ws:3,wave:3,temp:26,wtemp:26,
  B:[
  {reg:'4323',g:'B1',nat:6.09,loc:4.13,mot:41.75,bt:36.74,st:0.17,F:0,exST:0.19,exF:null,exT:6.86,tilt:0.0,wt:55.4,entry:1,rec:[[5,.07,3],[4,.22,2],[4,.08,1]]},
  {reg:'4677',g:'A1',nat:6.09,loc:5.82,mot:25.58,bt:29.38,st:0.15,F:0,exST:0.27,exF:null,exT:6.95,tilt:0.0,wt:52.1,entry:2,rec:[[3,.12,'転'],[1,.16,4],[4,.11,6]]},
@@ -94,7 +94,7 @@ const RACES=[
 // entry は「賭ける時点で分かっていた展示の進入」を入れる。
 // actualEntry は本番の進入で、答え合わせ用。採点には使わない。
 // 1号艇の梅原（F1持ち）は本番ST .32 で最下位。
-{name:'徳山6R 予選',jcd:'18',rno:6,date:'2026-09-23',result:'2-3-6',pop:25,pay:5660,wind:null,ws:3,wave:3,temp:26,wtemp:26,
+{name:'徳山6R 予選',pays:{tan:170, ni:2390, nifuku:1650, sanfuku:1040},jcd:'18',rno:6,date:'2026-09-23',result:'2-3-6',pop:25,pay:5660,wind:null,ws:3,wave:3,temp:26,wtemp:26,
  actualEntry:{1:1,2:3,3:4,4:5,5:6,6:2},
  B:[
  {reg:'5206',g:'B1',nat:4.62,loc:4.22,mot:29.47,bt:28.90,st:0.15,F:1,exST:0.06,exF:null,exT:6.88,tilt:0.0,wt:52.8,entry:1,rec:[[6,.15,5],[3,.18,6],[5,.13,5],[2,.13,2]]},
@@ -108,7 +108,7 @@ const RACES=[
 // 期待値で選んだ4点はすべて外れ、確率順12点なら3番目で当たっていた。
 // モデルが市場より高く買っていた5号艇（展示タイム最速・展示ST.02）は
 // 本番ST .27 で5着。展示が当てにならなかった例がまた1つ増えた。
-{name:'三国1R 一般',jcd:'10',rno:1,date:'2026-09-24',result:'1-2-3',pop:2,pay:510,wind:null,ws:1,wave:1,temp:23,wtemp:23,
+{name:'三国1R 一般',pays:{tan:140, ni:230, nifuku:150, sanfuku:350},jcd:'10',rno:1,date:'2026-09-24',result:'1-2-3',pop:2,pay:510,wind:null,ws:1,wave:1,temp:23,wtemp:23,
  B:[
  {reg:'3333',g:'A1',nat:6.56,loc:6.67,mot:35.61,bt:18.75,st:0.15,F:0,exST:0.01,exF:null,exT:6.67,tilt:-0.5,wt:52.1,entry:1,rec:[]},
  {reg:'4894',g:'B1',nat:4.64,loc:null,mot:32.80,bt:35.34,st:0.19,F:0,exST:0.10,exF:null,exT:6.75,tilt:-0.5,wt:52.0,entry:2,rec:[]},
@@ -121,7 +121,7 @@ const RACES=[
 // モデルが市場と食い違った方向は、1・2・3号艇すべてで正しかった。
 // それでも結果 2-4-3 はモデル65番目（0.27%）で、4号艇の2着はまったく読めていない。
 // 「1着は当てられるが2着3着の並びは当てられない」がまた出た。
-{name:'三国3R 一般',jcd:'10',rno:3,date:'2026-09-24',result:'2-4-3',pop:43,pay:26460,wind:null,ws:1,wave:1,temp:24,wtemp:23,
+{name:'三国3R 一般',pays:{tan:370, ni:5850, nifuku:2060, sanfuku:2960},jcd:'10',rno:3,date:'2026-09-24',result:'2-4-3',pop:43,pay:26460,wind:null,ws:1,wave:1,temp:24,wtemp:23,
  B:[
  {reg:'3641',g:'A1',nat:6.09,loc:2.00,mot:34.38,bt:32.09,st:0.17,F:0,exST:0.32,exF:null,exT:6.68,tilt:-0.5,wt:52.2,adj:0.0,entry:1,rec:[]},
  {reg:'5090',g:'B1',nat:5.16,loc:null,mot:32.03,bt:30.43,st:0.15,F:1,exST:0.18,exF:null,exT:6.68,tilt:-0.5,wt:52.9,adj:0.0,entry:2,rec:[]},
@@ -174,7 +174,7 @@ function runWith(weightPatch, bandPatch, opt){
     const combos=w.buildProbabilities(ctx);
     const rank=combos.findIndex(c=>c.combo===R.result)+1;
     const sorted=[...state.boats].sort((a,b)=>b.score-a.score);
-    const rec={name:R.name, result:R.result, pop:R.pop, pay:R.pay, rank,
+    const rec={name:R.name, result:R.result, pop:R.pop, pay:R.pay, pays:R.pays, rank,
                gap: Math.round((sorted[0].score-sorted[1].score)*10)/10,
                probs:combos.map(c=>c.p)};
     if(opt.detail){
@@ -275,6 +275,58 @@ if(require.main===module){
     lines.forEach(l=>console.log(l));
     console.log(`\n  1着の的中 ${hit}/${n}（${(hit/n*100).toFixed(0)}%）`);
     console.log('  ※ 3連単で当てるより、ここが本当の実力。買い方を考えるときの土台になる。');
+  }
+
+  console.log('\n=== 券種を変えれば勝てるのか ===');
+  {
+    /* 3連単120通りの確率から、他の券種の確率を足し合わせて作る。
+       払戻を記録してあるレースだけで比べる。 */
+    const withPay = base.filter(x=>x.pays);
+    if(withPay.length){
+      const all = [];
+      for(let a=1;a<=6;a++) for(let b=1;b<=6;b++){ if(b===a) continue;
+        for(let c=1;c<=6;c++){ if(c===a||c===b) continue; all.push(`${a}-${b}-${c}`); } }
+      const TYPES = [['tan','単勝',6],['ni','2連単',30],['nifuku','2連複',15],
+                     ['sanfuku','3連複',20],['san','3連単',120]];
+      const keyOf = (t,a,b,c)=>
+        t==='tan' ? String(a)
+        : t==='ni' ? `${a}-${b}`
+        : t==='nifuku' ? [a,b].sort().join('=')
+        : t==='sanfuku' ? [a,b,c].sort().join('=') : `${a}-${b}-${c}`;
+      const ranks = {}; TYPES.forEach(([t])=>ranks[t]=[]);
+      console.log('  結果がモデルの何番目だったか\n');
+      console.log('  レース          単勝  2連単 2連複 3連複 3連単');
+      for(const x of withPay){
+        const [ra,rb,rc] = x.result.split('-').map(Number);
+        const line = [];
+        for(const [t] of TYPES){
+          const m = {};
+          all.forEach((k,i)=>{ const [a,b,c]=k.split('-').map(Number);
+            const kk = keyOf(t,a,b,c); m[kk] = (m[kk]||0) + x.probs[i]; });
+          const target = keyOf(t,ra,rb,rc);
+          const rk = Object.keys(m).sort((p1,p2)=>m[p2]-m[p1]).indexOf(target)+1;
+          ranks[t].push(rk); line.push(String(rk).padStart(4));
+        }
+        console.log(`  ${x.name.padEnd(12)} ${line.join('  ')}`);
+      }
+      console.log('\n  予算1,200円で上位N点を均等に買った場合の回収率');
+      for(const [t,name,total] of TYPES){
+        const out = [];
+        for(const n of [1,2,3,4,6,8,12]){
+          if(n > total) break;
+          const unit = Math.floor(1200/n/100)*100; if(unit < 100) continue;
+          let inv=0, ret=0, hit=0;
+          withPay.forEach((x,i)=>{ inv += unit*n;
+            if(ranks[t][i] <= n){ ret += (t==='san'?x.pay:x.pays[t])/100*unit; hit++; } });
+          out.push(`${n}点 ${String(Math.round(ret/inv*100)).padStart(4)}%(${hit}/${withPay.length})`);
+        }
+        console.log(`  ${name.padEnd(6)} ${out.join('  ')}`);
+      }
+      console.log('\n  ※ 100%を超えている数字があっても、1レースの高配当が持っていることが多い。');
+      console.log('     件数が少ないうちは、ここから券種を決めないこと。');
+      console.log('     単勝が一度も100%を超えないのは、1着の予想が「常に1号艇」と同成績で、');
+      console.log('     しかも単勝はいちばん効率よく値付けされているから。');
+    }
   }
 
   console.log('\n=== モデルの確率 vs 市場の確率（回収率の核心） ===');
