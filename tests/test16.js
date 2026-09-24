@@ -109,5 +109,36 @@ console.log('\n=== E. 確率が低すぎる組は期待値が大きくても買�
   state.oddsMap={};
 }
 
+console.log('\n=== F. 答えは常にひとつ ===');
+{
+  const state=w.eval('state'),newBoat=w.eval('newBoat'),setField=w.eval('setField');
+  const REG=['4064','4688','4686','4266','3783','3557'];
+  const setup=()=>{
+    state.boats.forEach((b,i)=>Object.assign(b,newBoat(i+1)));
+    REG.forEach((r,i)=>{ d.getElementById('reg'+(i+1)).value=r; });
+    w.syncRegsFromInputs();
+    state.boats.forEach((b,i)=>{
+      setField(b,'grade','A2','official'); setField(b,'nationalWinRate',5+i*0.2,'official');
+      setField(b,'localWinRate',5,'official'); setField(b,'motor2Rate',30+i,'official'); });
+    d.getElementById('venue').value='10'; d.getElementById('raceDate').value='2026-09-24';
+    d.getElementById('raceNo').value='3'; d.getElementById('budget').value='1200';
+    w.validateAll();
+  };
+  setup(); state.oddsMap={}; w.generateReport();
+  let t=d.getElementById('report').textContent;
+  ok(t.includes('結論'),'結論の見出しが出る');
+  ok(/この\d+点だけを買う/.test(t),`買う点数を1つだけ示す: ${(t.match(/この\d+点だけを買う（合計 [\d,]+円）/)||[''])[0]}`);
+  ok(t.includes('そこから足さないでください'),'候補表から足さないよう釘を刺す');
+  // 買う価値が無ければ「見送り」の一言だけ
+  const combos=state.lastCombos;
+  state.oddsMap={}; combos.slice(0,3).forEach(c=>{ state.oddsMap[c.combo]=1/c.p*0.5; });
+  w.generateReport();
+  t=d.getElementById('report').textContent;
+  ok(t.includes('見送り'),'買えないときは見送りと言い切る');
+  ok(!/この\d+点だけを買う/.test(t),'見送りのときに買い目の点数を出さない');
+  ok(t.includes('このレースは買わないでください'),'行動をひとつに絞る');
+  state.oddsMap={};
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);

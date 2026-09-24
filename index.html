@@ -3868,6 +3868,18 @@ ${ranked.map((b,i)=>`
   <div class="scen" style="border-color:#ef6262"><b>荒れシナリオ</b>${esc(sc.rough)}</div>
 </div></div>
 
+<div class="card" style="border-color:#f0c040"><div class="chead">結論</div><div class="cbody">
+  ${points.length===0
+    ? `<div style="font-size:19px;font-weight:700;color:#ef6262">見送り</div>
+       <div class="mini" style="margin-top:6px">買う価値のある組がありません。このレースは買わないでください。</div>`
+    : `<div style="font-size:19px;font-weight:700;color:#3ecf74">この${points.length}点だけを買う（合計 ${amounts.reduce((a,c)=>a+c,0).toLocaleString()}円）</div>
+       <div style="margin-top:8px;font-size:17px;letter-spacing:.04em">${points.map(p=>p.combo).join('　')}</div>
+       <div class="mini" style="margin-top:8px">
+         下に出ている候補の一覧は<b>確認のための表</b>です。そこから足さないでください。
+         点数を増やすと、割に合わない値段の組を買うことになります。
+       </div>`}
+</div></div>
+
 <div class="card"><div class="chead">買い目（3連単 ${points.length}点）<span class="mini">${
   picked.mode==='ev' ? `期待値${evMinValue().toFixed(2)}以上で選定` : '確率の高い順'} ／ 予算 ${budget.toLocaleString()}円</span></div><div class="cbody">
 ${points.length===0 ? `
