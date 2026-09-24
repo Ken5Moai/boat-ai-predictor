@@ -103,6 +103,19 @@ const RACES=[
  {reg:'4159',g:'A2',nat:6.59,loc:5.36,mot:39.56,bt:28.71,st:0.17,F:0,exST:0.07,exF:null,exT:6.87,tilt:-0.5,wt:52.0,entry:5,rec:[[2,.11,2],[3,.02,2],[6,.06,4],[5,.11,5]]},
  {reg:'5290',g:'B1',nat:3.43,loc:1.25,mot:37.38,bt:28.97,st:0.17,F:0,exST:0.05,exF:null,exT:6.92,tilt:0.0,wt:52.0,entry:6,rec:[[6,.22,6],[4,.11,2],[2,.07,4]]},
  {reg:'3473',g:'A1',nat:6.75,loc:6.75,mot:39.58,bt:37.75,st:0.14,F:1,exST:0.19,exF:null,exT:6.93,tilt:-0.5,wt:52.5,entry:3,rec:[[2,.18,4],[1,.15,1],[1,.20,1]]}]},
+// 三国1R（2026-09-24 5日目）: 初めて3連単オッズ120通りが揃ったレース。
+// 進入は枠なり。今節成績は5日目で表が密になり読み取りが安定しなかったため入れていない。
+// 期待値で選んだ4点はすべて外れ、確率順12点なら3番目で当たっていた。
+// モデルが市場より高く買っていた5号艇（展示タイム最速・展示ST.02）は
+// 本番ST .27 で5着。展示が当てにならなかった例がまた1つ増えた。
+{name:'三国1R 一般',jcd:'10',rno:1,date:'2026-09-24',result:'1-2-3',pop:2,pay:510,wind:null,ws:1,wave:1,temp:23,wtemp:23,
+ B:[
+ {reg:'3333',g:'A1',nat:6.56,loc:6.67,mot:35.61,bt:18.75,st:0.15,F:0,exST:0.01,exF:null,exT:6.67,tilt:-0.5,wt:52.1,entry:1,rec:[]},
+ {reg:'4894',g:'B1',nat:4.64,loc:null,mot:32.80,bt:35.34,st:0.19,F:0,exST:0.10,exF:null,exT:6.75,tilt:-0.5,wt:52.0,entry:2,rec:[]},
+ {reg:'5190',g:'B1',nat:4.00,loc:3.97,mot:33.59,bt:41.32,st:0.18,F:1,exST:0.10,exF:null,exT:6.70,tilt:-0.5,wt:52.0,entry:3,rec:[]},
+ {reg:'3652',g:'B1',nat:3.57,loc:3.72,mot:36.62,bt:31.45,st:0.19,F:0,exST:0.11,exF:null,exT:6.73,tilt:-0.5,wt:54.4,entry:4,rec:[]},
+ {reg:'4902',g:'B1',nat:4.26,loc:4.94,mot:36.96,bt:32.54,st:0.20,F:0,exST:0.02,exF:null,exT:6.65,tilt:0.0,wt:52.0,entry:5,rec:[]},
+ {reg:'5465',g:'B2',nat:1.07,loc:1.11,mot:34.53,bt:33.08,st:null,F:1,exST:0.15,exF:null,exT:6.66,tilt:-0.5,wt:54.2,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -133,8 +146,10 @@ function runWith(weightPatch, bandPatch, opt){
       if(x.parts) b.partsChange=x.parts;
       b.flagF=x.F; b.flagL=0;
       if(x.entry) b.entryCourse = (opt.useActualEntry && R.actualEntry) ? R.actualEntry[i+1] : x.entry;
-      b.recentRaces=x.rec.map(r=>({course:r[0],st:r[1],stFlag:null,result:r[2]}));
-      b.recentSource='official';
+      if(x.rec && x.rec.length){
+        b.recentRaces=x.rec.map(r=>({course:r[0],st:r[1],stFlag:null,result:r[2]}));
+        b.recentSource='official';
+      }
     });
     d.getElementById('venue').value=R.jcd; d.getElementById('raceDate').value=R.date;
     d.getElementById('raceNo').value=String(R.rno||1);
