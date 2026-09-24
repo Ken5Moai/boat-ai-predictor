@@ -402,6 +402,30 @@ const RACES=[
  {reg:'4732',g:'A2',nat:7.09,loc:8.44,mot:41.12,bt:32.56,st:0.12,F:0,exST:0.14,exF:null,exT:6.92,tilt:0.0,wt:54.6,entry:4,rec:[]},
  {reg:'4173',g:'B1',nat:5.31,loc:4.80,mot:24.73,bt:33.33,st:0.17,F:0,exST:0.01,exF:'F',exT:6.91,tilt:0.0,wt:56.2,entry:5,rec:[]},
  {reg:'5027',g:'B1',nat:4.38,loc:5.53,mot:28.87,bt:33.33,st:0.20,F:0,exST:0.06,exF:null,exT:6.87,tilt:0.0,wt:53.2,entry:6,rec:[]}]},
+// 徳山3R 決めトク特賞（9/24）: 1番人気で決着（1-3-2 ¥910）。
+// オッズ9.1倍 → 払戻¥910、人気順も公式の「1番人気」と一致（12例目）。
+//   モデルの1号艇 71.3% / 市場 73.9% / 結果 1号艇の逃げ。ほぼ並んだ。
+//
+// 展示STがまた大きく裏切ったレース。
+// 1号艇 石川真二の展示STは .37 で、バンドの下限(.20)を超えていたため
+// 展示STの点は 0 だった。それでも総合77.3で1番手、本番は .07 で6艇中最速。
+//   枠     1     2     3     4     5     6
+//   展示  .37   .22   .10   .04   .05   .02
+//   本番  .07   .11   .13   .10   .06   .09
+// 展示で最も遅かった艇が本番で最も速い、という形。
+// 徳山1R(9/23)の .24→.05、三国9Rの .29→.05 に続いて3例目。
+// 「展示で極端に遅い」は本番の遅さを意味していない可能性がある。
+{name:'徳山3R 決めトク特賞',jcd:'18',rno:3,date:'2026-09-24',result:'1-3-2',pop:1,pay:910,
+ pays:{tan:140, ni:290, nifuku:290, sanfuku:460},
+ actualST:{1:.07,2:.11,3:.13,4:.10,5:.06,6:.09},
+ wind:null,ws:1,wave:1,temp:26,wtemp:26,
+ B:[
+ {reg:'3473',g:'A1',nat:6.75,loc:6.75,mot:39.58,bt:37.75,st:0.14,F:1,exST:0.37,exF:null,exT:6.90,tilt:-0.5,wt:52.4,entry:1,rec:[]},
+ {reg:'3519',g:'B1',nat:3.98,loc:4.86,mot:38.10,bt:25.73,st:0.16,F:1,exST:0.22,exF:null,exT:6.94,tilt:-0.5,wt:52.0,entry:2,rec:[]},
+ {reg:'4663',g:'B2',nat:5.73,loc:null,mot:30.97,bt:38.14,st:0.16,F:1,exST:0.10,exF:null,exT:6.91,tilt:-0.5,wt:51.0,adj:1.0,entry:3,rec:[]},
+ {reg:'5206',g:'B1',nat:4.62,loc:4.22,mot:29.47,bt:28.90,st:0.15,F:1,exST:0.04,exF:null,exT:6.86,tilt:0.0,wt:52.4,entry:4,rec:[]},
+ {reg:'4839',g:'A2',nat:6.18,loc:5.32,mot:43.68,bt:30.84,st:0.15,F:0,exST:0.05,exF:null,exT:6.94,tilt:0.0,wt:52.0,entry:5,rec:[]},
+ {reg:'4375',g:'A2',nat:5.75,loc:5.47,mot:22.11,bt:34.27,st:0.17,F:0,exST:0.02,exF:null,exT:6.91,tilt:0.0,wt:52.0,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -949,8 +973,39 @@ if(require.main===module){
         console.log('     符号が逆でも偶然の幅に入る。');
       } else if(r < 0.2){
         console.log('  ※ 展示STは本番STをほとんど言い当てていない。');
-        console.log('     展示STの重み(W.exST)を下げるか外すかを検討する材料になる。');
+        console.log('     ただし「本番STを当てていない」＝「採点に役立たない」ではない。');
+        console.log('     重みを下げたら成績がどうなるかを、そのまま下で測る。');
       }
+
+      /* 相関が低いことと、重みを下げるべきことは別。
+         ここを分けずに「当てていないから外そう」とやると、実際には悪くなる。
+         だから相関の直後に、必ず重みを振った結果を並べる。 */
+      console.log('\n  展示STの重みを下げたらどうなるか（減らしたぶんは展示タイムへ回す）');
+      console.log('    設定                        1着の対数  平均順位  6点     12点');
+      const W0 = 0.07, WT0 = 0.08;
+      const showW = (label, patch) => {
+        const r2 = runWith(patch, null, {});
+        const st = summarize(r2);
+        const rows2 = [];
+        for(const y of r2){
+          const R2 = RACES.find(q=>q.name===y.name); const m2 = ODDS[R2.name];
+          if(!m2 || Object.keys(m2).length !== 120) continue;
+          const w2 = Number(R2.result.split('-')[0]);
+          rows2.push(Object.keys(y.probOf).filter(k=>k[0]===String(w2))
+                           .reduce((t,k)=>t + y.probOf[k], 0));
+        }
+        const ls = rows2.reduce((t,v)=>t + Math.log(Math.max(v,1e-6)), 0)/rows2.length;
+        console.log(`    ${label.padEnd(26)}${ls.toFixed(3).padStart(8)}  `+
+          `${st.avg.toFixed(1).padStart(7)}  ${st.in6}/${st.n}   ${st.in12}/${st.n}`);
+      };
+      showW('いまのまま exST 0.07', {});
+      for(const v of [0.03, 0]){
+        showW(`exST ${v.toFixed(2)} / exTime ${(W0+WT0-v).toFixed(2)}`,
+              { exST:v, exTime:W0+WT0-v });
+      }
+      console.log('    → 下げるほど悪くなるなら、相関が低くても外してはいけない。');
+      console.log('       展示STは本番STそのものではなく、別の何か（気合い・');
+      console.log('       仕上がり）を映している可能性がある。'); 
     }
   }
 
