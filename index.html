@@ -539,6 +539,7 @@ BOAT RACE公式から取得します。<br>
 ときどき書き出して保存しておくと安心です。</div>
 <div class="btnrow">
   <button onclick="exportVerification()">検証用に短く書き出す</button>
+  <button onclick="exportRecordPost()">成績表を書き出す（公開用）</button>
 </div>
 <div class="mini" style="margin:6px 0">
   1レース1行だけの短い形で書き出してコピーします。そのまま貼り付けて渡せます。<br>
@@ -4252,6 +4253,30 @@ ${(()=>{
      </div>`);
 })()}
 
+${(()=>{
+  /* 配信用の書き出し。
+     配信で一番よくある嘘は「都合の良い回だけ載せる」こと。
+     だから予想テキストに通算成績を必ず貼りつける。
+     成績は全記録から自動で出すので、選別のしようがない。 */
+  if(!points.length) return '';
+  const post = buildPostText(points, amounts);
+  return `<div class="card" style="border-color:#5aa9e6"><div class="chead">配信用の書き出し</div><div class="cbody">
+    <div class="mini" style="margin-bottom:8px">
+      note や SNS に貼る用のテキストです。<b>通算成績が自動で入ります。</b>
+      成績は全記録から計算するので、当たった回だけ載せることはできません。
+    </div>
+    <textarea id="postText" style="height:220px">${esc(post)}</textarea>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="secondary" onclick="copyPost()">コピー</button>
+    </div>
+    <div id="postNotice" class="notice info" style="margin-top:8px">
+      <b>この注記は消さないでください。</b>
+      「当たる」と書いて売ると、実測が支持していない以上、景品表示法の優良誤認にあたる可能性があります。
+      いま入っている数字はすべて実測値です。
+    </div>
+  </div></div>`;
+})()}
+
 <div class="card"><div class="chead">買い目（3連単 ${points.length}点）<span class="mini">${
   picked.mode==='ev' ? `期待値${evMinValue().toFixed(2)}以上で選定` : '確率の高い順'} ／ 予算 ${budget.toLocaleString()}円</span></div><div class="cbody">
 ${points.length===0 ? `
@@ -4625,6 +4650,110 @@ function withEV(combos){
 /* 買う組を決める。
    オッズを1つも入れていなければ、これまでどおり確率順。
    入れていれば、期待値が基準以上の組だけを期待値順に選ぶ。 */
+/* ==================================================================
+   配信用の書き出し
+   ------------------------------------------------------------------
+   予想を売るなら、いちばん問題になるのは中身ではなく「見せ方」。
+   この業界でよくあるのは、当たった回だけ載せて成績を作ること。
+
+   だから、予想テキストに通算成績を必ず貼りつける形にした。
+   成績は保存されている全記録から計算するので、
+   「都合の良い回だけ選ぶ」が仕組みとしてできない。
+
+   数字はすべて実測。よく見せる加工はしない。
+   「当たる」と書けないのは、いまのところ本当に当たっていないから。
+   ================================================================== */
+
+/* 通算成績を1行ずつの文字列にする。公開用。 */
+function careerLines(){
+  const list = loadRecords();
+  const st = recordStats(list);
+  if(!st.done) return ['まだ結果の出た記録がありません。'];
+  const pct = (a,b)=> b ? (a/b*100).toFixed(0)+'%' : '—';
+  const rate = st.bet ? (st.back/st.bet*100).toFixed(0)+'%' : '—';
+  return [
+    `通算 ${st.done}レース（全件・選別なし）`,
+    `  3連単 的中 ${st.tri}/${st.done} (${pct(st.tri,st.done)})`,
+    `  1着   的中 ${st.head}/${st.done} (${pct(st.head,st.done)})`,
+    `  回収率 ${rate}（投資 ${st.bet.toLocaleString()}円 / 払戻 ${Math.round(st.back).toLocaleString()}円）`
+  ];
+}
+
+/* 配信に必ず付ける注記。ここを書き換えると優良誤認になりうる。 */
+const POST_NOTE = [
+  '※ 予想は全レース自動で記録しています。当たった回だけ載せることはできません。',
+  '※ 3連単の控除率は25%です。長く続ければ資金は減る前提の遊びとしてお読みください。',
+  '※ 当たることを保証するものではありません。購入は自己判断でお願いします。'
+];
+
+function buildPostText(points, amounts){
+  const jcd  = ($('venue')||{}).value || '';
+  const name = (typeof VENUES!=='undefined' && VENUES[jcd]) ? VENUES[jcd].name : '';
+  const rno  = ($('raceNo')||{}).value || '';
+  const date = ($('raceDate')||{}).value || '';
+  const total = (amounts||[]).reduce((a,c)=>a+c,0);
+  const now = new Date();
+  const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-`+
+                `${String(now.getDate()).padStart(2,'0')} `+
+                `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const combos = points.map((p,i)=>`${p.combo}  ${(amounts[i]||0).toLocaleString()}円`);
+  return [
+    `【${date} ${name}${rno}R】`,
+    '',
+    `3連単 ${points.length}点  計${total.toLocaleString()}円`,
+    ...combos.map(c=>'  '+c),
+    '',
+    `予想時刻 ${stamp}（締切前に出しています）`,
+    '',
+    '───────────────',
+    ...careerLines(),
+    '',
+    ...POST_NOTE
+  ].join('\n');
+}
+
+function copyPost(){
+  const t = $('postText'); if(!t) return;
+  t.select();
+  if(navigator.clipboard) navigator.clipboard.writeText(t.value).catch(()=>{});
+  else { try{ document.execCommand('copy'); }catch(e){} }
+  notice('postNotice','ok','コピーしました。注記もそのまま貼ってください。');
+}
+
+/* 成績だけを公開用に書き出す。全レースが入る。 */
+function buildRecordPost(){
+  const list = loadRecords().filter(r=>r.result);
+  if(!list.length) return 'まだ結果の出た記録がありません。';
+  const rows = list.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.rno||0)-(b.rno||0));
+  const jn = j => (typeof VENUES!=='undefined' && VENUES[j]) ? VENUES[j].name : (j||'');
+  const body = rows.map(r=>{
+    const hit = (r.picks||[]).some(p=>p.combo===r.result.combo);
+    const spend = (r.picks||[]).reduce((a,p)=>a+(p.amount||0),0);
+    const back = hit ? Math.round((r.picks||[]).find(p=>p.combo===r.result.combo).amount/100*r.result.payout) : 0;
+    return `${r.date} ${jn(r.jcd)}${r.rno}R  ${r.result.combo}  `+
+           `${hit?'的中':'—  '}  投${spend.toLocaleString()}  戻${back.toLocaleString()}`;
+  });
+  return [
+    '■ 予想の全記録（選別なし）',
+    '',
+    ...careerLines(),
+    '',
+    '── レース別 ──',
+    ...body,
+    '',
+    ...POST_NOTE
+  ].join('\n');
+}
+
+function exportRecordPost(){
+  const t = buildRecordPost();
+  const el = $('recordIO'); if(el) el.value = t;
+  if(navigator.clipboard) navigator.clipboard.writeText(t).catch(()=>{});
+  notice('recordIONotice','ok',
+    '成績表を書き出しました。<b>全レースが入っています。</b>'+
+    'ここから行を消して載せると、優良誤認になりえます。');
+}
+
 /* ==================================================================
    資金管理
    ------------------------------------------------------------------
