@@ -48,37 +48,28 @@ setup(); w.buildProbabilities(w.scoreAll());
   ok(w.winEVList()[0].ev===null,'1.0以下のオッズは受け付けない');
 }
 
-console.log('\n=== B. 結論は単勝を優先する ===');
-setup(); w.generateReport();
-{
-  let t=d.getElementById('report').textContent;
-  ok(t.includes('3連単'),'単勝オッズが無ければ3連単の結論を出す');
-  ok(t.includes('単勝オッズを6つ入れると'),'単勝を入れるよう案内する');
-  /* 1号艇に、分岐を大きく超える単勝オッズを付ける */
-  const be=w.winEVList()[0].be;
-  w.setWinOdds(1,(be*1.4).toFixed(1));
-  w.generateReport();
-  t=d.getElementById('report').textContent;
-  ok(t.includes('単勝 1号艇 を買う'),`結論が単勝になる: ${(t.match(/単勝[^（]*（各[\d,]+円）/)||[''])[0]}`);
-  ok(t.includes('3連単は買いません'),'3連単を買わないと明言する');
-  ok(t.includes('8/11'),'なぜ単勝なのかを数字で示す');
-  /* 分岐に届かない単勝なら、単勝は薦めない */
-  w.setWinOdds(1,(be*0.5).toFixed(1));
-  w.generateReport();
-  t=d.getElementById('report').textContent;
-  ok(!t.includes('単勝 1号艇 を買う'),'期待値が足りない単勝は薦めない');
-}
-
-console.log('\n=== C. 複数の艇が条件を満たす場合 ===');
+console.log('\n=== B. 単勝は結論に出さない ===');
+/* 実測8レースの回収率が 1点78% / 2点73% / 3点60% と一度も100%を超えず、
+   1着の予想も「常に1号艇」と同じ8/11だったため、単勝は薦めない。
+   入力欄は損益分岐を見る材料として残す。 */
 setup(); w.buildProbabilities(w.scoreAll());
 {
-  const l=w.winEVList();
-  w.setWinOdds(1,(l[0].be*1.3).toFixed(1));
-  w.setWinOdds(3,(l[2].be*1.2).toFixed(1));
+  const be = w.winEVList()[0].be;
+  w.setWinOdds(1, (be*3).toFixed(1));   /* 期待値3.0の単勝を用意する */
   w.generateReport();
-  const t=d.getElementById('report').textContent;
-  ok(/単勝 1号艇・3号艇 を買う/.test(t),'期待値の高い順に並べて両方出す');
-  ok(/各600円/.test(t),`予算1,200円を2艇で割る: ${(t.match(/各[\d,]+円/)||[''])[0]}`);
+  const t = d.getElementById('report').textContent;
+  ok(w.winEVList()[0].ev > 2.5, `期待値2.5超の単勝がある (${w.winEVList()[0].ev.toFixed(2)})`);
+  ok(!/単勝[^。]*を買う/.test(t), 'それでも結論に単勝を出さない');
+  ok(t.includes('3連単') || t.includes('見送り'), '結論は3連単か見送りのまま');
+}
+
+console.log('\n=== C. 単勝が薦められない理由を画面に書いてある ===');
+{
+  const box = d.getElementById('winOddsRow').parentElement.textContent;
+  ok(box.includes('単勝は薦めません'), '薦めないと明記する');
+  ok(box.includes('8/11'), '1着の予想が「常に1号艇」と同成績だと示す');
+  ok(box.includes('100%を超えていません'), '実測の回収率を示す');
+  ok(d.getElementById('winOddsRow').querySelectorAll('input').length===6, '入力欄は6つ残す');
 }
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
