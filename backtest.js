@@ -3,6 +3,7 @@
 //   使い方: node backtest.js        （index.html と同じ場所で実行）
 const fs=require('fs'),path=require('path'),{JSDOM}=require('jsdom');
 const ODDS=require('./odds.js');   /* 実オッズ120通り（あるレースだけ） */
+const PENDING=require('./pending.js'); /* まだ結果の出ていないレース */
 const HTML_PATH=path.join(__dirname,'index.html');
 const HTML=fs.readFileSync(HTML_PATH,'utf8');
 
@@ -181,7 +182,7 @@ function runWith(weightPatch, bandPatch, opt){
   if(bandPatch) Object.assign(w.eval('BAND'), bandPatch);
   const state=w.eval('state'),newBoat=w.eval('newBoat'),setField=w.eval('setField');
   const out=[];
-  for(const R of RACES){
+  for(const R of (opt.races || RACES)){
     state.boats.forEach((b,i)=>Object.assign(b,newBoat(i+1)));
     R.B.forEach((x,i)=>{ d.getElementById('reg'+(i+1)).value=x.reg; });
     w.syncRegsFromInputs();
@@ -477,5 +478,36 @@ if(require.main===module){
     console.log(`  当地の重み ${v.toFixed(2)}          `+
       line(summarize(runWith({local:v, national:0.11+(0.08-v)}))));
   });
+
+  if(PENDING.length){
+    console.log('\n=== 結果まちのレース（モデルと市場の見方） ===');
+    console.log('  結果が出たら pending.js から RACES へ移す。買い目を出すためのものではない。');
+    const res = runWith({},null,{races:PENDING, detail:true});
+    res.forEach((r,i)=>{
+      const R = PENDING[i];
+      const map = ODDS[R.name];
+      console.log(`\n  ${R.name}`);
+      console.log(`  モデルの並び  ${r.order.join(' ')}`);
+      console.log(`  モデルの上位3 ${r.top3.join(' / ')}`);
+      if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
+      const ks = Object.keys(map);
+      if(ks.length !== 120){ console.log(`  オッズが${ks.length}通りしかない（120通り必要）`); return; }
+      const mk = {}, md = {};
+      for(let a=1;a<=6;a++){
+        mk[a] = ks.filter(k=>k[0]===String(a)).reduce((t,k)=>t + 0.75/map[k], 0);
+        md[a] = ks.filter(k=>k[0]===String(a)).reduce((t,k)=>t + (r.probOf[k]||0), 0);
+      }
+      console.log('  1着確率   ' + [1,2,3,4,5,6]
+        .map(n=>`${n}号艇 モデル${(md[n]*100).toFixed(1)}% 市場${(mk[n]*100).toFixed(1)}%`).join('\n            '));
+      let gap = 0, gl = 0;
+      for(let n=1;n<=6;n++){ const d=Math.abs(md[n]-mk[n]); if(d>gap){ gap=d; gl=n; } }
+      console.log(`  一番食い違う艇  ${gl}号艇（${((md[gl]-mk[gl])*100>0?'+':'')}${((md[gl]-mk[gl])*100).toFixed(1)}pt）`);
+      const best = ks.map(k=>({k, ev:(r.probOf[k]||0)*map[k], p:r.probOf[k]||0, o:map[k]}))
+                     .filter(x=>x.p >= 0.02).sort((a,b)=>b.ev-a.ev).slice(0,3);
+      console.log('  期待値の上位  ' + (best.length
+        ? best.map(x=>`${x.k} ${x.o}倍 期待値${x.ev.toFixed(2)}`).join(' / ')
+        : '確率2%以上の組が無い'));
+    });
+  }
 }
 module.exports={RACES,runWith,summarize};
