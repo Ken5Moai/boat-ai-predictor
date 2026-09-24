@@ -441,7 +441,14 @@ BOAT RACE公式から取得します。<br>
 <div class="mini">記録はこの端末にだけ保存されます。機種変更やブラウザのデータ消去で消えるため、
 ときどき書き出して保存しておくと安心です。</div>
 <div class="btnrow">
-  <button class="secondary" onclick="exportRecords()">書き出す</button>
+  <button onclick="exportVerification()">検証用に短く書き出す</button>
+</div>
+<div class="mini" style="margin:6px 0">
+  1レース1行だけの短い形で書き出してコピーします。そのまま貼り付けて渡せます。<br>
+  下の「すべて書き出す」は端末のバックアップ用で、1レースあたり数千文字あります。
+</div>
+<div class="btnrow">
+  <button class="secondary" onclick="exportRecords()">すべて書き出す（バックアップ）</button>
   <button class="secondary" onclick="importRecords()">読み込む</button>
 </div>
 <textarea id="recordIO" placeholder="書き出した文字列がここに入ります／復元したい文字列を貼り付け"></textarea>
@@ -3604,6 +3611,33 @@ function renderRecords(badInput){
 }
 
 /* ---------- 書き出し・読み込み（機種変更やバックアップ用） ---------- */
+/* 検証に必要なぶんだけを、短い1行ずつで書き出す。
+   ------------------------------------------------------------------
+   ふつうの書き出しは120通りの評価順まで含むので1レースで数千文字になり、
+   スマホから貼り付けるのが現実的でない。
+   「モデルは市場を上回れるか」を見るのに要るのは
+   モデルの1着確率・市場の1着確率・実際の結果だけなので、それだけを出す。 */
+function exportVerification(){
+  const list = loadRecords().filter(r=>r.modelWin);
+  if(!list.length){
+    notice('recordIONotice','warn','まだ検証に使える記録がありません。オッズを入れて予想を生成してください。');
+    return;
+  }
+  const num = o => [1,2,3,4,5,6].map(i=>((o&&o[i])!=null ? (o[i]*100).toFixed(1) : '-')).join(' ');
+  const lines = list.map(r=>{
+    const res = r.result ? `${r.result.combo} ¥${r.result.payout ?? '-'}` : '結果まち';
+    return `${r.date} ${r.venueName||''}${r.rno}R | model ${num(r.modelWin)} | market ${num(r.market)} | ${res}`;
+  });
+  const t = lines.join('\n');
+  $('recordIO').value = t;
+  if(navigator.clipboard) navigator.clipboard.writeText(t).catch(()=>{});
+  const withMarket = list.filter(r=>r.market).length;
+  const withResult = list.filter(r=>r.result).length;
+  notice('recordIONotice','ok',
+    `${list.length}件を書き出してコピーしました（オッズあり ${withMarket}件 / 結果あり ${withResult}件）。`+
+    'そのまま貼り付けて渡せます。');
+}
+
 function exportRecords(){
   const t = JSON.stringify(loadRecords());
   $('recordIO').value = t;
