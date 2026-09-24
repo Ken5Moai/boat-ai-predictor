@@ -360,6 +360,26 @@ const RACES=[
  {reg:'3808',g:'B1',nat:4.01,loc:4.16,mot:38.20,bt:29.77,st:0.17,F:0,exST:0.11,exF:null,exT:6.99,tilt:0.0,wt:57.7,entry:4,rec:[]},
  {reg:'5338',g:'B1',nat:4.58,loc:2.89,mot:36.61,bt:35.38,st:0.16,F:0,exST:0.12,exF:'F',exT:6.89,tilt:0.0,wt:52.0,entry:5,rec:[]},
  {reg:'4981',g:'B1',nat:5.24,loc:5.72,mot:20.79,bt:37.09,st:0.18,F:0,exST:0.04,exF:null,exT:6.98,tilt:-0.5,wt:52.6,entry:6,rec:[]}]},
+// 下関2R: モデルが1号艇を市場より大きく高く見て、当たったレース。
+//   モデルの1号艇 65.9% / 市場 47.9% / 結果 1号艇の逃げ
+// 1号艇 川上聡介は全国4.33と低いがモーター18の2連率が52.27%で6艇中断然。
+// 当地の記録は無い（表示の0.00は「無い」の意味なので null）。
+// 市場は4号艇に22.6%を置いていたが3着。
+//
+// 期待値方式が2連続で的中。9点のうち 1-6-4（67.0倍・確率4.3%・期待値2.90）。
+// 投資900円 → 払戻6,700円。
+// オッズ67.0倍 → 払戻¥6,700、人気順も公式の「28番人気」と一致（10例目）。
+{name:'下関2R 予選',jcd:'19',rno:2,date:'2026-09-24',result:'1-6-4',pop:28,pay:6700,
+ pays:{tan:210, ni:2160, nifuku:2040, sanfuku:990},
+ actualST:{1:.17,2:.21,3:.26,4:.19,5:.28,6:.23},
+ wind:null,ws:2,wave:2,temp:27,wtemp:26,
+ B:[
+ {reg:'3848',g:'B1',nat:4.33,loc:null,mot:52.27,bt:29.55,st:0.15,F:0,exST:0.18,exF:null,exT:6.82,tilt:0.0,wt:56.5,entry:1,rec:[]},
+ {reg:'5076',g:'B1',nat:5.04,loc:4.79,mot:27.06,bt:31.46,st:0.17,F:0,exST:0.29,exF:null,exT:6.88,tilt:-0.5,wt:54.7,entry:2,rec:[]},
+ {reg:'3681',g:'B1',nat:4.89,loc:null,mot:30.49,bt:34.78,st:0.15,F:1,exST:0.21,exF:null,exT:6.73,tilt:0.0,wt:52.0,entry:3,rec:[]},
+ {reg:'3692',g:'B1',nat:5.20,loc:5.14,mot:38.20,bt:32.97,st:0.18,F:0,exST:0.07,exF:null,exT:6.85,tilt:0.0,wt:52.0,entry:4,rec:[]},
+ {reg:'3581',g:'B1',nat:5.45,loc:5.38,mot:27.17,bt:26.09,st:0.20,F:0,exST:0.18,exF:null,exT:6.91,tilt:0.0,wt:52.2,entry:5,rec:[]},
+ {reg:'3746',g:'A2',nat:5.75,loc:5.06,mot:44.68,bt:40.45,st:0.18,F:0,exST:0.23,exF:null,exT:6.86,tilt:0.0,wt:53.1,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -504,6 +524,41 @@ if(require.main===module){
     console.log(`  ${t.label.padEnd(18)}${String(t.inv).padStart(7)}円${String(Math.round(t.ret)).padStart(8)}円`+
       `${(t.ret/t.inv*100).toFixed(0).padStart(8)}%   ${t.hits}/${PAID.length}`);
   }
+  /* 回収率だけを見ると必ず騙される。ここまでで2回それをやりかけた。
+       15レース時点で「1点買い96%」→ 19レースで76%
+       12レース時点で「期待値方式21%」→ 13レースで73%
+     どちらも1〜2レースが数字を作っていた。
+     だから100%を超えた買い方は、必ず中身を割って見る。 */
+  const over = stakeTable.filter(t=>t.ret/t.inv >= 1.0);
+  if(over.length){
+    console.log('\n  100%を超えた買い方の中身（1〜2レースが作っていないか）');
+    for(const t of over){
+      const m = t.label.match(/^(\d+)点/);
+      if(!m) continue;
+      const n = Number(m[1]);
+      const unit = Math.max(100, Math.floor(1200/n/100)*100);
+      const rows = PAID.map(r=>({ name:r.name,
+        d: (r.rank<=n ? r.pay/100*unit : 0) - unit*n }));
+      const tot = rows.reduce((a,c)=>a+c.d,0);
+      const top = [...rows].sort((a,b)=>b.d-a.d).slice(0,2);
+      const topSum = top.reduce((a,c)=>a+c.d,0);
+      const restInv = (rows.length-2)*unit*n;
+      const restRet = restInv + (tot - topSum);
+      console.log(`    ${t.label}`);
+      console.log(`      いちばん効いた2レース: `+
+        top.map(x=>`${x.name.replace(/ .*/,'')} ${x.d>=0?'+':''}${x.d.toLocaleString()}円`).join(' / '));
+      console.log(`      その2つを除いた残り${rows.length-2}レースの回収率 `+
+        `${(restRet/restInv*100).toFixed(0)}%`);
+      let win=0; const N=20000;
+      for(let i=0;i<N;i++){ let t2=0;
+        for(let j=0;j<rows.length;j++) t2 += rows[Math.floor(Math.random()*rows.length)].d;
+        if(t2>0) win++; }
+      console.log(`      引き直してプラスになる割合 ${(win/N*100).toFixed(0)}%`+
+        `（50%に近いほど、ただの運）`);
+    }
+    console.log('    → 残りの回収率が100%を大きく下回るなら、その買い方はまだ根拠にならない。');
+  }
+
   console.log('\n  レース別の払戻（100円あたり）');
   PAID.forEach(r=>console.log(`    ${r.name.padEnd(12)} ${r.result}  ${String(r.pay).padStart(6)}円  `+
     `${String(r.pop||'?').padStart(2)}番人気  評価${String(r.rank).padStart(3)}番目`));
