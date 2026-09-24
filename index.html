@@ -426,6 +426,14 @@ BOAT RACE公式から取得します。<br>
 <h2><span class="stepno">8</span>結果を記録して答え合わせ</h2>
 <div class="lead">予想は自動で保存されます。レース後に着順を入れると、
 的中率・回収率・信頼度ごとの成績が出ます。<b>当たった予想だけ覚えている状態を防ぐため</b>の機能です。</div>
+<div style="margin-bottom:10px">
+  <button id="btnResult" onclick="fetchResult()">レース結果を自動取得して記録</button>
+  <div id="resultNotice" class="notice info" style="margin-top:8px">
+    STEP1で指定したレースの結果を公式から取り込みます。
+    着順は3連単の組番（＝1着-2着-3着）から取るので、表を別々に読んで食い違うことがありません。
+    読めなければ下の欄に手入力できます。
+  </div>
+</div>
 <div id="recordList"></div>
 <details>
 <summary>記録の書き出し・読み込み（バックアップ）</summary>
@@ -3260,6 +3268,102 @@ function savePrediction(info){
   return rec;
 }
 
+/* ==================================================================
+   結果の自動取得
+   ------------------------------------------------------------------
+   検証のいちばんの手間は、レース後に着順と払戻を人が書き写すこと。
+   公式の結果ページから拾って記録に入れる。
+
+   着順そのものを表から読むのではなく、3連単の組番から取る。
+   3連単の組番は「1着-2着-3着」そのものなので、
+   着順の表と払戻の表を別々に読んで食い違う心配がない。
+
+   読めたと言い切る前に確かめること
+     ・組番が1〜6の3つで、重複していないか
+     ・払戻が100円以上で、けた数が現実的か
+     ・他の式別（3連複・2連単・2連複）と矛盾していないか
+   1つでも外れたら採用しない。
+   ================================================================== */
+function parseRaceResult(raw){
+  const text = htmlToText(raw);
+  const grab = (label, pat) => {
+    const i = text.indexOf(label);
+    if(i < 0) return null;
+    const m = text.slice(i, i + 200).match(pat);
+    return m ? m : null;
+  };
+  /* 3連単：組番（1着-2着-3着）と払戻 */
+  const t3 = grab('3連単', /([1-6])\s*[-－]\s*([1-6])\s*[-－]\s*([1-6])[^0-9]{0,20}¥?\s*([0-9,]{3,9})/);
+  if(!t3) return { ok:false, why:'3連単の組番と払戻を見つけられませんでした' };
+  const [,a,b,c,payRaw] = t3;
+  if(a===b || b===c || a===c) return { ok:false, why:`組番が重複しています（${a}-${b}-${c}）` };
+  const pay = Number(String(payRaw).replace(/,/g,''));
+  if(!(pay >= 100 && pay <= 2000000)) return { ok:false, why:`払戻が現実的でありません（${payRaw}）` };
+
+  const out = { ok:true, combo:`${a}-${b}-${c}`,
+                first:Number(a), second:Number(b), third:Number(c), payout:pay, pays:{} };
+
+  /* 他の式別も拾えたら入れる。拾えなくても止めない。 */
+  const f3 = grab('3連複', /([1-6])\s*[=＝]\s*([1-6])\s*[=＝]\s*([1-6])[^0-9]{0,20}¥?\s*([0-9,]{3,9})/);
+  if(f3){
+    const set = [f3[1],f3[2],f3[3]].sort().join('');
+    if(set === [a,b,c].sort().join('')) out.pays.sanfuku = Number(f3[4].replace(/,/g,''));
+  }
+  const t2 = grab('2連単', /([1-6])\s*[-－]\s*([1-6])[^0-9]{0,20}¥?\s*([0-9,]{3,9})/);
+  if(t2 && t2[1]===a && t2[2]===b) out.pays.ni = Number(t2[3].replace(/,/g,''));
+  const f2 = grab('2連複', /([1-6])\s*[=＝]\s*([1-6])[^0-9]{0,20}¥?\s*([0-9,]{3,9})/);
+  if(f2 && [f2[1],f2[2]].sort().join('') === [a,b].sort().join('')) out.pays.nifuku = Number(f2[3].replace(/,/g,''));
+  const tan = grab('単勝', /([1-6])[^0-9]{0,20}¥?\s*([0-9,]{3,9})/);
+  if(tan && tan[1]===a) out.pays.tan = Number(tan[2].replace(/,/g,''));
+
+  /* 決まり手（あれば） */
+  const km = text.match(/決まり手[^ぁ-ん一-龥]{0,10}(逃げ|差し|まくり差し|まくり|抜き|恵まれ)/);
+  if(km) out.kimarite = km[1];
+  return out;
+}
+
+async function fetchResult(){
+  if(state.busy){ alert('ほかの取得を実行中です。終わるまでお待ちください。'); return; }
+  const url = officialUrl('raceresult');
+  if(!url){ alert('開催日・競艇場・レース番号を先に選んでください。'); return; }
+  const btn = $('btnResult'); if(btn) btn.disabled = true;
+  state.busy = true;
+  try{
+    notice('resultNotice','info','レース結果を取得しています…');
+    log('[結果] '+url);
+    const body = await fetchViaProxy(url, { mustContain:['結果','払戻','boatrace'] });
+    const r = parseRaceResult(body);
+    if(!r.ok){
+      notice('resultNotice','warn',
+        `結果を読み取れませんでした（${esc(r.why)}）。<b>下の欄に手入力できます。</b>`);
+      log('  取得内容の先頭: '+String(body).replace(/\s+/g,' ').slice(0,400));
+      return;
+    }
+    const p = raceParams();
+    const id = `${$('raceDate').value}_${p.jcd}_${p.rno}`;
+    const list = loadRecords();
+    const rec = list.find(x=>x.id === id);
+    if(!rec){
+      notice('resultNotice','warn',
+        'このレースの予想が記録にありません。先に「予想レポート生成」を押してから結果を取得してください。');
+      return;
+    }
+    rec.result = { combo:r.combo, first:r.first, second:r.second, third:r.third,
+                   payout:r.payout, pays:r.pays, kimarite:r.kimarite || null };
+    saveRecords(list);
+    renderRecords();
+    notice('resultNotice','ok',
+      `結果 <b>${esc(r.combo)}</b> 払戻 <b>${r.payout.toLocaleString()}円</b>`+
+      `${r.kimarite?`（${esc(r.kimarite)}）`:''} を記録しました。`);
+    log(`  ✓ ${r.combo} ¥${r.payout} ${Object.keys(r.pays).length?`他式別 ${JSON.stringify(r.pays)}`:''}`);
+  }catch(e){
+    notice('resultNotice','warn','結果を取得できませんでした（'+esc(e.message)+'）。手入力もできます。');
+  }finally{
+    if(btn) btn.disabled = false;
+    state.busy = false;
+  }
+}
+
 /* 「154」のような入力を 1着/2着/3着 に変換する */
 function parseResultOrder(raw){
   const d = String(raw).replace(/[^1-6]/g,'').split('').map(Number);
@@ -3390,6 +3494,48 @@ function renderRecords(badInput){
            `<tr><td>${esc(k)}</td><td>${g.n}</td><td>${pct(g.tri,g.n)}</td><td>${pct(g.trio,g.n)}</td><td>${pct(g.head,g.n)}</td></tr>`
          ).join('')}</table>
          <div class="mini" style="margin-bottom:8px">信頼度Aの的中率が本当に高いかを、ここで確認できます。</div>` : ''}
+       ${(()=>{
+         /* 検証の進み具合。モデルと市場の両方が残っていて、結果も入っている
+            レースだけが「モデルは市場を上回れるか」の答えに使える。 */
+         const full = list.filter(r=>r.market && r.modelWin && r.result);
+         const NEED = 10;
+         if(!list.length) return '';
+         const rows = full.map(r=>{
+           let best = null;
+           for(let a=1;a<=6;a++){
+             const dd = (r.modelWin[a]||0) - (r.market[a]||0);
+             if(!best || Math.abs(dd) > Math.abs(best.d)) best = { a, d:dd };
+           }
+           const winner = r.result.first;
+           const right = (best.d > 0 && winner === best.a) || (best.d < 0 && winner !== best.a);
+           return `<tr><td>${esc(r.venueName||'')}${esc(r.rno||'')}R</td>
+             <td>${best.a}号艇 ${best.d>0?'+':''}${(best.d*100).toFixed(1)}pt</td>
+             <td>${(r.modelWin[best.a]*100).toFixed(1)}%</td>
+             <td>${(r.market[best.a]*100).toFixed(1)}%</td>
+             <td>${winner}号艇</td>
+             <td style="color:${right?'#3ecf74':'#ef6262'}">${right?'モデル':'市場'}</td></tr>`;
+         }).join('');
+         return `<div class="card" style="border-color:#4a90d9"><div class="chead">検証の進み具合</div><div class="cbody">
+           <div class="kpis" style="margin-bottom:10px">
+             <div class="kpi"><b>${full.length}</b><small>モデルと市場を<br>比べられるレース</small></div>
+             <div class="kpi"><b>${Math.max(0, NEED-full.length)}</b><small>判定まで<br>あと</small></div>
+           </div>
+           <div class="mini" style="margin-bottom:8px">
+             <b>いま確かめているのは「モデルは市場を上回れるのか」だけです。</b>
+             買わなくても、オッズを入れて予想を生成し、あとで結果を取り込めば記録は貯まります。
+             ${full.length >= NEED ? '<b style="color:#3ecf74">判定できる件数に届きました。</b>'
+               : `${NEED}件そろうまでは、買い方の話は先送りにしてください。`}
+           </div>
+           ${full.length ? `<table class="tbl">
+             <tr><th>レース</th><th>いちばん離れた艇</th><th>モデル</th><th>市場</th><th>1着</th><th>正しかったのは</th></tr>
+             ${rows}</table>
+             <div class="mini" style="margin-top:7px">
+               モデルが市場より高く見た艇が勝てば「モデル」、
+               モデルが下げた艇が勝たなければ「モデル」。それ以外は「市場」。
+             </div>`
+             : '<div class="mini">まだ1件もありません。オッズを120通り入れて予想を生成し、レース後に結果を取り込んでください。</div>'}
+         </div></div>`;
+       })()}
        ${st.evKnown ? `<div class="card"><div class="chead">期待値ごとの回収率<span class="mini">買った1点ずつで集計</span></div><div class="cbody">
          <div class="mini" style="margin-bottom:8px">
            <b>ここがいちばん大事な表です。</b>買った時点の期待値（確率×オッズ）ごとに、
@@ -3976,6 +4122,18 @@ ${picked.mode!=='ev' ? `<div class="mini" style="margin-top:8px;color:#f0c040">
                                   odds: p.odds || null,
                                   ev: p.ev != null ? Number(p.ev.toFixed(3)) : null })),
       pickMode: picked.mode,
+      /* 市場が各艇の1着をどう見ていたか。モデルと市場のどちらが正しかったかは
+         これが無いと後から測れない。オッズを入れた時だけ入る。 */
+      market: (()=>{
+        const ks = Object.keys(state.oddsMap);
+        if(ks.length < 120) return null;
+        const m = {};
+        for(let a=1;a<=6;a++)
+          m[a] = Number(ks.filter(k=>k[0]===String(a))
+                          .reduce((s2,k)=>s2 + 0.75/state.oddsMap[k], 0).toFixed(4));
+        return m;
+      })(),
+      modelWin: Object.fromEntries(state.boats.map(b=>[b.lane, Number((b.winProb||0).toFixed(4))])),
       rank, fill, gap,
       seriesRaces: ctx.seriesInfo ? ctx.seriesInfo.maxRaces : 0,
       entryMoved: ctx.entryInfo ? ctx.entryInfo.movedCount : 0,
