@@ -478,6 +478,30 @@ const RACES=[
  {reg:'4750',g:'B1',nat:5.13,loc:3.91,mot:29.17,bt:27.47,st:0.16,F:1,exST:0.01,exF:null,exT:6.79,tilt:0.0,wt:52.1,entry:4,rec:[[6,.26,4]]},
  {reg:'4180',g:'A2',nat:5.33,loc:5.08,mot:25.56,bt:35.16,st:0.17,F:0,exST:0.41,exF:null,exT:6.82,tilt:0.0,wt:54.1,parts:'プロペラ新',entry:5,rec:[[2,.13,4]]},
  {reg:'4142',g:'A2',nat:5.67,loc:null,mot:38.89,bt:22.58,st:0.18,F:0,exST:0.11,exF:null,exT:6.86,tilt:0.0,wt:53.4,entry:6,rec:[[2,.16,4]]}]},
+// 下関11R 予選特選: まくり差しで3号艇が勝った。
+// 3号艇 塩田北斗（A1・当地8.38・当地2連率75.00%）はモデル21.5%・市場25.7%で、
+// どちらも本命にしていなかった艇。市場のほうがわずかに近い。
+//   モデルの採点順 2(72.3) 1(71.3) 3(66.7) …  実際の着順 3 → 1 → 2
+// 上位3艇の顔ぶれは完全に一致していて、順番だけが違った（三国11Rと同じ形）。
+//
+// オッズは締切11分前の値。3-1-2 は 13.1倍（=¥1,310）で記録しているが
+// 実際の払戻は ¥1,660（=16.6倍）。+26.7% 動いた。
+// 締切までの時間とズレの大きさが並ぶ:
+//   三国3R  22分前  +63.7%
+//   下関11R 11分前  +26.7%
+//   下関10R  4分前   +1.8%
+{name:'下関11R 予選特選',jcd:'19',rno:11,date:'2026-09-24',result:'3-1-2',pop:5,pay:1660,
+ pays:{tan:320, ni:710, nifuku:220, sanfuku:170},
+ actualST:{1:.16,2:.09,3:.06,4:.13,5:.12,6:.15},
+ preClose:'19:47（締切19:58）',
+ wind:null,ws:3,wave:3,temp:23,wtemp:26,
+ B:[
+ {reg:'3963',g:'A2',nat:5.82,loc:5.32,mot:23.60,bt:39.56,st:0.17,F:0,exST:0.08,exF:null,exT:6.80,tilt:0.0,wt:52.0,entry:1,rec:[[3,.14,2]]},
+ {reg:'4949',g:'A2',nat:5.98,loc:6.37,mot:49.44,bt:41.57,st:0.16,F:0,exST:0.12,exF:null,exT:6.77,tilt:0.0,wt:50.0,adj:2.0,entry:2,rec:[[4,.04,2]]},
+ {reg:'4566',g:'A1',nat:6.75,loc:8.38,mot:39.76,bt:42.86,st:0.14,F:1,exST:0.05,exF:null,exT:6.84,tilt:0.0,wt:53.2,entry:3,rec:[[4,.17,4]]},
+ {reg:'4396',g:'B1',nat:4.68,loc:5.63,mot:38.37,bt:27.59,st:0.20,F:0,exST:0.14,exF:null,exT:6.89,tilt:-0.5,wt:52.9,entry:4,rec:[[1,.19,1]]},
+ {reg:'3848',g:'B1',nat:4.33,loc:null,mot:52.27,bt:29.55,st:0.15,F:0,exST:0.26,exF:null,exT:6.85,tilt:0.0,wt:56.5,entry:5,rec:[[1,.17,1]]},
+ {reg:'5060',g:'A2',nat:5.96,loc:4.40,mot:28.26,bt:43.96,st:0.17,F:0,exST:0.08,exF:null,exT:6.83,tilt:0.0,wt:51.5,adj:0.5,entry:6,rec:[[4,.18,3]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -611,6 +635,19 @@ if(require.main===module){
         console.log(`    ${b.name}  ${b.combo}  ${b.odds}倍→¥${b.expect}  `+
                     `実際¥${b.pay}  ${b.gap>=0?'+':''}${b.gap.toFixed(1)}%  [${b.pre}]`);
       console.log('    締切前の市場は未完成なので、モデルとの比較では不利に働く。');
+      /* 締切までの時間とズレの大きさを並べる。
+         いつスクショを撮ればいいかが、そのまま読み取れる。 */
+      const mins = d => { const m = /(\d+):(\d+)（締切(\d+):(\d+)/.exec(d.pre);
+        return m ? (Number(m[3])*60+Number(m[4])) - (Number(m[1])*60+Number(m[2])) : null; };
+      const timed = drift.map(d=>({...d, min:mins(d)})).filter(d=>d.min!=null)
+                         .sort((a,b)=>b.min-a.min);
+      if(timed.length >= 2){
+        console.log('    締切までの時間とズレ');
+        for(const t of timed)
+          console.log(`      ${String(t.min).padStart(2)}分前  ${t.gap>=0?'+':''}${t.gap.toFixed(1)}%  ${t.name}`);
+        console.log('      → 締切に近いほどオッズは動かない。');
+        console.log('        スクショは「締切時オッズ」表示に切り替わってからが正確。');
+      }
     }
     if(bad.length){
       console.log('■ 説明のつかないズレ（書き写しの誤りの可能性）');
@@ -1136,6 +1173,41 @@ if(require.main===module){
       console.log('    → 下げるほど悪くなるなら、相関が低くても外してはいけない。');
       console.log('       展示STは本番STそのものではなく、別の何か（気合い・');
       console.log('       仕上がり）を映している可能性がある。'); 
+    }
+  }
+
+  console.log('\n=== 「誰が絡むか」と「どの順番か」を分けて見る ===');
+  console.log('  モデルの採点上位3艇が、実際の上位3着とそのまま同じ顔ぶれだったか。');
+  console.log('  順番は問わない。3連単で外していても、顔ぶれが合っているなら');
+  console.log('  外しているのは順番だけ、ということになる。\n');
+  {
+    let setHit = 0, exact = 0, n = 0, head = 0;
+    const rows = [];
+    for(const x of base){
+      const R = RACES.find(r=>r.name===x.name);
+      if(!x.order) continue;
+      n++;
+      const top3 = x.order.slice(0,3).map(o=>Number(o[0]));
+      const real = R.result.split('-').map(Number);
+      const same = top3.slice().sort().join() === real.slice().sort().join();
+      const ex = top3.join() === real.join();
+      if(same) setHit++;
+      if(ex) exact++;
+      if(top3[0] === real[0]) head++;
+      rows.push({ name:R.name, model:top3.join('-'), real:R.result, same, ex });
+    }
+    if(!n){ console.log('  detail なしで走っているので測れない'); }
+    else {
+      console.log('  レース                 モデル上位3  実際     顔ぶれ  並びまで');
+      rows.forEach(r=>console.log(`  ${r.name.padEnd(20)}${r.model.padEnd(12)}${r.real.padEnd(9)}`+
+        `${r.same?'○':'×'}      ${r.ex?'○':'×'}`));
+      console.log(`\n  顔ぶれが合った  ${setHit}/${n} (${(setHit/n*100).toFixed(0)}%)`);
+      console.log(`  並びまで合った  ${exact}/${n} (${(exact/n*100).toFixed(0)}%)`);
+      console.log(`  頭だけ合った    ${head}/${n} (${(head/n*100).toFixed(0)}%)`);
+      console.log('\n  参考: でたらめに3艇選んで顔ぶれが合う確率は 1/20 = 5%、');
+      console.log('        顔ぶれが合ったうえで並びまで合う確率は 1/6 = 17%。');
+      if(setHit/n > 0.2 && exact/setHit < 0.5)
+        console.log('  → 顔ぶれは当てられているが、並べ方で落としている。');
     }
   }
 
