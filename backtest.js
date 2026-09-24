@@ -1211,6 +1211,93 @@ if(require.main===module){
     }
   }
 
+  console.log('\n=== 番組表だけで分かること（級別の並び） ===');
+  console.log('  1日の番組表に載っているのは、レース番号・締切・選手名・級別だけ。');
+  console.log('  そこから「荒れそうなレース」を選べるかを測る。');
+  console.log('  狙いは穴だったが、出てきた答えは逆だった。\n');
+  {
+    const P = [];
+    for(const x of base){
+      const R = RACES.find(r=>r.name===x.name); if(!R.pay) continue;
+      const map = ODDS[R.name];
+      let topMk = null;
+      if(map && Object.keys(map).length===120){
+        const ks = Object.keys(map), mk = [];
+        for(let a=1;a<=6;a++) mk.push(ks.filter(k=>k[0]===String(a)).reduce((t,k)=>t+0.75/map[k],0));
+        const nn = mk.reduce((a,c)=>a+c,0); topMk = Math.max(...mk)/nn;
+      }
+      P.push({ name:R.name, pay:R.pay, rank:x.rank, topMk,
+               outA: R.B.slice(2).some(b=>b.g==='A1'||b.g==='A2') });
+    }
+    const med = a => { const q=a.slice().sort((x,y)=>x-y);
+      return q.length%2 ? q[(q.length-1)/2] : (q[q.length/2-1]+q[q.length/2])/2; };
+    const hi = P.filter(r=>r.outA), lo = P.filter(r=>!r.outA);
+    const line = (label,a) => {
+      if(!a.length){ console.log(`  ${label.padEnd(16)}0件`); return; }
+      console.log(`  ${label.padEnd(16)}${String(a.length).padStart(2)}件  `+
+        `配当の中央値 ¥${String(med(a.map(r=>r.pay))).padStart(6)}  `+
+        `モデルの平均順位 ${(a.reduce((s,r)=>s+r.rank,0)/a.length).toFixed(1).padStart(5)}番目`);
+    };
+    line('外にA級あり', hi);
+    line('外にA級なし', lo);
+
+    /* 市場がすでに織り込んでいるかを見る。
+       織り込んでいるなら、この情報で先回りはできない。 */
+    const wk = P.filter(r=>r.topMk!=null);
+    const avg = a => a.length ? (a.reduce((s,r)=>s+r.topMk,0)/a.length*100).toFixed(1) : '—';
+    console.log(`\n  市場の1番人気の確率  外にA級あり ${avg(wk.filter(r=>r.outA))}%  /  `+
+                `外にA級なし ${avg(wk.filter(r=>!r.outA))}%`);
+    console.log('  → 市場は「外にA級がいると荒れる」をすでに値段に入れている。');
+    console.log('     番組表で気づけることは、オッズにもう書いてある。');
+
+    /* 買ったらどうなるか。ここが本番。 */
+    const ret = (a,n) => { let inv=0, r=0, h=0;
+      for(const x of a){ inv += 100*n; if(x.rank<=n){ r += x.pay; h++; } }
+      return { rate: inv ? r/inv*100 : 0, h, n:a.length }; };
+    console.log('\n  買った場合の回収率');
+    console.log('    点数   外にA級あり        外にA級なし');
+    for(const n of [6,10,12]){
+      const a = ret(hi,n), b = ret(lo,n);
+      console.log(`    ${String(n).padStart(2)}点   ${a.rate.toFixed(0).padStart(4)}% (${a.h}/${a.n})`+
+                  `        ${b.rate.toFixed(0).padStart(4)}% (${b.h}/${b.n})`);
+    }
+    console.log('    → 荒れそうなレースを選ぶと、モデルがいちばん当てられないレースを買うことになる。');
+
+    /* 「外にA級なし」だけを6点で買った場合を、いつもの3段階で検定する。 */
+    {
+      const n = 6;
+      const d = lo.map(r=>({ name:r.name, v:(r.rank<=n?r.pay:0) - 100*n }));
+      const inv = d.length*100*n;
+      const tot = d.reduce((s,x)=>s+x.v,0);
+      const top2 = [...d].sort((a,b)=>b.v-a.v).slice(0,2);
+      const restInv = (d.length-2)*100*n;
+      const restRet = restInv + (tot - top2.reduce((s,x)=>s+x.v,0));
+      let win=0; const N=20000;
+      for(let i=0;i<N;i++){ let t=0;
+        for(let j=0;j<d.length;j++) t += d[Math.floor(Math.random()*d.length)].v;
+        if(t>0) win++; }
+      const pct = win/N*100;
+      console.log(`\n  「外にA級なし」を6点で買った場合（${d.length}レース）`);
+      console.log(`    回収率 ${((tot+inv)/inv*100).toFixed(0)}%`);
+      console.log(`    いちばん効いた2レースを除くと ${restInv>0?(restRet/restInv*100).toFixed(0):'—'}%`);
+      console.log(`    引き直してプラスになる割合 ${pct.toFixed(0)}%`);
+      if(d.length < 20){
+        console.log(`\n    ※ まだ${d.length}レース。引き直しが高く出ても、それは`);
+        console.log('       「この数レースが揃っていた」という意味しかない。');
+        console.log('       見ていないレースについては何も言えない。');
+      }
+      console.log('\n    【先に決めておく】');
+      console.log('    「外にA級なし」が20レースそろった時点で、6点均等が');
+      console.log('      ・回収率100%以上');
+      console.log('      ・いちばん効いた2レースを除いても100%以上');
+      console.log('      ・引き直してプラスになる割合が95%以上');
+      console.log('    の3つすべてを満たしていたら、条件として採用する。');
+      console.log('    1つでも欠けたら捨てる。（結果を見てから基準を決めないため）');
+      const needed = Math.max(0, 20 - d.length);
+      if(needed) console.log(`    あと${needed}レース。`);
+    }
+  }
+
   console.log('\n=== 当地勝率は効いているか ===');
   console.log('  1号艇の当地勝率で全レースを半分に割り、実際の勝率とモデルの見方を比べる。');
   console.log('  当地の記録が無い艇（loc が null）は対象外。\n');
