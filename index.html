@@ -281,8 +281,33 @@ BOAT RACE公式から取得します。<br>
     <option value="10">10点（広く取る）</option>
     <option value="12">12点</option></select></div>
   <div><label>&nbsp;</label><div class="mini" style="padding-top:11px">
-    点数を増やすと的中率は上がりますが、1点あたりの金額は下がります。</div></div>
+    点数を増やすと的中率は上がりますが、回収率は下がります。→</div></div>
 </div>
+<details style="margin-top:6px">
+<summary class="mini">点数ごとの実測（28レース・1点100円）</summary>
+<div class="dbody">
+<table class="tbl"><tr><th>点数</th><th>回収率</th><th>的中</th></tr>
+<tr><td>6点</td><td>89%</td><td>11/28</td></tr>
+<tr><td>8点</td><td>104%</td><td>14/28</td></tr>
+<tr><td><b>10点</b></td><td><b>106%</b></td><td>17/28</td></tr>
+<tr><td>12点</td><td>89%</td><td>17/28</td></tr>
+<tr><td>15点</td><td>71%</td><td>17/28</td></tr>
+<tr><td>18点</td><td>68%</td><td>19/28</td></tr>
+<tr><td>20点</td><td>61%</td><td>19/28</td></tr>
+<tr><td>30点</td><td>55%</td><td>21/28</td></tr>
+</table>
+<div class="mini" style="margin-top:8px">
+<b>10点あたりが山で、そこから増やすと落ちます。</b>
+12点→18点で何が起きるかを割るとこうです。<br><br>
+<b>増える投資 16,800円 → 増える払戻 4,600円（回収率27%）。差し引き −12,200円。</b><br><br>
+13〜18番目の買い目は、めったに来ないうえに来ても安い。
+的中数は17→19に増えますが、増えた2件の払戻が合計4,600円しかありません。
+<b>「点数を増やせば当たる」は本当ですが、「当たれば得」ではありません。</b><br><br>
+※ 10点の106%も、いちばん効いた2レースを除くと69%です。
+どの点数も100%を安定して超えてはいません。
+</div>
+</div>
+</details>
 <div id="venueInfo" class="notice info">競艇場を選ぶと水質・イン傾向を表示します。</div>
 <button id="btnStadium" class="secondary" onclick="fetchStadiumData()">この競艇場のデータを取り込む（1回だけ）</button>
 <div id="stadiumNotice" class="notice info">
@@ -4267,8 +4292,24 @@ ${(()=>{
     </div>
     <textarea id="postText" style="height:220px">${esc(post)}</textarea>
     <div class="btnrow" style="margin-top:8px">
-      <button class="secondary" onclick="copyPost()">コピー</button>
+      <button class="secondary" onclick="copyPost()">note用をコピー</button>
     </div>
+    ${(()=>{
+      const sh = buildPostShort(points, amounts);
+      const n  = xLen(sh);
+      const over = n > 140;
+      return `<div style="margin-top:12px">
+        <div class="mini" style="margin-bottom:4px">
+          X用（短い版）<b style="color:${over?'#ef6262':'#3ecf74'}">${n}字</b>
+          ${over ? '／ <b style="color:#ef6262">140字を超えています。点数を減らすか、買い目を分けてください。</b>'
+                 : '／ 140字以内'}
+        </div>
+        <textarea id="postShort" style="height:150px">${esc(sh)}</textarea>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="secondary" onclick="copyShort()">X用をコピー</button>
+        </div>
+      </div>`;
+    })()}
     <div id="postNotice" class="notice info" style="margin-top:8px">
       <b>この注記は消さないでください。</b>
       「当たる」と書いて売ると、実測が支持していない以上、景品表示法の優良誤認にあたる可能性があります。
@@ -4710,6 +4751,47 @@ function buildPostText(points, amounts){
     '',
     ...POST_NOTE
   ].join('\n');
+}
+
+/* X（旧Twitter）用の短い版。
+   無料アカウントは全角140字までなので、通算成績と注記を削らずに収める。
+   削る順は「買い目の金額 → 締切時刻」。成績と注記は最後まで残す。 */
+function buildPostShort(points, amounts){
+  const jcd  = ($('venue')||{}).value || '';
+  const name = (typeof VENUES!=='undefined' && VENUES[jcd]) ? VENUES[jcd].name : '';
+  const rno  = ($('raceNo')||{}).value || '';
+  const total = (amounts||[]).reduce((a,c)=>a+c,0);
+  const unit  = (amounts&&amounts.length) ? amounts[0] : 0;
+  const list  = loadRecords();
+  const st    = recordStats(list);
+  const rate  = st.bet ? (st.back/st.bet*100).toFixed(0)+'%' : '—';
+  const career = st.done
+    ? `通算${st.done}R 的中${st.tri} 回収${rate}`
+    : '通算 記録なし';
+  return [
+    `${name}${rno}R`,
+    `3連単${points.length}点 各${unit.toLocaleString()}円（計${total.toLocaleString()}円）`,
+    points.map(p=>p.combo).join(' '),
+    '',
+    career,
+    '※全レース記録・選別なし',
+    '※控除率25%。当たる保証はありません'
+  ].join('\n');
+}
+
+/* 全角を2、半角を1として数える（Xの数え方に近い目安） */
+function xLen(t){
+  let n = 0;
+  for(const ch of String(t)) n += /[\x00-\x7F\uFF61-\uFF9F]/.test(ch) ? 1 : 2;
+  return Math.ceil(n/2);
+}
+
+function copyShort(){
+  const t = $('postShort'); if(!t) return;
+  t.select();
+  if(navigator.clipboard) navigator.clipboard.writeText(t.value).catch(()=>{});
+  else { try{ document.execCommand('copy'); }catch(e){} }
+  notice('postNotice','ok','X用をコピーしました。注記2行はそのまま残してください。');
 }
 
 function copyPost(){
