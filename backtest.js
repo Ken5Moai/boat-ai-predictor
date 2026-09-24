@@ -282,6 +282,33 @@ const RACES=[
  {reg:'5143',g:'B1',nat:3.92,loc:3.40,mot:34.40,bt:27.54,st:0.19,F:0,exST:0.05,exF:null,exT:6.81,tilt:-0.5,wt:53.7,entry:4,rec:[[4,.14,6]]},
  {reg:'5038',g:'A2',nat:6.57,loc:6.19,mot:41.09,bt:33.59,st:0.16,F:0,exST:0.12,exF:null,exT:6.73,tilt:-0.5,wt:52.0,parts:'リング2',entry:5,rec:[[1,.11,1]]},
  {reg:'3837',g:'A2',nat:6.40,loc:5.55,mot:30.00,bt:31.30,st:0.17,F:0,exST:0.24,exF:null,exT:6.84,tilt:-0.5,wt:52.2,entry:6,rec:[[1,.15,1]]}]},
+// 三国12R 準優勝戦: 38番人気（2-3-4 ¥64,820）。まくり決着。11Rに続く波乱。
+// オッズ648.2倍 → 払戻¥64,820、人気順も公式の「38番人気」と一致（7例目）。
+//
+// 市場は1号艇（A1 茅原悠紀・当地8.60・当地2連率90.00%）を90.9%と見ていた。
+// 10レースで最も極端な本命。その1号艇は6着（最下位）。
+// 来た2号艇（A1 小坂尚哉・全国7.53）にモデルは16.6%、市場は3.4%。
+// 1着の対数スコアで、モデルがこのレースでも市場に大きく勝っている。
+//
+// 本番STは 1:.18 2:.15 3:.17 4:.15 5:.17 6:.18 でほぼ横一線。
+// 展示でも1号艇と2号艇はどちらも.06で差が無かった。
+// つまり「1号艇が失敗した」のではなく、単に2号艇に外から押し切られた。
+// 市場の90.9%のほうが、材料に対して強すぎたということ。
+//
+// 5号艇 松村康太（4210）は三国7Rの1号艇、
+// 2号艇 小坂尚哉（4295）は三国7Rの5号艇と同じ選手で、
+// 全国・当地・モーター・ボートの数字がすべて一致した。7Rの読み取りの裏付け。
+{name:'三国12R 準優勝戦',jcd:'10',rno:12,date:'2026-09-24',result:'2-3-4',pop:38,pay:64820,
+ pays:{tan:550, ni:15000, nifuku:2610, sanfuku:4880},
+ actualST:{1:.18,2:.15,3:.17,4:.15,5:.17,6:.18},
+ wind:null,ws:4,wave:4,temp:25,wtemp:24,
+ B:[
+ {reg:'4418',g:'A1',nat:7.47,loc:8.60,mot:35.51,bt:35.04,st:0.13,F:0,exST:0.06,exF:null,exT:6.74,tilt:-0.5,wt:52.7,entry:1,rec:[[3,.11,1]]},
+ {reg:'4295',g:'A1',nat:7.53,loc:6.50,mot:31.62,bt:30.08,st:0.14,F:0,exST:0.06,exF:null,exT:6.79,tilt:-0.5,wt:52.0,entry:2,rec:[[5,.15,4]]},
+ {reg:'4441',g:'A2',nat:5.81,loc:6.92,mot:29.17,bt:31.15,st:0.14,F:0,exST:0.19,exF:null,exT:6.77,tilt:-0.5,wt:52.6,entry:3,rec:[[4,.08,2]]},
+ {reg:'4363',g:'A2',nat:5.47,loc:6.25,mot:30.47,bt:25.74,st:0.17,F:0,exST:0.10,exF:null,exT:6.77,tilt:-0.5,wt:52.6,entry:4,rec:[[3,.03,3]]},
+ {reg:'4210',g:'A2',nat:5.41,loc:5.95,mot:29.37,bt:35.25,st:0.17,F:0,exST:0.16,exF:null,exT:6.84,tilt:-0.5,wt:52.1,entry:5,rec:[[1,.10,3]]},
+ {reg:'3641',g:'A1',nat:6.09,loc:2.00,mot:34.38,bt:32.09,st:0.17,F:0,exST:0.09,exF:null,exT:6.92,tilt:-0.5,wt:52.2,entry:6,rec:[[1,.21,4]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -544,7 +571,8 @@ if(require.main===module){
       const nk = Object.values(mk).reduce((a,c)=>a+c,0);
       const win = Number(R.result.split('-')[0]);
       rows.push({ name:R.name, win,
-                  m: md[win]/nm, k: mk[win]/nk, p: PRIOR[win] });
+                  m: md[win]/nm, k: mk[win]/nk, p: PRIOR[win],
+                  top: Math.max(...Object.values(mk))/nk });
     }
     if(!rows.length){ console.log('  実オッズのあるレースがまだ無い'); }
     else {
@@ -556,9 +584,50 @@ if(require.main===module){
       console.log(`\n  対数スコア（0に近いほど良い）  モデル ${lm.toFixed(3)}  市場 ${lk.toFixed(3)}  枠順のみ ${lp.toFixed(3)}`);
       const better = rows.filter(r=>r.m > r.k).length;
       console.log(`  来た艇に市場より高い確率を置けた回数  ${better}/${rows.length}`);
-      console.log(`  ${lm > lk ? 'いまのところモデルのほうが上。' : 'いまのところ市場のほうが上。'}`+
-                  ` ただし${rows.length}件では偶然の幅のほうが大きい。`);
-      console.log('  10件そろうまで、この数字を根拠に賭け方を変えないこと。');
+      console.log(`  ${lm > lk ? 'いまのところモデルのほうが上。' : 'いまのところ市場のほうが上。'}`);
+
+      /* 合計だけ見ると「どの1レースが効いているか」が隠れる。
+         1レースで大きく勝った回が全体をひっくり返していないかを必ず確かめる。 */
+      const diff = rows.map(r=>({ name:r.name, d: Math.log(Math.max(r.m,1e-6)) - Math.log(Math.max(r.k,1e-6)) }));
+      console.log('\n  レースごとの「モデル − 市場」（プラスならモデルの勝ち）');
+      diff.forEach(x=>console.log(`    ${x.name.padEnd(16)}${x.d>=0?'+':''}${x.d.toFixed(3)}`));
+      const tot = diff.reduce((t,x)=>t+x.d,0);
+      const sortedByAbs = [...diff].sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+      const top2 = sortedByAbs.slice(0,2);
+      const top2sum = top2.reduce((t,x)=>t+x.d,0);
+      console.log(`\n    合計 ${tot>=0?'+':''}${tot.toFixed(3)}`);
+      console.log(`    いちばん大きい2レース（${top2.map(x=>x.name.replace(/ .*/,'')).join(' / ')}）だけで `+
+                  `${top2sum>=0?'+':''}${top2sum.toFixed(3)}`);
+      console.log(`    その2つを除いた残り${diff.length-2}レースの合計 `+
+                  `${tot-top2sum>=0?'+':''}${(tot-top2sum).toFixed(3)}`);
+      if(Math.abs(top2sum) > Math.abs(tot)){
+        console.log('    → **勝ち負けの向きが、2レースだけで決まっている。**');
+        console.log('       残りを見ると逆の結論になる。合計を信じてはいけない。');
+      }
+
+      /* 引き直し（ブートストラップ）。50%に近いほど「どちらとも言えない」。 */
+      let winCount = 0; const N = 20000;
+      for(let i=0;i<N;i++){
+        let t = 0;
+        for(let j=0;j<diff.length;j++) t += diff[Math.floor(Math.random()*diff.length)].d;
+        if(t > 0) winCount++;
+      }
+      const pct = winCount/N*100;
+      console.log(`\n    同じ${diff.length}レースを重複ありで引き直すと、モデルが勝つ割合 ${pct.toFixed(0)}%`);
+      console.log('    （50%に近いほど「どちらが上とも言えない」。95%を超えて初めて差と呼べる）');
+
+      /* 市場がどれだけ強気だったかで分けてみる。
+         いまのところ、モデルが勝っているのは市場が極端に強気だった回に偏っている。 */
+      const byTop = rows.map((r,i)=>({ top:r.top, d:diff[i].d })).sort((a,b)=>a.top-b.top);
+      const half = Math.floor(byTop.length/2);
+      const mean = a => a.length ? a.reduce((t,x)=>t+x.d,0)/a.length : NaN;
+      console.log('\n  市場の1番人気の確率で半分に分けると');
+      console.log(`    市場が控えめな${half}レース（〜${(byTop[half-1].top*100).toFixed(0)}%）  平均 `+
+                  `${mean(byTop.slice(0,half))>=0?'+':''}${mean(byTop.slice(0,half)).toFixed(3)}`);
+      console.log(`    市場が強気な${byTop.length-half}レース（${(byTop[half].top*100).toFixed(0)}%〜）  平均 `+
+                  `${mean(byTop.slice(half))>=0?'+':''}${mean(byTop.slice(half)).toFixed(3)}`);
+      console.log('    仮説: 市場が極端に強気なとき、モデルは言い切らないぶん得をする。');
+      console.log('    まだ仮説。件数を増やして同じ向きが続くかを見る。');
     }
   }
 
