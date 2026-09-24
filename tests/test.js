@@ -395,6 +395,9 @@ console.log('\n=== S. オッズを入れて期待値で買い目を選ぶ ===');
   w.setOdds(top[2].combo, (1/top[2].p*2).toFixed(1));
   w.setOdds(top[6].combo, (1/top[6].p*1.5).toFixed(1));
   // 1番目は損益分岐を下回るオッズ（＝買ってはいけない組）
+  /* 期待値での選定は既定オフになった（実測19レースで2/19・回収率59%）。
+     この節は期待値経路そのものを試すので、明示的に入にする。 */
+  d.getElementById('useEV').checked = true;
   w.setOdds(top[0].combo, (1/top[0].p*0.5).toFixed(1));
   w.generateReport();
   const picked=w.eval('state').lastPicked;
@@ -422,6 +425,7 @@ console.log('\n=== S. オッズを入れて期待値で買い目を選ぶ ===');
   w.generateReport();
   ok(w.eval('state').lastPicked.points.length===3,'基準を下げれば買える');
   d.getElementById('evMin').value='1.10';
+  d.getElementById('useEV').checked = false;
 
   // 金額配分は従来どおり予算内
   w.clearOdds();

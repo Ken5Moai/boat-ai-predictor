@@ -178,6 +178,67 @@ BOAT RACE公式から取得します。<br>
 
 <!-- ===================== STEP 1 ===================== -->
 <div class="panel" id="p1">
+<details style="margin-bottom:12px">
+<summary><b>毎日の手順（迷ったらここ）</b></summary>
+<div class="dbody">
+
+<div class="notice warn">
+<b>先に正直なところ。</b>29レース測った結果、<b>市場に勝てる根拠はまだ見つかっていません。</b>
+1着の予想の精度は市場とほぼ互角（対数スコア −0.964 対 −0.955で市場がわずかに上）、
+どの買い方も回収率100%を安定して超えていません。控除率25%があるので、
+<b>続ければ資金は減る前提</b>で使ってください。
+この手順は「当てるため」ではなく「減り方を自分で決めるため」のものです。
+</div>
+
+<div style="margin-top:10px"><b>■ 買う前（1レースあたり3〜4分）</b></div>
+<ol class="mini" style="margin:6px 0 0 18px;line-height:1.9">
+  <li><b>今日の上限とレース数を決める</b>（STEP1の資金管理）。決めたらもう触らない。</li>
+  <li>STEP1でレースを選ぶ。</li>
+  <li>STEP2に<b>登録番号を6つ</b>入れる。</li>
+  <li>STEP3の「出走表を取得」→「直前情報を取得」を押す。</li>
+  <li>STEP5に<b>風向き</b>を入れる（風速4m以上のとき。矢印は自動で読めません）。</li>
+  <li>STEP7の「3連単オッズを取得」を押す。
+      <b>「締切時オッズ」表示に変わってから</b>が正確です
+      （締切22分前だと最大63.7%ずれた実測あり）。</li>
+  <li>「予想レポート生成」→ <b>結論カードに出た買い目だけ</b>を買う。</li>
+  <li>買ったら<b>「このレースを買った」</b>を押す。使用額が積まれます。</li>
+</ol>
+
+<div style="margin-top:12px"><b>■ 買ったあと</b></div>
+<ol class="mini" style="margin:6px 0 0 18px;line-height:1.9">
+  <li>レースが終わったらSTEP8の<b>「レース結果を自動取得して記録」</b>を押す。</li>
+  <li>それだけ。的中率と回収率が自動で積み上がります。</li>
+</ol>
+
+<div style="margin-top:12px"><b>■ やってはいけないこと</b></div>
+<ul class="mini" style="margin:6px 0 0 18px;line-height:1.9">
+  <li><b>結論カード以外の買い目を足さない。</b>
+      候補の一覧は確認用です。「ついでにこれも」で点数が増えると、
+      1点あたりが薄まって当たっても負けます。</li>
+  <li><b>負けたあとに上限を上げない。</b>取り返せる根拠がありません。</li>
+  <li><b>期待値方式を使わない。</b>実測19レースで2/19・回収率59%。
+      試したどの買い方より悪い結果でした。</li>
+  <li><b>単勝を買わない。</b>モデルの1着予想は「常に1号艇」と同成績で、
+      単勝の回収率が100%を超えたことは一度もありません。</li>
+</ul>
+
+<div style="margin-top:12px"><b>■ ときどきやること</b></div>
+<ul class="mini" style="margin:6px 0 0 18px;line-height:1.9">
+  <li>STEP8の<b>「検証用に短く書き出す」</b>を押してコピーし、貼り付けて渡す。
+      レースが増えるほど、この作りが本当に使えるのかがはっきりします。</li>
+  <li>記録はこの端末にしか残りません。<b>「すべて書き出す」</b>でときどき保存を。</li>
+</ul>
+
+<div class="notice info" style="margin-top:12px">
+<b>やめどきの目安。</b>50レースを超えても回収率が100%に届かないなら、
+それはもう「運が悪い」ではなく<b>「勝てない」</b>ということです。
+そのときは、遊ぶ金額を決めて遊ぶか、やめるかの2択になります。
+いまは29レースで、まだどちらとも言えません。
+</div>
+
+</div>
+</details>
+
 <h2><span class="stepno">1</span>レース指定</h2>
 <div class="g3">
   <div><label>開催日</label><input id="raceDate" type="date"></div>
@@ -186,8 +247,32 @@ BOAT RACE公式から取得します。<br>
 </div>
 <div class="g2">
   <div><label>レース種別（自動取得・修正可）</label><input id="raceType" placeholder="一般 / 予選 など"></div>
-  <div><label>購入予算（円）</label><input id="budget" type="number" value="1000" min="100" step="100"></div>
+  <div><label>1レースの購入額（円）</label><input id="budget" type="number" value="1000" min="100" step="100" readonly
+    style="background:#20242c"></div>
 </div>
+
+<div class="card" style="border-color:#f0c040;margin-top:10px"><div class="chead">資金管理</div><div class="cbody">
+<div class="mini" style="margin-bottom:8px">
+  <b>いまのところ、勝てる買い方は見つかっていません。</b>
+  控除率25%があるので、長く続ければ資金は減る前提です。
+  ここで決められるのは「いくらまで減ってよいか」だけです。
+</div>
+<div class="g2">
+  <div><label>今日の上限（円）</label>
+    <input id="dayCap" type="number" value="5000" min="100" step="500" oninput="onBankChange()"></div>
+  <div><label>今日買うレース数</label>
+    <input id="dayRaces" type="number" value="5" min="1" max="12" step="1" oninput="onBankChange()"></div>
+</div>
+<div id="bankBox" class="notice info" style="margin-top:8px"></div>
+<div class="btnrow" style="margin-top:8px">
+  <button class="secondary" onclick="markBought()">このレースを買った（使用額に加える）</button>
+  <button class="ghost" onclick="resetDay()">今日の記録をやり直す</button>
+</div>
+<div class="mini" style="margin-top:6px">
+  1レースの購入額は「今日の上限 ÷ レース数」で決まります。<b>手で増やせません。</b>
+  負けたあとに金額を上げるのを防ぐためです。
+</div>
+</div></div>
 <div class="g2">
   <div><label>買い目の点数</label><select id="betCount">
     <option value="4">4点（絞る）</option>
@@ -412,9 +497,19 @@ BOAT RACE公式から取得します。<br>
   <div id="winOddsNote" class="mini" style="margin-top:6px"></div>
 </div>
 <div style="margin-top:10px">
-  <label>期待値がこの値以上の組だけ買う</label>
+  <label><input type="checkbox" id="useEV" onchange="renderOddsBox()"> 期待値で買い目を選ぶ（推奨しません）</label>
+  <div class="notice warn" style="margin-top:6px">
+    <b>実測19レースで 2/19・回収率59%。試したどの買い方より悪い結果です。</b>
+    期待値＝確率×オッズで、オッズのほうが確率よりずっと大きく振れるため、
+    期待値の順位はほぼオッズの順位になります。つまり
+    <b>「人気の薄い組」を選ぶのと変わりません。</b>
+    三国8Rでは、モデルが120通りで最も高い確率（13.2%）を付けた組が
+    期待値0.55で足切りされ、代わりに買った8点が全部外れました。
+    <b>既定では使いません。</b>
+  </div>
+  <label style="margin-top:8px">期待値がこの値以上の組だけ買う</label>
   <input id="evMin" inputmode="decimal" value="1.10" oninput="renderOddsBox()">
-  <div class="mini">1.00が損益分岐。ぶれを考えて少し上に置くのが無難です。</div>
+  <div class="mini">上のチェックを入れたときだけ効きます。1.00が損益分岐。</div>
 </div>
 <div id="oddsBox" class="mini" style="margin-top:8px">まだ買い目が生成されていません。</div>
 </div>
@@ -4111,6 +4206,20 @@ ${ranked.map((b,i)=>`
 
 ${(()=>{
   /* 答えはひとつだけ出す。 */
+  /* 今日の上限を使い切っていたら、買い目より先にそれを言う。 */
+  const bank = (typeof bankState === 'function') ? bankState() : null;
+  if(bank && bank.done)
+    return `<div class="card" style="border-color:#ef6262"><div class="chead">結論</div><div class="cbody">
+      <div style="font-size:19px;font-weight:700;color:#ef6262">今日はもう買いません</div>
+      <div class="mini" style="margin-top:8px">
+        今日の上限 ${bank.cap.toLocaleString()}円 のうち ${bank.used.toLocaleString()}円 を使いました
+        （${bank.races}レース）。残り ${bank.left.toLocaleString()}円 では
+        1レースぶん（${bank.per.toLocaleString()}円）に足りません。<br><br>
+        <b>ここで上限を上げないでください。</b>
+        負けたあとに賭け金を増やすのが、いちばんよくある失い方です。
+        この作りには勝てる根拠がまだ無いので、増やしても取り返せる理由がありません。<br><br>
+        予想じたいは下に出ています。<b>見るだけにして、明日また来てください。</b>
+      </div></div></div>`;
   /* 単勝は結論に出さない。上の説明のとおり、1着の予想が
      「常に1号艇」と同成績で、実測の回収率も100%を超えたことがない。 */
   const wins = [];
@@ -4516,8 +4625,85 @@ function withEV(combos){
 /* 買う組を決める。
    オッズを1つも入れていなければ、これまでどおり確率順。
    入れていれば、期待値が基準以上の組だけを期待値順に選ぶ。 */
+/* ==================================================================
+   資金管理
+   ------------------------------------------------------------------
+   19レース測っても、勝てる買い方は見つかっていない。
+   対数スコアは市場のほうがわずかに上、期待値方式は回収率59%、
+   100%を超えて見える買い方も2レースが作っているだけだった。
+   控除率25%があるので、期待値はマイナスから始まる。
+
+   つまりこの作りで本当に効くのは「いくら賭けるか」だけ。
+   ここは当てる話ではなく、減り方を決める話。
+
+   ・1レースの金額は「今日の上限 ÷ レース数」で自動。手で増やせない
+   ・使った額は端末に日付つきで残す。日が変わればリセット
+   ・上限に達したら結論カードが「今日は終わり」に変わる
+   ================================================================== */
+const BANK_KEY = 'boat-bank-v1';
+
+function todayKey(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function loadBank(){
+  try{
+    const o = JSON.parse(localStorage.getItem(BANK_KEY) || '{}');
+    if(o.day !== todayKey()) return { day:todayKey(), used:0, races:0 };
+    return { day:o.day, used:Number(o.used)||0, races:Number(o.races)||0 };
+  }catch(e){ return { day:todayKey(), used:0, races:0 }; }
+}
+function saveBank(b){
+  try{ localStorage.setItem(BANK_KEY, JSON.stringify(b)); }catch(e){}
+}
+/* 1レースの金額。上限とレース数から決まり、100円単位に切り下げる。 */
+function perRace(){
+  const cap = Number(($('dayCap')||{}).value) || 0;
+  const n   = Math.max(1, Number(($('dayRaces')||{}).value) || 1);
+  return Math.max(100, Math.floor(cap/n/100)*100);
+}
+function bankState(){
+  const b = loadBank();
+  const cap = Number(($('dayCap')||{}).value) || 0;
+  const per = perRace();
+  return { ...b, cap, per, left: Math.max(0, cap - b.used), done: (cap - b.used) < per };
+}
+function onBankChange(){
+  const st = bankState();
+  if($('budget')) $('budget').value = st.per;
+  const el = $('bankBox'); if(!el) return;
+  el.className = 'notice ' + (st.done ? 'warn' : 'info');
+  el.innerHTML = st.done
+    ? `<b>今日はここまでです。</b>上限 ${st.cap.toLocaleString()}円 のうち `+
+      `${st.used.toLocaleString()}円 を使い、残り ${st.left.toLocaleString()}円。`+
+      `1レース ${st.per.toLocaleString()}円 に足りません。<br>`+
+      `<b>明日また来てください。</b>ここで上限を上げるのが、いちばんよくある負け方です。`
+    : `1レース <b>${st.per.toLocaleString()}円</b>（上限 ${st.cap.toLocaleString()}円 ÷ ${
+        Math.max(1,Number(($('dayRaces')||{}).value)||1)}レース）<br>`+
+      `今日 ${st.races}レース購入・${st.used.toLocaleString()}円 使用。`+
+      `残り <b>${st.left.toLocaleString()}円</b>（あと${Math.floor(st.left/st.per)}レースぶん）`;
+}
+function markBought(){
+  const st = bankState();
+  if(st.done){ onBankChange(); return; }
+  const b = loadBank();
+  b.used += st.per; b.races += 1; b.day = todayKey();
+  saveBank(b); onBankChange();
+  /* すでにレポートが出ているなら、結論カードを打ち止め表示に描き直す。 */
+  if($('report') && $('report').innerHTML.trim() && !$('btnGen').disabled) generateReport();
+}
+function resetDay(){
+  if(!confirm('今日の使用額の記録を0に戻します。よろしいですか？')) return;
+  saveBank({ day:todayKey(), used:0, races:0 });
+  onBankChange();
+}
+
 function choosePoints(combos, want){
   const list = withEV(combos);
+  /* 既定は「モデルの確率が高い順」。期待値で選ぶのは実測で最も悪かったので、
+     使う場合だけチェックを入れてもらう（STEP7の説明を参照）。 */
+  if(!($('useEV') && $('useEV').checked))
+    return { points: list.slice(0, want), mode:'prob', skipped:0 };
   const known = list.filter(c=>c.ev !== null);
   if(!known.length) return { points: list.slice(0, want), mode:'prob', skipped:0 };
   const min = evMinValue();
@@ -4663,6 +4849,7 @@ function init(){
   if(typeof renderRecords === 'function') renderRecords();
   renderBoats();
   validateAll();
+  onBankChange();
   log('v16 起動しました。STEP1から順に進めてください。');
   setStatus('待機中');
 }

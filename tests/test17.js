@@ -180,8 +180,14 @@ console.log('\n=== F. 取得したオッズがそのまま期待値に使える 
   ok(ev[0].ev>1, `確率20%の1-2-3は期待値${ev[0].ev.toFixed(2)}で買い`);
   ok(ev[1].ev<1, `確率0.1%の6-5-4は期待値${ev[1].ev.toFixed(2)}で見送り`);
   ok(Math.abs(ev[0].be-5)<0.01, '損益分岐は5.0倍（確率20%の逆数）');
+  /* 期待値での選定は既定オフになったので、明示的に入にしてから試す。
+     （実測19レースで2/19・回収率59%と最も悪かったため既定から外した） */
+  ok(w.choosePoints(fake.map(f=>({...f})), 12).mode==='prob',
+     '既定では期待値を使わず確率の高い順で選ぶ');
+  d.getElementById('useEV').checked = true;
   const picked=w.choosePoints(fake.map(f=>({...f})), 12);
-  ok(picked.mode==='ev' && picked.points.length===1, '期待値で1点だけ選ばれる');
+  ok(picked.mode==='ev' && picked.points.length===1, '入にすれば期待値で1点だけ選ばれる');
+  d.getElementById('useEV').checked = false;
   state.oddsMap={};
 }
 
