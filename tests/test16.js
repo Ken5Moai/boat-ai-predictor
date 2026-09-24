@@ -94,6 +94,8 @@ console.log('\n=== E. 確率が低すぎる組は期待値が大きくても買�
     {combo:'1-4-2', p:0.055},   // 期待値1.13 → 買う
     {combo:'6-1-3', p:0.001},   // 期待値3.88 だが確率0.1% → 買わない
   ];
+  /* 期待値での選定は既定オフになったので、この節では明示的に入にする。 */
+  d.getElementById('useEV').checked = true;
   const ev=w.withEV(cands);
   ok(Math.abs(ev[3].ev-3.876)<0.01, `6-1-3 の期待値は ${ev[3].ev.toFixed(2)}（数字としては最大）`);
   const picked=w.choosePoints(cands.map(c=>({...c})), 12);
