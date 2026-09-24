@@ -2,6 +2,7 @@
 // 重みやバンドを思いつきで変えないための検証環境。
 //   使い方: node backtest.js        （index.html と同じ場所で実行）
 const fs=require('fs'),path=require('path'),{JSDOM}=require('jsdom');
+const ODDS=require('./odds.js');   /* 実オッズ120通り（あるレースだけ） */
 const HTML_PATH=path.join(__dirname,'index.html');
 const HTML=fs.readFileSync(HTML_PATH,'utf8');
 
@@ -129,6 +130,22 @@ const RACES=[
  {reg:'5329',g:'B1',nat:4.54,loc:3.15,mot:37.21,bt:32.59,st:0.16,F:1,exST:0.16,exF:null,exT:6.66,tilt:-0.5,wt:51.0,adj:1.0,entry:4,rec:[]},
  {reg:'4016',g:'B1',nat:5.50,loc:5.76,mot:26.92,bt:39.69,st:0.16,F:0,exST:0.13,exF:null,exT:6.71,tilt:0.0,wt:55.0,adj:0.0,entry:5,rec:[]},
  {reg:'5453',g:'B2',nat:2.03,loc:null,mot:39.10,bt:30.30,st:null,F:0,exST:0.07,exF:null,exT:6.63,tilt:0.0,wt:52.2,adj:0.0,entry:6,rec:[]}]},
+// 三国5R（2026-09-24 5日目）: A1の茅原（全国7.47/当地8.60/当地2連率90%）が
+// 6枠から3コースまで前づけ。市場も6号艇を本命（51.5%）にした。
+// 1・2号艇は展示でF。6号艇の展示STは .25 で最も遅い。
+// 結果 6-4-2 はモデル27番目。期待値で買った4番手が 6-4-1 で、3着だけ違った。
+// このレースの実オッズは、枠順の目安との順位相関が -0.21 で検算を弾いた。
+// モデルの確率と突き合わせると 0.86 で通る（v16.26 で物差しを2つにした）。
+{name:'三国5R 一般',jcd:'10',rno:5,date:'2026-09-24',result:'6-4-2',pop:33,pay:8750,
+ pays:{tan:140, ni:1270, nifuku:1300, sanfuku:2230},
+ wind:null,ws:2,wave:2,temp:24,wtemp:23,
+ B:[
+ {reg:'4004',g:'B1',nat:4.81,loc:5.00,mot:36.92,bt:36.43,st:0.18,F:0,exST:0.08,exF:'F',exT:6.72,tilt:0.0,wt:52.1,entry:1,rec:[]},
+ {reg:'4112',g:'A2',nat:5.70,loc:5.85,mot:22.41,bt:39.34,st:0.17,F:1,exST:0.02,exF:'F',exT:6.75,tilt:-0.5,wt:53.7,entry:2,parts:'リング2',rec:[]},
+ {reg:'5143',g:'B1',nat:3.92,loc:3.40,mot:34.40,bt:42.61,st:0.19,F:0,exST:0.13,exF:null,exT:6.67,tilt:-0.5,wt:53.7,entry:4,rec:[]},
+ {reg:'4894',g:'B1',nat:4.64,loc:null,mot:32.80,bt:35.34,st:0.19,F:0,exST:0.13,exF:null,exT:6.71,tilt:-0.5,wt:52.0,entry:5,rec:[]},
+ {reg:'5009',g:'A2',nat:5.17,loc:5.09,mot:25.00,bt:41.23,st:0.16,F:1,exST:0.08,exF:null,exT:6.75,tilt:-0.5,wt:54.7,entry:6,rec:[]},
+ {reg:'4418',g:'A1',nat:7.47,loc:8.60,mot:35.51,bt:35.04,st:0.13,F:0,exST:0.25,exF:null,exT:6.67,tilt:-0.5,wt:52.7,entry:3,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -176,7 +193,9 @@ function runWith(weightPatch, bandPatch, opt){
     const sorted=[...state.boats].sort((a,b)=>b.score-a.score);
     const rec={name:R.name, result:R.result, pop:R.pop, pay:R.pay, pays:R.pays, rank,
                gap: Math.round((sorted[0].score-sorted[1].score)*10)/10,
-               probs:combos.map(c=>c.p)};
+               probs:combos.map(c=>c.p),
+               /* probs は確率の高い順。組番と対応させるにはこちらを使う。 */
+               probOf:Object.fromEntries(combos.map(c=>[c.combo,c.p]))};
     if(opt.detail){
       rec.order=[...state.boats].sort((a,b)=>b.score-a.score).map(b=>`${b.lane}(${b.score.toFixed(1)})`);
       rec.head=combos[0].combo.split('-')[0];
@@ -188,6 +207,11 @@ function runWith(weightPatch, bandPatch, opt){
   }
   return out;
 }
+
+const allCombos = (()=>{ const o=[];
+  for(let a=1;a<=6;a++) for(let b=1;b<=6;b++){ if(b===a) continue;
+    for(let c=1;c<=6;c++){ if(c===a||c===b) continue; o.push(`${a}-${b}-${c}`); } }
+  return o; })();
 
 function summarize(res){
   const r=res.map(x=>x.rank);
@@ -353,6 +377,38 @@ if(require.main===module){
     console.log('\n  ※ 当たった組のオッズしか分からないので、これは「当たったレースだけ」の集計。');
     console.log('     買った全点での本当の回収率は、アプリのSTEP8に払戻を入れて');
     console.log('     「期待値ごとの回収率」の表で確かめること。');
+  }
+
+  console.log('\n=== 市場と食い違ったレースは儲かるのか ===');
+  {
+    const withOdds = base.filter(x=>ODDS[x.name]);
+    if(withOdds.length){
+      console.log('  1着の確率をモデルと市場で比べ、いちばん離れた艇の差（pt）を出す。');
+      console.log('  「市場が見落としている情報をモデルが見ている」なら、差の大きいレースが儲かるはず。\n');
+      console.log('  レース          最大の差  その艇  モデル  市場   実際  期待値で買った結果');
+      for(const x of withOdds){
+        const O = ODDS[x.name];
+        const win = Number(x.result.split('-')[0]);
+        let top = null;
+        for(let a=1;a<=6;a++){
+          const mk = Object.keys(O).filter(k=>k[0]===String(a)).reduce((s2,k)=>s2+0.75/O[k],0);
+          const mp = allCombos.reduce((s2,k)=>s2 + (k[0]===String(a) ? x.probOf[k] : 0), 0);
+          const d = Math.abs(mp-mk);
+          if(!top || d>top.d) top = { a, d, mp, mk };
+        }
+        /* 期待値1.10以上・確率2%以上で買っていたら、いくらになったか */
+        const picks = allCombos.map(k=>({k, p:x.probOf[k], o:O[k], ev:x.probOf[k]*O[k]}))
+          .filter(c=>c.p>=0.02 && c.ev>=1.10).sort((a,b)=>b.ev-a.ev).slice(0,12);
+        const hit = picks.find(c=>c.k===x.result);
+        const spend = picks.length ? 1200 : 0;
+        const back = hit ? x.pay/100*(Math.floor(1200/picks.length/100)*100) : 0;
+        console.log(`  ${x.name.padEnd(12)} ${top.d>=0 ? (top.d*100).toFixed(1).padStart(5) : ''}pt  ${top.a}号艇  `+
+          `${(top.mp*100).toFixed(1).padStart(5)}% ${(top.mk*100).toFixed(1).padStart(5)}%  ${win}号艇  `+
+          `${picks.length}点 ${hit?'的中':'不的中'} ${String(back-spend).padStart(6)}円`);
+      }
+      console.log('\n  ※ 差が大きくても、賭けているのが2着3着の並びなら当たらない。');
+      console.log('     モデルが市場より正しかったレース（三国3R）でも、買った点は全部外れている。');
+    }
   }
 
   console.log('\n=== 手書き補正の点検 ===');
