@@ -133,5 +133,38 @@ console.log('\n=== F. 検証の進み具合が見える ===');
   w.localStorage.setItem('boatai_records_v1','[]');
 }
 
+console.log('\n=== G. 検証用に短く書き出せる ===');
+{
+  const rec={ id:'2026-09-24_10_6', date:'2026-09-24', jcd:'10', rno:6, venueName:'三国',
+    picks:[{combo:'1-2-3',amount:100,p:0.1}],
+    modelWin:{1:.188,2:.256,3:.169,4:.183,5:.069,6:.136},
+    market:{1:.512,2:.097,3:.074,4:.187,5:.078,6:.054},
+    ranking: new Array(120).fill('1-2-3').join(','),
+    result:{combo:'2-4-1', first:2, second:4, third:1, payout:12340} };
+  w.localStorage.setItem('boatai_records_v1', JSON.stringify([rec]));
+  w.exportVerification();
+  const t=d.getElementById('recordIO').value;
+  ok(t.split('\n').length===1, '1レース1行で書き出す');
+  ok(t.includes('三国6R'),'レースが分かる');
+  ok(t.includes('model 18.8 25.6 16.9 18.3 6.9 13.6'),`モデルの1着確率が並ぶ: ${t.slice(0,60)}`);
+  ok(t.includes('market 51.2 9.7 7.4 18.7 7.8 5.4'),'市場の1着確率が並ぶ');
+  ok(t.includes('2-4-1 ¥12340'),'結果と払戻が入る');
+  ok(!t.includes(rec.ranking),'120通りの評価順は入れない（長くなるため）');
+  ok(t.length < 200, `短い（${t.length}文字）`);
+  /* 結果がまだなら「結果まち」と出す */
+  w.localStorage.setItem('boatai_records_v1', JSON.stringify([{...rec, result:null}]));
+  w.exportVerification();
+  ok(d.getElementById('recordIO').value.includes('結果まち'),'結果がまだなら結果まちと出す');
+  /* オッズが無い記録は市場を「-」で出す */
+  w.localStorage.setItem('boatai_records_v1', JSON.stringify([{...rec, market:null}]));
+  w.exportVerification();
+  ok(d.getElementById('recordIO').value.includes('market - - - - - -'),'オッズが無ければ市場は空で出す');
+  /* 検証に使える記録が無ければ、その旨を出す */
+  w.localStorage.setItem('boatai_records_v1', JSON.stringify([{id:'x', date:'2026-09-24', rno:1, picks:[]}]));
+  w.exportVerification();
+  ok(d.getElementById('recordIONotice').textContent.includes('検証に使える記録がありません'),'使える記録が無ければそう言う');
+  w.localStorage.setItem('boatai_records_v1','[]');
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
