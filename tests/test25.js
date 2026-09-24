@@ -90,5 +90,27 @@ console.log('\n注記の文言は1か所にまとまっている');
   ok(note.every(n=>rec.includes(n)), '成績表にも全部入る');
 }
 
+console.log('\nX用の短い版は140字に収まる');
+{
+  d.getElementById('venue').value='19';
+  d.getElementById('raceNo').value='5';
+  const mkPts=n=>Array.from({length:n},(_,i)=>({combo:`1-2-${i%4+3}`}));
+  for(const n of [6,10,12]){
+    const pts=mkPts(n);
+    const t=w.buildPostShort(pts, pts.map(()=>100));
+    ok(w.xLen(t)<=140, `${n}点なら ${w.xLen(t)}字で収まる`);
+  }
+  const t6=w.buildPostShort(mkPts(6), mkPts(6).map(()=>100));
+  ok(/下関5R/.test(t6), 'レースが分かる');
+  ok(/全レース記録・選別なし/.test(t6), '選別なしの注記が残る');
+  ok(/控除率25%/.test(t6) && /保証はありません/.test(t6), '控除率と無保証の注記が残る');
+  ok(/通算/.test(t6), '通算成績が入る');
+}
+
+console.log('\n字数の数え方（全角2・半角1）');
+ok(w.xLen('あいう')===3, '全角3文字は3字');
+ok(w.xLen('abcdef')===3, '半角6文字は3字ぶん');
+ok(w.xLen('')===0, '空なら0');
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
