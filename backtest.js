@@ -4,8 +4,18 @@
 const fs=require('fs'),path=require('path'),{JSDOM}=require('jsdom');
 const ODDS=require('./odds.js');   /* 実オッズ120通り（あるレースだけ） */
 const PENDING=require('./pending.js'); /* まだ結果の出ていないレース */
+
 const HTML_PATH=path.join(__dirname,'index.html');
 const HTML=fs.readFileSync(HTML_PATH,'utf8');
+/* 競艇場ごとの公表イン率（1コース1着率）。index.html の VENUES から読む。
+   17レースの勝率よりずっと確かな物差しとして、採点の校正に使う。 */
+const VENUE_IN_RATE = (()=>{
+  const out = {};
+  const src = HTML;
+  const re = /'(\d{2})':\{name:'[^']+',\s*water:'[^']+',\s*inRate:(\d+)/g;
+  let m; while((m = re.exec(src))) out[m[1]] = Number(m[2]);
+  return out;
+})();
 
 // ---- 実際に走ったレース（結果つき） ----
 // rec は [進入コース, ST, 着順] の並び。新しい順ではなく出走表の並び（古い→新しい）。
@@ -223,6 +233,29 @@ const RACES=[
  {reg:'4675',g:'A2',nat:5.69,loc:6.60,mot:12.04,bt:34.68,st:0.14,F:0,exST:0.11,exF:null,exT:6.85,tilt:-0.5,wt:51.0,adj:1.0,entry:4,rec:[[3,.12,3]]},
  {reg:'4150',g:'A2',nat:5.94,loc:5.89,mot:33.07,bt:32.84,st:0.15,F:0,exST:0.29,exF:null,exT:6.81,tilt:0.0,wt:55.9,entry:5,rec:[[2,.15,3]]},
  {reg:'5465',g:'B2',nat:1.07,loc:1.11,mot:34.53,bt:33.08,st:null,F:1,exST:0.04,exF:null,exT:6.89,tilt:-0.5,wt:55.4,entry:6,rec:[[6,.25,6]]}]},
+// 三国10R 準優勝戦: 1号艇の逃げ。市場が正しかった。
+// モデルは4号艇（58歳A1・丸尾義孝）を28.8%、市場は9.3%。4号艇は3着。
+// 1号艇はモデル44.6%・市場61.8%で、来たのは1号艇。
+// 「枠より実績を取るモデル」と「枠を取る市場」の正面衝突で、市場の勝ち。
+// モデルは結果の組を6番目に置いていた（12点なら当たるが4.3%・期待値0.40）。
+// オッズ9.5倍 → 払戻¥950、人気順も公式の「2番人気」と一致（5例目）。
+//
+// 展示STと本番ST（5・6号艇は展示Fなので比較対象外）
+//   枠     1     2     3     4
+//   展示  .01   .11   .01   .05
+//   本番  .06   .06   .04   .13
+// 三国9Rでは6艇すべて本番のほうが速かったが、ここでは逆向きが3艇。
+// 「展示より本番が速い」は一般則ではなさそう。1レースで決めなくてよかった。
+{name:'三国10R 準優勝戦',jcd:'10',rno:10,date:'2026-09-24',result:'1-3-4',pop:2,pay:950,pays:{tan:110, ni:390, nifuku:270, sanfuku:500},
+ actualST:{1:.06,2:.06,3:.04,4:.13,5:.17,6:.17},
+ wind:null,ws:3,wave:3,temp:24,wtemp:24,
+ B:[
+ {reg:'5167',g:'B1',nat:5.38,loc:4.56,mot:29.10,bt:30.53,st:0.16,F:0,exST:0.01,exF:null,exT:6.80,tilt:-0.5,wt:52.0,entry:1,rec:[[5,.19,4]]},
+ {reg:'5009',g:'A2',nat:5.17,loc:5.09,mot:25.00,bt:41.23,st:0.16,F:1,exST:0.11,exF:null,exT:6.83,tilt:-0.5,wt:54.7,entry:2,rec:[[6,.14,5]]},
+ {reg:'5352',g:'B1',nat:5.40,loc:2.50,mot:23.53,bt:31.34,st:0.16,F:0,exST:0.01,exF:null,exT:6.83,tilt:-0.5,wt:53.0,entry:3,rec:[[4,.10,2]]},
+ {reg:'3333',g:'A1',nat:6.56,loc:6.67,mot:35.61,bt:18.75,st:0.15,F:0,exST:0.05,exF:null,exT:6.83,tilt:-0.5,wt:52.1,entry:4,rec:[[1,.17,1]]},
+ {reg:'5344',g:'B1',nat:5.34,loc:2.47,mot:27.91,bt:32.80,st:0.15,F:1,exST:0.12,exF:'F',exT:6.80,tilt:-0.5,wt:52.0,entry:5,rec:[[1,.08,1]]},
+ {reg:'4004',g:'B1',nat:4.81,loc:5.00,mot:36.92,bt:36.43,st:0.18,F:0,exST:0.05,exF:'F',exT:6.81,tilt:-0.5,wt:52.1,entry:6,rec:[[1,.17,4]]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -501,6 +534,102 @@ if(require.main===module){
                   ` ただし${rows.length}件では偶然の幅のほうが大きい。`);
       console.log('  10件そろうまで、この数字を根拠に賭け方を変えないこと。');
     }
+  }
+
+  console.log('\n=== モデルは枠ごとに確率を付けすぎ／付けなさすぎていないか ===');
+  console.log('  1着の対数スコアで市場に負けているが、どこで負けているのかは別の話。');
+  console.log('  枠ごとに「モデルが平均で何%と言ったか」と「実際に何%勝ったか」を並べる。');
+  console.log('  オッズの有無に関係なく全レースが使えるので、いちばん件数が多い物差し。\n');
+  {
+    const n = base.length;
+    const said = {1:0,2:0,3:0,4:0,5:0,6:0}, won = {1:0,2:0,3:0,4:0,5:0,6:0};
+    for(const x of base){
+      const R = RACES.find(r=>r.name===x.name);
+      const w = Number(R.result.split('-')[0]);
+      won[w]++;
+      for(let a=1;a<=6;a++)
+        said[a] += Object.keys(x.probOf).filter(k=>k[0]===String(a))
+                         .reduce((t,k)=>t + x.probOf[k], 0);
+    }
+    console.log('  枠   モデルの平均   実際に勝った   差');
+    for(let a=1;a<=6;a++){
+      const m = said[a]/n, r = won[a]/n, d = (m-r)*100;
+      console.log(`  ${a}    ${(m*100).toFixed(1).padStart(6)}%   `+
+        `${(r*100).toFixed(1).padStart(6)}% (${won[a]}/${n})   ${d>=0?'+':''}${d.toFixed(1)}pt`);
+    }
+    /* ここでの比較相手は「この17レースの実績」ではなく、競艇場の公表イン率。
+       17レースの勝率はぶれが大きすぎて、真の値の代わりにならない。
+       イン率は何千レースもの集計なので、そちらのほうがはるかに確かな物差し。 */
+    const m1 = said[1]/n, r1 = won[1]/n;
+    const rates = [...new Set(base.map(x=>{
+      const R = RACES.find(r=>r.name===x.name);
+      return (typeof VENUE_IN_RATE === 'object' && VENUE_IN_RATE[R.jcd]) || null;
+    }).filter(Boolean))];
+    const inRate = rates.length ? rates.reduce((a,c)=>a+c,0)/rates.length/100 : 0.55;
+    const binomAtLeast = (k,nn,p)=>{ let t=0;
+      const C=(nn,r)=>{ let v=1; for(let i=0;i<r;i++) v=v*(nn-i)/(i+1); return v; };
+      for(let i=k;i<=nn;i++) t += C(nn,i)*Math.pow(p,i)*Math.pow(1-p,nn-i); return t; };
+    const pAtLeast = binomAtLeast(won[1], n, inRate);
+    console.log(`\n  1号艇: モデルの平均 ${(m1*100).toFixed(1)}%  /  `+
+                `この${n}レースの実績 ${(r1*100).toFixed(1)}%  /  `+
+                `競艇場の公表イン率 ${(inRate*100).toFixed(0)}%`);
+    console.log(`  実績${won[1]}/${n}が公表イン率から出る確率は ${(pAtLeast*100).toFixed(0)}%。`+
+      (pAtLeast > 0.05
+        ? ' 珍しくないので、この実績を真の値と思ってはいけない。'
+        : ' さすがに偏っている。'));
+    if(m1 < inRate - 0.05){
+      console.log(`  **ただしモデルの${(m1*100).toFixed(1)}%は、公表イン率${(inRate*100).toFixed(0)}%も下回っている。**`);
+      console.log('  イン率は何千レースもの集計なので、こちらとのズレは件数のせいにできない。');
+      console.log('  モデルは1号艇を構造的に低く見ている可能性がある。');
+    } else if(m1 > inRate + 0.05){
+      console.log(`  モデルの${(m1*100).toFixed(1)}%は公表イン率を上回っている。`);
+    } else {
+      console.log('  モデルの平均は公表イン率とおおむね合っている。');
+    }
+    console.log('  ※ 重みをいじる前に、まず「どこまでなら重みで動くのか」を下で測る。');
+  }
+
+  console.log('\n=== 1号艇の低さは、重みをいじれば直るのか ===');
+  console.log('  「直すべきか」の前に「直せるのか」を見る。');
+  console.log('  枠の重み(W.lane)と、確率の広がりを決める温度(TEMPERATURE)を動かして、');
+  console.log('  モデルの1号艇平均が公表イン率に近づくか、そのとき順位の成績が落ちないかを測る。\n');
+  {
+    const n = base.length;
+    const lane1 = res => res.reduce((t,x)=>t + Object.keys(x.probOf)
+      .filter(k=>k[0]==='1').reduce((u,k)=>u + x.probOf[k], 0), 0) / res.length;
+    const logScore = res => {
+      const rows = [];
+      for(const x of res){
+        const R = RACES.find(r=>r.name===x.name);
+        const map = ODDS[R.name];
+        if(!map || Object.keys(map).length !== 120) continue;
+        const w = Number(R.result.split('-')[0]);
+        const md = Object.keys(x.probOf).filter(k=>k[0]===String(w))
+                         .reduce((t,k)=>t + x.probOf[k], 0);
+        rows.push(md);
+      }
+      return rows.length ? rows.reduce((t,v)=>t + Math.log(Math.max(v,1e-6)), 0)/rows.length : NaN;
+    };
+    const show = (label, res) => {
+      const st = summarize(res);
+      console.log(`  ${label.padEnd(26)}1号艇 ${(lane1(res)*100).toFixed(1).padStart(5)}%  `+
+        `対数 ${logScore(res).toFixed(3)}  平均順位 ${st.avg.toFixed(1)}  12点 ${st.in12}/${st.n}`);
+    };
+    console.log('  設定                        モデルの1号艇  1着の対数  3連単の順位');
+    show('いまのまま', base);
+    /* 温度を下げると確率の差が開く（自信を強める）。枠の重みは動かさない。 */
+    for(const t of [10, 9, 8, 7]){
+      const patched = HTML.replace('const TEMPERATURE = 11;', `const TEMPERATURE = ${t};`);
+      if(patched === HTML){ console.log('  TEMPERATUREの箇所が見つからない'); break; }
+      show(`温度 ${t}（11→${t}）`, runWith({},null,{html:patched}));
+    }
+    /* 枠の重みを増やす。増やしたぶんは全国勝率から取る（合計を変えない）。 */
+    for(const add2 of [0.04, 0.08, 0.12]){
+      show(`枠の重み +${add2.toFixed(2)}`, runWith({lane:0.14+add2, national:0.11-add2}));
+    }
+    console.log('\n  対数スコアは市場が -0.965。ここを超えられる設定があるかを見る。');
+    console.log('  ※ どれかが良く見えても、まだ変えない。17レースでは選んだ時点で');
+    console.log('     その17レースに合わせただけになる。次の10レースでも同じ向きなら考える。');
   }
 
   console.log('\n=== 展示STは本番STを言い当てているか ===');
