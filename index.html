@@ -399,6 +399,16 @@ BOAT RACE公式から取得します。<br>
   <button class="ghost" onclick="openOfficialPage('odds3t')" style="margin-top:6px">公式のオッズ画面を開く</button>
 </div>
 <div style="margin-top:10px">
+  <div class="mini" style="margin-bottom:6px">
+    <b style="color:#3ecf74">単勝オッズ（6つだけ）</b>— 実測11レースで<b>1着の的中は8/11（73%）</b>。
+    モデルの強みは「誰が勝つか」にあり、3連単はその強みを
+    「2着3着の並び」という弱いところに薄めてしまいます。
+    ここに6つ入れるだけで、強みをそのまま買う形になります。
+  </div>
+  <div id="winOddsRow" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  <div id="winOddsNote" class="mini" style="margin-top:6px"></div>
+</div>
+<div style="margin-top:10px">
   <label>期待値がこの値以上の組だけ買う</label>
   <input id="evMin" inputmode="decimal" value="1.10" oninput="renderOddsBox()">
   <div class="mini">1.00が損益分岐。ぶれを考えて少し上に置くのが無難です。</div>
@@ -545,6 +555,8 @@ const state = {
   busy:false,         /* 同時に複数の取得を走らせない（重なるとタイムアウトを誘発する） */
   /* 組番 → オッズ。買い目の並びが変わっても対応が崩れないよう、番号ではなく組番で持つ。 */
   oddsMap: {},
+  /* 単勝オッズ。艇番 → 倍率。3連単と控除率が違う（単勝20% / 3連単25%）。 */
+  winOddsMap: {},
   lastCombos: null, lastPicked: null
 };
 /* lane(1-6) から艇を取る。配列位置に依存しない安全なアクセサ */
@@ -3868,17 +3880,43 @@ ${ranked.map((b,i)=>`
   <div class="scen" style="border-color:#ef6262"><b>荒れシナリオ</b>${esc(sc.rough)}</div>
 </div></div>
 
-<div class="card" style="border-color:#f0c040"><div class="chead">結論</div><div class="cbody">
-  ${points.length===0
-    ? `<div style="font-size:19px;font-weight:700;color:#ef6262">見送り</div>
-       <div class="mini" style="margin-top:6px">買う価値のある組がありません。このレースは買わないでください。</div>`
-    : `<div style="font-size:19px;font-weight:700;color:#3ecf74">この${points.length}点だけを買う（合計 ${amounts.reduce((a,c)=>a+c,0).toLocaleString()}円）</div>
-       <div style="margin-top:8px;font-size:17px;letter-spacing:.04em">${points.map(p=>p.combo).join('　')}</div>
+${(()=>{
+  /* 答えはひとつだけ出す。
+     単勝に買える艇があれば、そちらを優先する。
+     実測11レースで1着の的中は8/11（73%）に対し、3連単は12点で7/11、
+     しかも利益は2レースが持っているだけ。モデルの強みは1着にあり、
+     3連単はその強みを2着3着の並びという弱いところに薄めてしまう。 */
+  const wins = (typeof winEVList==='function' ? winEVList() : [])
+    .filter(x=>x.ev!==null && x.ev>=evMinValue()).sort((a,b)=>b.ev-a.ev);
+  const box = (color,title,body)=>
+    `<div class="card" style="border-color:${color}"><div class="chead">結論</div><div class="cbody">
+       <div style="font-size:19px;font-weight:700;color:${color}">${title}</div>${body}</div></div>`;
+  if(wins.length){
+    const bet = Math.max(100, Math.floor(budget/wins.length/100)*100);
+    return box('#3ecf74', `単勝 ${wins.map(x=>x.lane+'号艇').join('・')} を買う（各${bet.toLocaleString()}円）`,
+      `<div class="mini" style="margin-top:8px">
+         ${wins.map(x=>`${x.lane}号艇 ${esc(x.name||'')}：モデル${(x.p*100).toFixed(1)}% / 市場${(x.market*100).toFixed(1)}% / ${x.odds}倍 → <b>期待値 ${x.ev.toFixed(2)}</b>`).join('<br>')}
+       </div>
        <div class="mini" style="margin-top:8px">
-         下に出ている候補の一覧は<b>確認のための表</b>です。そこから足さないでください。
-         点数を増やすと、割に合わない値段の組を買うことになります。
-       </div>`}
-</div></div>
+         3連単は買いません。実測11レースで<b>1着の的中は8/11（73%）</b>ですが、
+         3連単は12点買っても7/11で、しかも利益は2レースが持っているだけでした。
+         毎回「1着は当たるが2着3着の並びで外す」という同じ負け方をしています。
+         強いところだけを買います。
+       </div>`);
+  }
+  if(points.length===0)
+    return box('#ef6262','見送り',
+      `<div class="mini" style="margin-top:6px">買う価値のある買い目がありません。このレースは買わないでください。</div>`);
+  return box('#f0c040',
+    `3連単 この${points.length}点だけを買う（合計 ${amounts.reduce((a,c)=>a+c,0).toLocaleString()}円）`,
+    `<div style="margin-top:8px;font-size:17px;letter-spacing:.04em">${points.map(p=>p.combo).join('　')}</div>
+     <div class="mini" style="margin-top:8px">
+       下に出ている候補の一覧は<b>確認のための表</b>です。そこから足さないでください。
+       点数を増やすと、割に合わない値段の組を買うことになります。<br>
+       ${Object.keys(state.winOddsMap).length ? '' :
+         '<b style="color:#3ecf74">単勝オッズを6つ入れると、より強いところだけを買えます。</b>'}
+     </div>`);
+})()}
 
 <div class="card"><div class="chead">買い目（3連単 ${points.length}点）<span class="mini">${
   picked.mode==='ev' ? `期待値${evMinValue().toFixed(2)}以上で選定` : '確率の高い順'} ／ 予算 ${budget.toLocaleString()}円</span></div><div class="cbody">
@@ -3951,6 +3989,7 @@ ${picked.mode!=='ev' ? `<div class="mini" style="margin-top:8px;color:#f0c040">
     });
   }
   renderOddsBox();
+  renderWinOdds();
   $('report').scrollIntoView({behavior:'smooth', block:'start'});
   setStatus('予想レポートを生成しました');
 }
@@ -4218,6 +4257,59 @@ function choosePoints(combos, want){
   const good  = solid.filter(c=>c.ev >= min).sort((a,b)=>b.ev-a.ev);
   return { points: good.slice(0, want), mode:'ev',
            skipped: solid.length - good.length, checked: known.length, thin };
+}
+
+/* ==================================================================
+   単勝（1着だけを買う）
+   ------------------------------------------------------------------
+   実測11レースで、モデルが1位に評価した艇が実際に1着になったのは 8/11（73%）。
+   一方、3連単は12点買っても7/11で、利益は2レースが持っているだけだった。
+   さらに毎回同じ形で外れる。
+
+     三国1R  1着はモデル81.6%/市場80.6%と一致。外したのは2着3着の内訳
+     三国3R  1着の評価は1・2・3号艇すべて市場より正しかった。
+             それでも結果2-4-3はモデル65番目。4号艇の2着が読めていない
+
+   モデルの強みは「誰が勝つか」にあり、3連単はその強みを
+   「2着3着の並び」という弱いところに薄めてしまう。
+   単勝なら強みをそのまま買える。入力も6つで済む。
+   単勝の控除率は20%なので、市場の推定確率は 0.80 ÷ オッズ。   */
+const WIN_TAKEOUT = 0.80;
+function setWinOdds(lane, v){
+  const n = toNum(v);
+  if(n !== null && n > 1) state.winOddsMap[lane] = n;
+  else delete state.winOddsMap[lane];
+  renderWinOdds();
+}
+/* 単勝の期待値。winProb は scoreAll のあとに入っている。 */
+function winEVList(){
+  return state.boats.map(b=>{
+    const o = state.winOddsMap[b.lane];
+    return { lane:b.lane, name:V(b.name), p:b.winProb||0, odds:o||null,
+             ev: o ? (b.winProb||0)*o : null,
+             be: (b.winProb>0) ? 1/b.winProb : Infinity,
+             market: o ? WIN_TAKEOUT/o : null };
+  });
+}
+function renderWinOdds(){
+  const row = $('winOddsRow'); if(!row) return;
+  const list = winEVList();
+  row.innerHTML = list.map(x=>`
+    <div style="flex:1 1 30%;min-width:98px">
+      <div class="mini">${x.lane}号艇 ${esc(x.name||'')}</div>
+      <input style="width:100%" inputmode="decimal" value="${x.odds||''}" placeholder="倍"
+        oninput="setWinOdds(${x.lane},this.value)">
+      <div class="mini" style="text-align:right">${
+        x.p>0 ? `<span style="color:#f0c040">${x.be.toFixed(1)}倍</span>以上` : '—'}${
+        x.ev!=null ? ` / <b style="color:${x.ev>=evMinValue()?'#3ecf74':'#ef6262'}">${x.ev.toFixed(2)}</b>` : ''}</div>
+    </div>`).join('');
+  const known = list.filter(x=>x.ev!==null);
+  const good  = known.filter(x=>x.ev>=evMinValue());
+  $('winOddsNote').innerHTML = !known.length
+    ? '各艇の「○倍以上」が損益分岐です。公式の単勝オッズと見比べて、超えているものを入れてください。'
+    : `${known.length}艇ぶん入力済み。期待値${evMinValue().toFixed(2)}以上は`+
+      `<b style="color:${good.length?'#3ecf74':'#ef6262'}">${good.length}艇</b>。`+
+      (good.length ? '' : '<br>いまのところ単勝で買う価値のある艇はありません。');
 }
 
 const ODDS_CANDIDATES = 30;   /* オッズを見てもらう候補の数 */
