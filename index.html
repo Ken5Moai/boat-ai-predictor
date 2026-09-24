@@ -3873,7 +3873,8 @@ ${ranked.map((b,i)=>`
 ${points.length===0 ? `
   <div class="notice warn" style="margin:0">
     <b>買う価値のある組がありませんでした。見送りを推めます。</b><br>
-    オッズを入れた${picked.checked||0}件のうち、期待値が${evMinValue().toFixed(2)}以上の組は0件でした。
+    オッズを入れた${picked.checked||0}件のうち、期待値が${evMinValue().toFixed(2)}以上で、
+    かつモデルの確率が${(EV_MIN_P*100).toFixed(0)}%以上ある組は0件でした。
     確率が高くてもオッズが見合っていない＝当たっても損になる形です。<br>
     基準を下げて買うこともできますが、その場合は下の候補表の期待値を見て自分で決めてください。
   </div>` : ''}
@@ -3896,6 +3897,9 @@ ${picked.mode!=='ev' ? `<div class="mini" style="margin-top:8px;color:#f0c040">
   実測9レースでは、<b>当たっても負けた6レースはすべてこの判断で外せた組</b>でした。
 </div>` : `<div class="mini" style="margin-top:8px">
   オッズを入れた${picked.checked}件のうち、期待値が基準に届かなかった${picked.skipped}件は外しています。
+  ${picked.thin ? `<br>モデルの確率が${(EV_MIN_P*100).toFixed(0)}%未満の${picked.thin}件は、
+    期待値が大きく出ても買いません。確率が小さいほど推定の誤差が何倍にも広がり、
+    「万舟に見えるお買い得」はたいていモデル側の間違いだからです。` : ''}
 </div>`}
 <hr>
 <div class="mini">
@@ -4150,6 +4154,30 @@ async function fetchOdds(){
    オッズは組番をキーにして持つ。買い目の並びが変わっても対応が崩れない。
    ================================================================== */
 const EV_DEFAULT_MIN = 1.10;
+/* 期待値で買うときの、モデルの確率の下限。
+   ------------------------------------------------------------------
+   3連単の確率は3つの条件付き確率の掛け算なので、値が小さくなるほど
+   誤差が何倍にも広がる。1着の判断が少しずれるだけで、0.1%は0.02%にも0.5%にもなる。
+   一方オッズは3000倍・4000倍と大きいので、わずかな過大評価が
+   そのまま「期待値3.8」のような数字に化ける。
+
+   三国1Rの実オッズで確かめたところ、はっきり出た。
+
+     モデルの確率 4.0%以上   10組中 2組が期待値1.10以上
+     モデルの確率 2.0〜4.0%   3組中 2組
+     モデルの確率 0.5〜1.0%  11組中 9組 ← 帯の8割が「買い」になる
+     モデルの確率 0.5%未満   89組中 8組
+
+   帯の8割が買いに見えるのは、掘り出し物が多いのではなく
+   モデルがその帯の確率を系統的に過大評価しているということ。
+   同じレースで、1着の確率はモデル81.6% / 市場80.6%とほぼ一致していた。
+   つまりモデルは「誰が勝つか」は市場並みに当てられるが、
+   「2着3着の細かい並び」の確率までは解像度が無い。
+
+   なので、確率がこの下限を下回る組は期待値で買う対象から外す。
+   実記録の9レースで黒字だった3組の確率は 3.1% / 4.6% / 10.9% で、
+   この下限に1つもかからない。                                     */
+const EV_MIN_P = 0.02;
 function evMinValue(){
   const n = toNum($('evMin') ? $('evMin').value : null);
   return (n !== null && n > 0) ? n : EV_DEFAULT_MIN;
@@ -4172,9 +4200,12 @@ function choosePoints(combos, want){
   const known = list.filter(c=>c.ev !== null);
   if(!known.length) return { points: list.slice(0, want), mode:'prob', skipped:0 };
   const min = evMinValue();
-  const good = known.filter(c=>c.ev >= min).sort((a,b)=>b.ev-a.ev);
+  /* 確率が低すぎる組は、期待値がいくら大きく出ても信用しない（上の説明を参照） */
+  const solid = known.filter(c=>c.p >= EV_MIN_P);
+  const thin  = known.length - solid.length;
+  const good  = solid.filter(c=>c.ev >= min).sort((a,b)=>b.ev-a.ev);
   return { points: good.slice(0, want), mode:'ev',
-           skipped: known.length - good.length, checked: known.length };
+           skipped: solid.length - good.length, checked: known.length, thin };
 }
 
 const ODDS_CANDIDATES = 30;   /* オッズを見てもらう候補の数 */
@@ -4185,7 +4216,9 @@ function renderOddsBox(){
   const min = evMinValue();
   const list = withEV(lb.slice(0, ODDS_CANDIDATES));
   const rows = list.map((c,i)=>{
+    const thin = c.p < EV_MIN_P;
     const evTxt = c.ev===null ? '—'
+      : thin ? `<span style="color:#7f8eaa">${c.ev.toFixed(2)}<br><small>確率が低く信用しない</small></span>`
       : `<b style="color:${c.ev>=min?'#3ecf74':'#ef6262'}">${c.ev.toFixed(2)}</b>`;
     return `<tr>
       <td class="mini">${i+1}</td>
@@ -4198,7 +4231,7 @@ function renderOddsBox(){
     </tr>`;
   }).join('');
   const known = list.filter(c=>c.ev!==null).length;
-  const good  = list.filter(c=>c.ev!==null && c.ev>=min).length;
+  const good  = list.filter(c=>c.ev!==null && c.ev>=min && c.p>=EV_MIN_P).length;
   box.innerHTML =
     `<div class="mini" style="margin-bottom:6px">
        「${'○'}倍以上」を超えているオッズだけ入れてください。${known}件入力済み／

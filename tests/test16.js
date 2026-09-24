@@ -84,5 +84,30 @@ console.log('\n=== D. 2つの損益分岐を説明しているか ===');
   ok(amt[0]>=amt[amt.length-1],`確率が高い組ほど厚い (${amt[0]}円 ≧ ${amt[amt.length-1]}円)`);
 }
 
+console.log('\n=== E. 確率が低すぎる組は期待値が大きくても買わない ===');
+{
+  const state=w.eval('state');
+  state.oddsMap = { '1-2-3': 5.0, '6-1-3': 3876, '1-4-2': 20.6, '1-2-5': 4.9 };
+  const cands=[
+    {combo:'1-2-3', p:0.082},   // 期待値0.41 → 基準割れ
+    {combo:'1-2-5', p:0.115},   // 期待値0.56 → 基準割れ
+    {combo:'1-4-2', p:0.055},   // 期待値1.13 → 買う
+    {combo:'6-1-3', p:0.001},   // 期待値3.88 だが確率0.1% → 買わない
+  ];
+  const ev=w.withEV(cands);
+  ok(Math.abs(ev[3].ev-3.876)<0.01, `6-1-3 の期待値は ${ev[3].ev.toFixed(2)}（数字としては最大）`);
+  const picked=w.choosePoints(cands.map(c=>({...c})), 12);
+  ok(picked.points.length===1, `買うのは1点だけ (${picked.points.length}点)`);
+  ok(picked.points[0].combo==='1-4-2', `買うのは 1-4-2（${picked.points[0].combo}）`);
+  ok(!picked.points.some(p=>p.combo==='6-1-3'), '期待値3.88でも確率0.1%の組は買わない');
+  ok(picked.thin===1, `確率が低すぎて外した件数を数える (${picked.thin}件)`);
+  // 下限は2%。ちょうど2%なら買う対象に入る
+  const edge=w.choosePoints([{combo:'6-1-3', p:0.02}], 12);
+  ok(edge.points.length===1, '確率2.0%ちょうどなら対象に入る');
+  const under=w.choosePoints([{combo:'6-1-3', p:0.0199}], 12);
+  ok(under.points.length===0 && under.thin===1, '2.0%未満なら外す');
+  state.oddsMap={};
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
