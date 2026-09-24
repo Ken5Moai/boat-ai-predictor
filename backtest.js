@@ -380,6 +380,28 @@ const RACES=[
  {reg:'3692',g:'B1',nat:5.20,loc:5.14,mot:38.20,bt:32.97,st:0.18,F:0,exST:0.07,exF:null,exT:6.85,tilt:0.0,wt:52.0,entry:4,rec:[]},
  {reg:'3581',g:'B1',nat:5.45,loc:5.38,mot:27.17,bt:26.09,st:0.20,F:0,exST:0.18,exF:null,exT:6.91,tilt:0.0,wt:52.2,entry:5,rec:[]},
  {reg:'3746',g:'A2',nat:5.75,loc:5.06,mot:44.68,bt:40.45,st:0.18,F:0,exST:0.23,exF:null,exT:6.86,tilt:0.0,wt:53.1,entry:6,rec:[]}]},
+// 徳山2R 狙いトク特選（9/24）: 着順が 1-2-3-4-5-6 と枠順どおりに決まった珍しいレース。
+// 3連単 1-2-3 ¥620（2番人気）。オッズ6.2倍 → 払戻¥620、人気順も一致（11例目）。
+//
+// モデルは4号艇 堀本和也を19.1%、市場は6.7%。4号艇は4着で市場が正しかった。
+// 堀本は当地8.44・当地2連率72.22%・当地3連率94.44%・平均ST0.12 と
+// 紙の上では6艇で断然だった。モデルはそこを買い、市場は買わなかった。
+// 「実績を取るモデル」が外れた典型例。
+//   モデルの1号艇 56.4% / 市場 71.6% / 結果 1号艇の逃げ → ここも市場が正しい
+//
+// 期待値方式は7点買って不的中（通算 2/14）。
+// 前の2レースで2連続的中していたが、続かなかった。
+{name:'徳山2R 狙いトク特選',jcd:'18',rno:2,date:'2026-09-24',result:'1-2-3',pop:2,pay:620,
+ pays:{tan:130, ni:350, nifuku:290, sanfuku:310},
+ actualST:{1:.18,2:.15,3:.13,4:.14,5:.19,6:.17},
+ wind:null,ws:1,wave:1,temp:24,wtemp:26,
+ B:[
+ {reg:'4163',g:'A2',nat:5.65,loc:4.72,mot:28.93,bt:28.16,st:0.16,F:0,exST:0.13,exF:null,exT:6.77,tilt:0.0,wt:52.4,entry:1,rec:[]},
+ {reg:'4090',g:'B2',nat:6.08,loc:6.18,mot:20.59,bt:38.14,st:0.16,F:0,exST:0.12,exF:null,exT:6.87,tilt:0.0,wt:54.5,entry:2,rec:[]},
+ {reg:'4136',g:'A1',nat:6.15,loc:null,mot:19.23,bt:35.48,st:0.17,F:0,exST:0.12,exF:null,exT:6.89,tilt:-0.5,wt:51.5,adj:0.5,entry:3,rec:[]},
+ {reg:'4732',g:'A2',nat:7.09,loc:8.44,mot:41.12,bt:32.56,st:0.12,F:0,exST:0.14,exF:null,exT:6.92,tilt:0.0,wt:54.6,entry:4,rec:[]},
+ {reg:'4173',g:'B1',nat:5.31,loc:4.80,mot:24.73,bt:33.33,st:0.17,F:0,exST:0.01,exF:'F',exT:6.91,tilt:0.0,wt:56.2,entry:5,rec:[]},
+ {reg:'5027',g:'B1',nat:4.38,loc:5.53,mot:28.87,bt:33.33,st:0.20,F:0,exST:0.06,exF:null,exT:6.87,tilt:0.0,wt:53.2,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -457,6 +479,26 @@ const line=s=>`[${s.ranks.map(x=>String(x).padStart(3)).join(' ')}]  平均${s.a
   `6点${s.in6}/${s.n} 12点${s.in12}/${s.n} 20点${s.in20}/${s.n}`;
 
 if(require.main===module){
+  /* オッズはレース名で引いている。名前が重なると別のレースのオッズを拾う。
+     同じ場の同じレース番号が別の日に出てくるので、実際に起きかけた（徳山2Rが2つ）。
+     気づけない種類の取り違えなので、毎回ここで止める。 */
+  {
+    const seen = new Map();
+    for(const r of RACES) seen.set(r.name, (seen.get(r.name)||0)+1);
+    const dup = [...seen].filter(([,v])=>v>1).map(([k])=>k);
+    if(dup.length){
+      console.error(`★ レース名が重複しています: ${dup.join(', ')}`);
+      console.error('  オッズはレース名で引いているので、別のレースの数字を拾います。');
+      console.error('  名前を分けてください（例「徳山2R 特選」「徳山2R 狙いトク特選」）。');
+      process.exit(1);
+    }
+    const missing = Object.keys(ODDS).filter(k=>!RACES.some(r=>r.name===k));
+    if(missing.length){
+      console.error(`★ odds.js にあるのに RACES に無いレース: ${missing.join(', ')}`);
+      console.error('  名前の書き間違いか、RACES への移し忘れです。');
+      process.exit(1);
+    }
+  }
   console.log(`検証レース ${RACES.length}件\n`);
   console.log('=== 現在の重み ===');
   const base=runWith({},null,{detail:true});
@@ -546,7 +588,7 @@ if(require.main===module){
       const restRet = restInv + (tot - topSum);
       console.log(`    ${t.label}`);
       console.log(`      いちばん効いた2レース: `+
-        top.map(x=>`${x.name.replace(/ .*/,'')} ${x.d>=0?'+':''}${x.d.toLocaleString()}円`).join(' / '));
+        top.map(x=>`${x.name} ${x.d>=0?'+':''}${x.d.toLocaleString()}円`).join(' / '));
       console.log(`      その2つを除いた残り${rows.length-2}レースの回収率 `+
         `${(restRet/restInv*100).toFixed(0)}%`);
       let win=0; const N=20000;
@@ -702,7 +744,7 @@ if(require.main===module){
       const top2 = sortedByAbs.slice(0,2);
       const top2sum = top2.reduce((t,x)=>t+x.d,0);
       console.log(`\n    合計 ${tot>=0?'+':''}${tot.toFixed(3)}`);
-      console.log(`    いちばん大きい2レース（${top2.map(x=>x.name.replace(/ .*/,'')).join(' / ')}）だけで `+
+      console.log(`    いちばん大きい2レース（${top2.map(x=>x.name).join(' / ')}）だけで `+
                   `${top2sum>=0?'+':''}${top2sum.toFixed(3)}`);
       console.log(`    その2つを除いた残り${diff.length-2}レースの合計 `+
                   `${tot-top2sum>=0?'+':''}${(tot-top2sum).toFixed(3)}`);
