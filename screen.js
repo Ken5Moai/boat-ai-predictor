@@ -91,6 +91,53 @@ console.log('  実測ではモデルの平均順位23.4番目。荒れるが、�
 console.log('  配当は大きい（中央値¥3,110）が、狙って取れた実績はない。');
 console.log(`  ${avoid.map(r=>r.rno+'R').join(' ')}`);
 
+/* ここまでの成績。採用するかどうかはここで決まる。 */
+{
+  const SC = require('./screened.js');
+  const calc = a => {
+    const inv = a.length*600;
+    const ret = a.reduce((s,r)=>s+(r.rank<=6?r.pay:0), 0);
+    const hit = a.filter(r=>r.rank<=6).length;
+    const dd  = a.map(r=>({ n:r.name, v:(r.rank<=6?r.pay:0)-600 }));
+    const top2 = [...dd].sort((x,y)=>y.v-x.v).slice(0,2).reduce((s,x)=>s+x.v,0);
+    const restInv = (a.length-2)*600;
+    const restRet = restInv + (dd.reduce((s,x)=>s+x.v,0) - top2);
+    let win=0; const N=20000;
+    for(let i=0;i<N;i++){ let t=0;
+      for(let j=0;j<dd.length;j++) t += dd[Math.floor(Math.random()*dd.length)].v;
+      if(t>0) win++; }
+    return { n:a.length, hit, inv, ret, rate:ret/inv*100,
+             rest: restInv>0 ? restRet/restInv*100 : null, boot:win/N*100 };
+  };
+  const all = calc(SC);
+  const full = calc(SC.filter(r=>r.info==='full'));
+  console.log('\n══════════ 「外にA級なし」の成績 ══════════');
+  console.log(`  全${all.n}レース  的中${all.hit}/${all.n}  `+
+              `投資¥${all.inv.toLocaleString()} 払戻¥${all.ret.toLocaleString()}  `+
+              `回収率 ${all.rate.toFixed(0)}%`);
+  console.log(`    いちばん効いた2レースを除くと ${all.rest!=null?all.rest.toFixed(0)+'%':'—'}`);
+  console.log(`    引き直してプラスになる割合   ${all.boot.toFixed(0)}%`);
+  const nCard = SC.filter(r=>r.info==='card').length;
+  if(nCard){
+    console.log(`\n  うち${nCard}レースは出走予定表だけで採点（展示が入っていない）。`);
+    console.log(`  直前情報まで入れた${full.n}レースだけなら  回収率 ${full.rate.toFixed(0)}%  `+
+                `除くと ${full.rest!=null?full.rest.toFixed(0)+'%':'—'}  引き直し ${full.boot.toFixed(0)}%`);
+    console.log('  採点に使った情報が違うので、本来は混ぜられない。両方見ること。');
+  }
+
+  /* 先に決めた判定。ここは結果を見てから変えない。 */
+  console.log('\n  【判定】20レースで次の3つをすべて満たせば採用、1つでも欠ければ捨てる');
+  /* 判定と表示の桁を揃える。0桁だと「100なのに×」が起きて読めない。 */
+  const ok = (label, v, need) =>
+    console.log(`    ${v!=null && v>=need ? '○' : '×'} ${label}  `+
+                `いま ${v!=null?v.toFixed(1):'—'}（必要 ${need}）`);
+  ok('回収率100%以上          ', all.rate, 100);
+  ok('上位2件を除いても100%以上', all.rest, 100);
+  ok('引き直し95%以上         ', all.boot, 95);
+  const left = Math.max(0, 20 - all.n);
+  console.log(left ? `    → あと${left}レース` : '    → 20レースに到達。上の3つで判定する');
+}
+
 console.log('\n※ 当日は必ずアプリで採点し直すこと。');
 console.log('  展示タイム・展示ST・チルト・オッズが入ると点は変わる。');
 console.log('  ここでの採点は、どのレースを見に行くかを決めるためだけのもの。');
