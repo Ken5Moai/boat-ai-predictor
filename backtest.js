@@ -426,6 +426,23 @@ const RACES=[
  {reg:'5206',g:'B1',nat:4.62,loc:4.22,mot:29.47,bt:28.90,st:0.15,F:1,exST:0.04,exF:null,exT:6.86,tilt:0.0,wt:52.4,entry:4,rec:[]},
  {reg:'4839',g:'A2',nat:6.18,loc:5.32,mot:43.68,bt:30.84,st:0.15,F:0,exST:0.05,exF:null,exT:6.94,tilt:0.0,wt:52.0,entry:5,rec:[]},
  {reg:'4375',g:'A2',nat:5.75,loc:5.47,mot:22.11,bt:34.27,st:0.17,F:0,exST:0.02,exF:null,exT:6.91,tilt:0.0,wt:52.0,entry:6,rec:[]}]},
+// 徳山4R ガチトク予選（9/24）: 2番人気決着（1-4-2 ¥720）。
+// モデルはこの組を120通り中2番目に置いていた（確率8.17%）。
+// オッズ7.2倍 → 払戻¥720、人気順も公式の「2番人気」と一致（13例目）。
+//   モデルの1号艇 56.0% / 市場 71.5% / 結果 1号艇の逃げ
+// 2号艇 片橋幸貴（A1）が展示でF。モデルはそれでも21.5%と高く見たが3着。
+// これで徳山が10レースになり、場ごとの比較に足る数になった。
+{name:'徳山4R ガチトク予選',jcd:'18',rno:4,date:'2026-09-24',result:'1-4-2',pop:2,pay:720,
+ pays:{tan:130, ni:490, nifuku:520, sanfuku:190},
+ actualST:{1:.13,2:.09,3:.15,4:.08,5:.11,6:.09},
+ wind:null,ws:2,wave:2,temp:26,wtemp:26,
+ B:[
+ {reg:'4079',g:'A2',nat:5.95,loc:5.94,mot:29.11,bt:31.75,st:0.19,F:0,exST:0.15,exF:null,exT:6.83,tilt:0.0,wt:52.0,entry:1,rec:[]},
+ {reg:'4677',g:'A1',nat:6.09,loc:5.82,mot:25.58,bt:29.38,st:0.15,F:0,exST:0.05,exF:'F',exT:6.88,tilt:0.0,wt:52.2,entry:2,rec:[]},
+ {reg:'5124',g:'B1',nat:4.31,loc:4.76,mot:21.11,bt:35.21,st:0.17,F:0,exST:0.06,exF:null,exT:6.96,tilt:-0.5,wt:53.5,entry:3,rec:[]},
+ {reg:'4158',g:'B1',nat:4.50,loc:5.33,mot:38.39,bt:32.67,st:0.16,F:0,exST:0.03,exF:null,exT:6.89,tilt:-0.5,wt:55.3,entry:4,rec:[]},
+ {reg:'3772',g:'B1',nat:4.87,loc:4.95,mot:37.07,bt:32.04,st:0.16,F:0,exST:0.13,exF:null,exT:6.92,tilt:0.0,wt:53.1,entry:5,rec:[]},
+ {reg:'3804',g:'B1',nat:5.03,loc:4.52,mot:30.00,bt:26.96,st:0.16,F:0,exST:0.01,exF:'F',exT:6.89,tilt:-0.5,wt:52.0,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -833,7 +850,7 @@ if(require.main===module){
       return (typeof VENUE_IN_RATE === 'object' && VENUE_IN_RATE[R.jcd]) || null;
     }).filter(Boolean))];
     const inRate = rates.length ? rates.reduce((a,c)=>a+c,0)/rates.length/100 : 0.55;
-    const binomAtLeast = (k,nn,p)=>{ let t=0;
+    var binomAtLeast = (k,nn,p)=>{ let t=0;
       const C=(nn,r)=>{ let v=1; for(let i=0;i<r;i++) v=v*(nn-i)/(i+1); return v; };
       for(let i=k;i<=nn;i++) t += C(nn,i)*Math.pow(p,i)*Math.pow(1-p,nn-i); return t; };
     const pAtLeast = binomAtLeast(won[1], n, inRate);
@@ -875,6 +892,28 @@ if(require.main===module){
         `${(o.said/o.n*100).toFixed(1).padStart(7)}%  ${(o.won/o.n*100).toFixed(1).padStart(9)}%`+
         ` (${o.won}/${o.n})  ${ir!=null?ir+'%':'?'}`);
     }
+    /* 場ごとの勝率は件数が少なすぎて真の値にならない。
+       比べる相手は必ず公表イン率のほう。
+       場をまたいで同じ向きのズレが出るなら、それはモデルの性質。 */
+    console.log('\n  公表イン率との差（モデル − 公表）。場をまたいで同じ向きか');
+    let wsum = 0, wn = 0;
+    for(const [v,o] of Object.entries(byV).sort((a,b)=>b[1].n-a[1].n)){
+      const ir = VENUE_IN_RATE[v]; if(ir==null) continue;
+      const d = (o.said/o.n - ir/100) * 100;
+      const pk = binomAtLeast(o.won, o.n, ir/100);
+      console.log(`    ${String(o.name).padEnd(8)}${String(o.n).padStart(3)}件  `+
+        `差 ${d>=0?'+':''}${d.toFixed(1)}pt   `+
+        `実績${o.won}/${o.n}が公表イン率から出る確率 ${(pk*100).toFixed(0)}%`);
+      wsum += d*o.n; wn += o.n;
+    }
+    if(wn){
+      const avg = wsum/wn;
+      console.log(`    件数で重みづけした平均の差  ${avg>=0?'+':''}${avg.toFixed(1)}pt`);
+      console.log(Math.abs(avg) < 6
+        ? '    → 場をまたいで数pt。小さいので、これだけで重みを動かす理由にはならない。'
+        : '    → 場をまたいで同じ向きに大きくズレている。重みを見直す材料になる。');
+    }
+
     const big = Object.values(byV).sort((a,b)=>b.n-a.n)[0];
     if(big && big.n / n > 0.5){
       console.log(`    → ${big.name}だけで全体の${(big.n/n*100).toFixed(0)}%。`+
