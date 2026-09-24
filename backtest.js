@@ -309,6 +309,31 @@ const RACES=[
  {reg:'4363',g:'A2',nat:5.47,loc:6.25,mot:30.47,bt:25.74,st:0.17,F:0,exST:0.10,exF:null,exT:6.77,tilt:-0.5,wt:52.6,entry:4,rec:[[3,.03,3]]},
  {reg:'4210',g:'A2',nat:5.41,loc:5.95,mot:29.37,bt:35.25,st:0.17,F:0,exST:0.16,exF:null,exT:6.84,tilt:-0.5,wt:52.1,entry:5,rec:[[1,.10,3]]},
  {reg:'3641',g:'A1',nat:6.09,loc:2.00,mot:34.38,bt:32.09,st:0.17,F:0,exST:0.09,exF:null,exT:6.92,tilt:-0.5,wt:52.2,entry:6,rec:[[1,.21,4]]}]},
+// 下関1R: 三国以外で実オッズを取った最初のレース。
+// これまでの10レースは全部三国だったので「三国だから」と「モデルだから」が
+// 分けられていなかった。ここからそれを分け始める。
+// 下関の公表イン率は58%（三国は54%）。
+//
+// 結果は1号艇の逃げ（1-2-4 ¥1,230・3番人気）。
+// モデルはこの組を120通り中2番目に置いていた。確率6.33%・期待値0.78。
+// 順位としてはこれまでで最良に近いが、期待値は1.00に届かない。
+// オッズ12.3倍 → 払戻¥1,230、人気順も公式の「3番人気」と一致（8例目）。
+//
+// 初日なので今節成績は無し（rec は全艇空）。
+// 2号艇 多羅尾達之は当地の記録なし（表示の0.00は「無い」の意味なので null）。
+// 5号艇 山川波乙は47.3kgで6艇中いちばん軽い。展示STも.01で最速だったが
+// 本番は.26で最も遅く、5着。展示STがまた当てにならなかった例。
+{name:'下関1R 予選',jcd:'19',rno:1,date:'2026-09-24',result:'1-2-4',pop:3,pay:1230,
+ pays:{tan:170, ni:510, nifuku:310, sanfuku:380},
+ actualST:{1:.19,2:.18,3:.19,4:.24,5:.26,6:.26},
+ wind:null,ws:1,wave:1,temp:26,wtemp:26,
+ B:[
+ {reg:'4396',g:'B1',nat:4.68,loc:5.63,mot:38.37,bt:27.59,st:0.20,F:0,exST:0.07,exF:null,exT:6.83,tilt:-0.5,wt:52.9,entry:1,rec:[]},
+ {reg:'3859',g:'B1',nat:3.99,loc:null,mot:38.82,bt:23.08,st:0.15,F:0,exST:0.18,exF:null,exT:6.86,tilt:0.0,wt:51.0,adj:1.0,entry:2,rec:[]},
+ {reg:'3710',g:'B1',nat:4.60,loc:5.38,mot:34.44,bt:33.70,st:0.18,F:0,exST:0.19,exF:null,exT:6.87,tilt:0.0,wt:54.3,entry:3,rec:[]},
+ {reg:'3284',g:'B1',nat:5.71,loc:5.81,mot:39.58,bt:28.26,st:0.18,F:1,exST:0.08,exF:null,exT:6.92,tilt:0.0,wt:52.4,entry:4,rec:[]},
+ {reg:'5078',g:'B1',nat:4.46,loc:4.33,mot:29.70,bt:47.25,st:0.19,F:1,exST:0.01,exF:null,exT:6.87,tilt:0.0,wt:47.3,entry:5,rec:[]},
+ {reg:'4750',g:'B1',nat:5.13,loc:3.91,mot:29.17,bt:27.47,st:0.16,F:1,exST:0.06,exF:null,exT:6.79,tilt:0.0,wt:52.1,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -682,6 +707,33 @@ if(require.main===module){
       console.log('  モデルの平均は公表イン率とおおむね合っている。');
     }
     console.log('  ※ 重みをいじる前に、まず「どこまでなら重みで動くのか」を下で測る。');
+
+    /* 競艇場ごとに分ける。全部が同じ場のデータだと
+       「その場だから」なのか「モデルだから」なのかが分けられない。 */
+    const byV = {};
+    for(const x of base){
+      const R = RACES.find(r=>r.name===x.name);
+      const v = R.jcd;
+      byV[v] = byV[v] || { n:0, said:0, won:0, name:(HTML.match(new RegExp(`'${v}':\\{name:'([^']+)'`))||[])[1] || v };
+      byV[v].n++;
+      if(Number(R.result.split('-')[0]) === 1) byV[v].won++;
+      byV[v].said += Object.keys(x.probOf).filter(k=>k[0]==='1')
+                           .reduce((t,k)=>t + x.probOf[k], 0);
+    }
+    console.log('\n  競艇場ごとの1号艇（件数が偏っていないかを必ず見る）');
+    console.log('    場        件数  モデルの平均  実際に勝った  公表イン率');
+    for(const [v,o] of Object.entries(byV).sort((a,b)=>b[1].n-a[1].n)){
+      const ir = VENUE_IN_RATE[v];
+      console.log(`    ${String(o.name).padEnd(8)}${String(o.n).padStart(3)}件  `+
+        `${(o.said/o.n*100).toFixed(1).padStart(7)}%  ${(o.won/o.n*100).toFixed(1).padStart(9)}%`+
+        ` (${o.won}/${o.n})  ${ir!=null?ir+'%':'?'}`);
+    }
+    const big = Object.values(byV).sort((a,b)=>b.n-a.n)[0];
+    if(big && big.n / n > 0.5){
+      console.log(`    → ${big.name}だけで全体の${(big.n/n*100).toFixed(0)}%。`+
+                  `いまの結論は「${big.name}での結論」でしかない。`);
+      console.log('       他場のレースを足すまで、モデル全体の性質とは呼べない。');
+    }
   }
 
   console.log('\n=== 1号艇の低さは、重みをいじれば直るのか ===');
