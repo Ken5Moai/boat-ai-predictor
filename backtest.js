@@ -116,6 +116,19 @@ const RACES=[
  {reg:'3652',g:'B1',nat:3.57,loc:3.72,mot:36.62,bt:31.45,st:0.19,F:0,exST:0.11,exF:null,exT:6.73,tilt:-0.5,wt:54.4,entry:4,rec:[]},
  {reg:'4902',g:'B1',nat:4.26,loc:4.94,mot:36.96,bt:32.54,st:0.20,F:0,exST:0.02,exF:null,exT:6.65,tilt:0.0,wt:52.0,entry:5,rec:[]},
  {reg:'5465',g:'B2',nat:1.07,loc:1.11,mot:34.53,bt:33.08,st:null,F:1,exST:0.15,exF:null,exT:6.66,tilt:-0.5,wt:54.2,entry:6,rec:[]}]},
+// 三国3R（2026-09-24 5日目）: 進入は枠なり。1号艇(A1 一瀬)の展示STが .32 と断トツに遅く、
+// モデルは1着確率を48.4%まで下げた（市場は57.9%のまま）。結果その1号艇は4着。
+// モデルが市場と食い違った方向は、1・2・3号艇すべてで正しかった。
+// それでも結果 2-4-3 はモデル65番目（0.27%）で、4号艇の2着はまったく読めていない。
+// 「1着は当てられるが2着3着の並びは当てられない」がまた出た。
+{name:'三国3R 一般',jcd:'10',rno:3,date:'2026-09-24',result:'2-4-3',pop:43,pay:26460,wind:null,ws:1,wave:1,temp:24,wtemp:23,
+ B:[
+ {reg:'3641',g:'A1',nat:6.09,loc:2.00,mot:34.38,bt:32.09,st:0.17,F:0,exST:0.32,exF:null,exT:6.68,tilt:-0.5,wt:52.2,adj:0.0,entry:1,rec:[]},
+ {reg:'5090',g:'B1',nat:5.16,loc:null,mot:32.03,bt:30.43,st:0.15,F:1,exST:0.18,exF:null,exT:6.68,tilt:-0.5,wt:52.9,adj:0.0,entry:2,rec:[]},
+ {reg:'4675',g:'A2',nat:5.69,loc:6.60,mot:12.04,bt:34.68,st:0.14,F:0,exST:0.11,exF:null,exT:6.73,tilt:-0.5,wt:51.5,adj:0.5,entry:3,rec:[]},
+ {reg:'5329',g:'B1',nat:4.54,loc:3.15,mot:37.21,bt:32.59,st:0.16,F:1,exST:0.16,exF:null,exT:6.66,tilt:-0.5,wt:51.0,adj:1.0,entry:4,rec:[]},
+ {reg:'4016',g:'B1',nat:5.50,loc:5.76,mot:26.92,bt:39.69,st:0.16,F:0,exST:0.13,exF:null,exT:6.71,tilt:0.0,wt:55.0,adj:0.0,entry:5,rec:[]},
+ {reg:'5453',g:'B2',nat:2.03,loc:null,mot:39.10,bt:30.30,st:null,F:0,exST:0.07,exF:null,exT:6.63,tilt:0.0,wt:52.2,adj:0.0,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -249,6 +262,20 @@ if(require.main===module){
   console.log('\n  レース別の払戻（100円あたり）');
   PAID.forEach(r=>console.log(`    ${r.name.padEnd(12)} ${r.result}  ${String(r.pay).padStart(6)}円  `+
     `${String(r.pop||'?').padStart(2)}番人気  評価${String(r.rank).padStart(3)}番目`));
+
+  console.log('\n=== 1着だけを見た場合の成績（3連単とは別に測る） ===');
+  {
+    let hit=0, n=0; const lines=[];
+    for(const x of base){
+      const top = Number(x.order[0].split('(')[0]);
+      const win = Number(x.result.split('-')[0]);
+      n++; if(top===win) hit++;
+      lines.push(`  ${x.name.padEnd(12)} モデル1位 ${top}号艇 / 実際の1着 ${win}号艇  ${top===win?'○':'×'}`);
+    }
+    lines.forEach(l=>console.log(l));
+    console.log(`\n  1着の的中 ${hit}/${n}（${(hit/n*100).toFixed(0)}%）`);
+    console.log('  ※ 3連単で当てるより、ここが本当の実力。買い方を考えるときの土台になる。');
+  }
 
   console.log('\n=== モデルの確率 vs 市場の確率（回収率の核心） ===');
   console.log('  市場の推定確率 = 0.75 ÷ オッズ（3連単の控除率25%を戻した値）');
