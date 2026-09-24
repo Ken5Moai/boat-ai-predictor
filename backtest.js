@@ -170,6 +170,21 @@ const RACES=[
  {reg:'4441',g:'A2',nat:5.81,loc:6.92,mot:29.17,bt:31.15,st:0.14,F:0,exST:0.02,exF:null,exT:6.80,tilt:-0.5,wt:52.6,entry:4,rec:[]},
  {reg:'3965',g:'A1',nat:5.86,loc:5.81,mot:29.93,bt:39.32,st:0.17,F:1,exST:0.03,exF:null,exT:6.87,tilt:-0.5,wt:52.0,entry:5,rec:[]},
  {reg:'4357',g:'A1',nat:6.71,loc:7.88,mot:37.01,bt:33.06,st:0.18,F:0,exST:0.11,exF:null,exT:6.76,tilt:-0.5,wt:52.1,entry:6,rec:[]}]},
+// 三国7R: モデルは1号艇を40.9%、市場は56.3%と見ていた（−15.4pt）。
+// 1号艇は3着に沈み、モデルの低い評価のほうが近かった。6Rの逆。
+// ただし来たのは3号艇（モデル9.6% / 市場9.1%）で、どちらも推していない。
+// 「1号艇を下げたのが当たった」だけで、当てたわけではない。
+// オッズ73.0倍 → 払戻¥7,300 と完全一致。読み取りの正確さの裏付け（2例目）。
+// 今節成績は出走表の右ブロックを読み切れなかったため入れていない。
+{name:'三国7R 一般',jcd:'10',rno:7,date:'2026-09-24',result:'3-4-1',pop:25,pay:7300,
+ wind:null,ws:3,wave:3,temp:24,wtemp:24,
+ B:[
+ {reg:'4210',g:'A2',nat:5.41,loc:5.95,mot:29.37,bt:35.25,st:0.17,F:0,exST:0.08,exF:null,exT:6.80,tilt:0.0,wt:52.1,entry:1,rec:[]},
+ {reg:'4315',g:'B1',nat:5.23,loc:4.25,mot:26.36,bt:34.96,st:0.18,F:0,exST:0.05,exF:null,exT:6.74,tilt:-0.5,wt:52.3,entry:2,rec:[]},
+ {reg:'4016',g:'B1',nat:5.50,loc:5.76,mot:26.92,bt:39.69,st:0.16,F:0,exST:0.05,exF:null,exT:6.81,tilt:-0.5,wt:55.0,entry:3,rec:[]},
+ {reg:'4711',g:'A2',nat:5.94,loc:6.15,mot:28.68,bt:30.16,st:0.16,F:0,exST:0.11,exF:null,exT:6.73,tilt:-0.5,wt:52.0,entry:4,rec:[]},
+ {reg:'4295',g:'A1',nat:7.53,loc:6.50,mot:31.62,bt:30.08,st:0.14,F:0,exST:0.09,exF:null,exT:6.75,tilt:-0.5,wt:52.0,entry:5,rec:[]},
+ {reg:'3617',g:'B1',nat:3.63,loc:null,mot:36.43,bt:36.92,st:0.19,F:1,exST:0.09,exF:null,exT:6.78,tilt:0.0,wt:52.1,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -401,6 +416,46 @@ if(require.main===module){
     console.log('\n  ※ 当たった組のオッズしか分からないので、これは「当たったレースだけ」の集計。');
     console.log('     買った全点での本当の回収率は、アプリのSTEP8に払戻を入れて');
     console.log('     「期待値ごとの回収率」の表で確かめること。');
+  }
+
+  console.log('\n=== 1着の当て方を点数化する（モデル vs 市場） ===');
+  console.log('  「いちばん離れた艇が来たか」は1艇しか見ていない弱い物差し。');
+  console.log('  6艇ぜんぶの確率を使って、実際に来た艇にどれだけ確率を置けていたかで測る。');
+  console.log('  対数スコア = ln(来た艇に置いた確率)。0に近いほど良い。');
+  console.log('  枠順の平年値（1号艇55%…）を第3の比較相手として並べる。\n');
+  {
+    const PRIOR = {1:.55,2:.14,3:.12,4:.11,5:.06,6:.02};
+    const rows = [];
+    for(const x of base){
+      const R = RACES.find(r=>r.name===x.name);
+      const map = ODDS[R.name];
+      if(!map || Object.keys(map).length !== 120) continue;
+      const ks = Object.keys(map);
+      const md = {}, mk = {};
+      for(let a=1;a<=6;a++){
+        md[a] = ks.filter(k=>k[0]===String(a)).reduce((t,k)=>t + (x.probOf[k]||0), 0);
+        mk[a] = ks.filter(k=>k[0]===String(a)).reduce((t,k)=>t + 0.75/map[k], 0);
+      }
+      const nm = Object.values(md).reduce((a,c)=>a+c,0);
+      const nk = Object.values(mk).reduce((a,c)=>a+c,0);
+      const win = Number(R.result.split('-')[0]);
+      rows.push({ name:R.name, win,
+                  m: md[win]/nm, k: mk[win]/nk, p: PRIOR[win] });
+    }
+    if(!rows.length){ console.log('  実オッズのあるレースがまだ無い'); }
+    else {
+      console.log('  レース          1着   モデル   市場    枠順のみ');
+      rows.forEach(r=>console.log(`  ${r.name.padEnd(14)}${r.win}号艇  `+
+        `${(r.m*100).toFixed(1).padStart(5)}%  ${(r.k*100).toFixed(1).padStart(5)}%  ${(r.p*100).toFixed(1).padStart(5)}%`));
+      const ln = a => a.reduce((t,v)=>t + Math.log(Math.max(v,1e-6)), 0) / a.length;
+      const lm = ln(rows.map(r=>r.m)), lk = ln(rows.map(r=>r.k)), lp = ln(rows.map(r=>r.p));
+      console.log(`\n  対数スコア（0に近いほど良い）  モデル ${lm.toFixed(3)}  市場 ${lk.toFixed(3)}  枠順のみ ${lp.toFixed(3)}`);
+      const better = rows.filter(r=>r.m > r.k).length;
+      console.log(`  来た艇に市場より高い確率を置けた回数  ${better}/${rows.length}`);
+      console.log(`  ${lm > lk ? 'いまのところモデルのほうが上。' : 'いまのところ市場のほうが上。'}`+
+                  ` ただし${rows.length}件では偶然の幅のほうが大きい。`);
+      console.log('  10件そろうまで、この数字を根拠に賭け方を変えないこと。');
+    }
   }
 
   console.log('\n=== 市場と食い違ったレースは儲かるのか ===');
