@@ -185,6 +185,22 @@ const RACES=[
  {reg:'4711',g:'A2',nat:5.94,loc:6.15,mot:28.68,bt:30.16,st:0.16,F:0,exST:0.11,exF:null,exT:6.73,tilt:-0.5,wt:52.0,entry:4,rec:[]},
  {reg:'4295',g:'A1',nat:7.53,loc:6.50,mot:31.62,bt:30.08,st:0.14,F:0,exST:0.09,exF:null,exT:6.75,tilt:-0.5,wt:52.0,entry:5,rec:[]},
  {reg:'3617',g:'B1',nat:3.63,loc:null,mot:36.43,bt:36.92,st:0.19,F:1,exST:0.09,exF:null,exT:6.78,tilt:0.0,wt:52.1,entry:6,rec:[]}]},
+// 三国8R: モデルの1番手（1-2-5）がそのまま来た。検証で初めての1番目的中。
+// ただし市場の1番人気でもあり、4.2倍。12点均等なら¥420 < ¥1,200 で赤字。
+// 「当たったのに負ける」がいちばんはっきり出た形。
+// 食い違いは2号艇（モデル37.7% / 市場18.3%）。2号艇は2着に入り、
+// モデルが高く見たほうが近かった。
+// 風速4mだが風向きが不明なため風の補正は発動していない（未検証のまま）。
+// オッズ4.2倍 → 払戻¥420 と完全一致。読み取りの裏付け3例目。
+{name:'三国8R 一般',jcd:'10',rno:8,date:'2026-09-24',result:'1-2-5',pop:1,pay:420,
+ wind:null,ws:4,wave:4,temp:24,wtemp:24,
+ B:[
+ {reg:'5282',g:'B1',nat:5.19,loc:4.09,mot:31.85,bt:34.62,st:0.17,F:0,exST:0.05,exF:null,exT:6.83,tilt:-0.5,wt:53.0,entry:1,rec:[[3,.16,2]]},
+ {reg:'4888',g:'B1',nat:6.03,loc:5.46,mot:45.45,bt:28.13,st:0.19,F:0,exST:0.04,exF:null,exT:6.81,tilt:-0.5,wt:52.1,entry:2,rec:[[5,.13,4]]},
+ {reg:'5366',g:'B2',nat:1.42,loc:1.31,mot:26.40,bt:39.39,st:0.19,F:1,exST:0.00,exF:null,exT:6.88,tilt:-0.5,wt:53.7,entry:3,rec:[[6,.26,6]]},
+ {reg:'5190',g:'B1',nat:4.00,loc:3.97,mot:33.59,bt:41.32,st:0.18,F:1,exST:0.11,exF:null,exT:6.86,tilt:-0.5,wt:52.0,entry:4,rec:[[3,.25,3]]},
+ {reg:'5090',g:'B1',nat:5.16,loc:null,mot:32.03,bt:30.43,st:0.15,F:1,exST:0.08,exF:null,exT:6.77,tilt:-0.5,wt:52.9,entry:5,rec:[[2,.16,1]]},
+ {reg:'4197',g:'B1',nat:3.66,loc:3.97,mot:25.86,bt:37.30,st:0.19,F:0,exST:0.01,exF:'F',exT:6.84,tilt:-0.5,wt:54.6,entry:6,rec:[]}]},
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -292,6 +308,13 @@ if(require.main===module){
   console.log('  ※ 件数が少ないうちは偶然の幅が大きい。傾向を見るだけで、これで買い方を決めない。');
   const PAID = base.filter(r=>r.pay);
   const stakeTable = [];
+  /* 1点・2点は予算を使い切らない。点数を絞る側の目安として並べる。 */
+  for(const n of [1,2]){
+    let inv=0, ret=0, hits=0;
+    for(const r of PAID){ inv += 100*n;
+      if(r.rank<=n){ ret += r.pay; hits++; } }
+    stakeTable.push({label:`${n}点 100円ずつ`, inv, ret, hits});
+  }
   /* 均等買い */
   for(const n of [3,4,6,8,10,12,15]){
     const unit = Math.floor(1200/n/100)*100;
