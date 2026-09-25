@@ -140,9 +140,57 @@ if(!pick.length){
 
 const avoid=rows.filter(r=>r.outA);
 console.log(`\n■ 「外にA級あり」のレース  ${avoid.length}件`);
-console.log('  実測ではモデルの平均順位23.4番目。荒れるが、当てられていない。');
+console.log('  最初の28レースの実測ではモデルの平均順位23.4番目。荒れるが、当てられていない。');
 console.log('  配当は大きい（中央値¥3,110）が、狙って取れた実績はない。');
 console.log(`  ${avoid.map(r=>r.rno+'R').join(' ')}`);
+
+/* 避けたほうも数える。
+   ------------------------------------------------------------------
+   「外にA級あり」を避ける理由は「そちらのほうが当たらない」。
+   なら避けたほうの成績も出さないと、避ける理由が検証できない。
+   カードがある日は12レース全部をどちらかに入れる決まりにして、
+   ここで取りこぼしを検出する（一部だけ拾うと選り好みになる）。 */
+{
+  const SC=require('./screened.js');
+  const AV=SC.avoided||[];
+  const day=rows.map(r=>r.rno);
+  const inPicked=new Set(SC.filter(e=>e.date===CARD.date).map(e=>e.rno));
+  const inAvoid =new Set(AV.filter(e=>e.date===CARD.date).map(e=>e.rno));
+  const pend    =new Set((SC.pending||[]).filter(e=>e.date===CARD.date).map(e=>e.rno));
+  let bad=0;
+  for(const rno of day){
+    const r=rows.find(x=>x.rno===rno);
+    if(inPicked.has(rno)&&inAvoid.has(rno)){ console.log(`\n!! ${rno}R が両方に入っている`); bad++; }
+    if(inPicked.has(rno)&&r.outA){ console.log(`\n!! ${rno}R は外にA級ありなのに picked 側にある`); bad++; }
+    if(inAvoid.has(rno)&&!r.outA){ console.log(`\n!! ${rno}R は外にA級なしなのに avoided 側にある`); bad++; }
+  }
+  if(bad){ console.log('\n   振り分けが card.js と合っていない。直すまで数えない。'); process.exit(1); }
+
+  const rest=day.filter(rno=>!inPicked.has(rno)&&!inAvoid.has(rno)&&!pend.has(rno));
+  if(rest.length)
+    console.log(`\n  （${CARD.date} でまだ結果を入れていないレース: ${rest.map(r=>r+'R').join(' ')}）`);
+
+  if(AV.length){
+    const inv=AV.length*600;
+    const ret=AV.reduce((t,r)=>t+(r.rank<=6?r.pay:0),0);
+    const hit=AV.filter(r=>r.rank<=6).length;
+    const avgRank=AV.reduce((t,r)=>t+r.rank,0)/AV.length;
+    const P=[...AV].sort((a,b)=>a.pay-b.pay);
+    const med=P.length%2?P[(P.length-1)/2].pay:(P[P.length/2-1].pay+P[P.length/2].pay)/2;
+    console.log(`\n  避けたほうを6点で買っていたら（実測${AV.length}件・出走予定表だけの採点）`);
+    console.log(`    的中${hit}/${AV.length}  投資¥${inv.toLocaleString()} 払戻¥${ret.toLocaleString()}  `+
+                `回収率 ${(ret/inv*100).toFixed(0)}%`);
+    console.log(`    モデルの平均順位 ${avgRank.toFixed(1)}番目  配当の中央値¥${med.toLocaleString()}  `+
+                `最高¥${P[P.length-1].pay.toLocaleString()}`);
+    const big=AV.filter(r=>r.pay>=5000);
+    if(big.length){
+      console.log(`    うち¥5,000超 ${big.length}件のモデルの順位: `+
+                  big.map(r=>`${r.name.replace(/^.{2}/,'')} ${r.rank}番目(¥${r.pay.toLocaleString()})`).join(' / '));
+      console.log('    高い配当ほど順位が遠い。ここが「穴は当てられない」の中身。');
+    }
+    console.log(`    ※ ${AV.length}件しかない。避ける判断の根拠にはまだ足りない。`);
+  }
+}
 
 /* ここまでの成績。採用するかどうかはここで決まる。 */
 {
