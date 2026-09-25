@@ -7,6 +7,14 @@
      info:'card'  … 出走予定表だけで採点（前夜の状態）
    同じ「6点で何番目か」でも意味が違うので、混ぜるときは必ず断る。
 
+   fwd はもうひとつ大事な区別。
+     fwd:false … この条件を「見つけた」28レースの中にあったレース。
+                 見つけたデータで測っているので、当たって当たり前（in-sample）。
+     fwd:true  … 条件を決めたあとに、前向きに選んだレース。
+                 こちらだけが本当の検証になる。
+   最初の7件がすべて fwd:false だったことに 2026-09-25 まで気づいていなかった。
+   「7件すべて的中」はそのせい。混ぜて見てはいけない。
+
    採用の判定は node screen.js の末尾に出る。
    20レースそろった時点で3条件すべてを満たせば採用、1つでも欠ければ捨てる。
 
@@ -18,20 +26,22 @@
    以後 picks は node screen.js --emit の出力をそのまま貼る。
    ずれていれば node screen.js が終了コード1で止まる。 */
 module.exports = [
- {name:'三国1R 一般',        date:'2026-09-24', pay:510,  rank:3,  info:'full'},
- {name:'三国8R 一般',        date:'2026-09-24', pay:420,  rank:1,  info:'full'},
- {name:'徳山1R 一般',        date:'2026-09-23', pay:790,  rank:4,  info:'full'},
- {name:'徳山4R 予選',        date:'2026-09-23', pay:890,  rank:2,  info:'full'},
- {name:'徳山1R 朝トク予選',    date:'2026-09-24', pay:2490, rank:6,  info:'full'},
- {name:'徳山4R ガチトク予選',  date:'2026-09-24', pay:720,  rank:2,  info:'full'},
- {name:'下関1R 予選',        date:'2026-09-24', pay:1230, rank:2,  info:'full'},
+ {name:'三国1R 一般',        date:'2026-09-24', pay:510,  rank:3,  info:'full', fwd:false},
+ {name:'三国8R 一般',        date:'2026-09-24', pay:420,  rank:1,  info:'full', fwd:false},
+ {name:'徳山1R 一般',        date:'2026-09-23', pay:790,  rank:4,  info:'full', fwd:false},
+ {name:'徳山4R 予選',        date:'2026-09-23', pay:890,  rank:2,  info:'full', fwd:false},
+ {name:'徳山1R 朝トク予選',    date:'2026-09-24', pay:2490, rank:6,  info:'full', fwd:false},
+ {name:'徳山4R ガチトク予選',  date:'2026-09-24', pay:720,  rank:2,  info:'full', fwd:false},
+ {name:'下関1R 予選',        date:'2026-09-24', pay:1230, rank:2,  info:'full', fwd:false},
  /* ここから screen.js で前夜に選んだぶん */
- {name:'桐生6R 一般',        date:'2026-09-24', pay:2880, rank:17, info:'card', pop:9},
- {name:'桐生12R 一般特賞',    date:'2026-09-24', pay:860,  rank:1,  info:'card', pop:1},
- {name:'三国1R みくにあさイチ', date:'2026-09-25', rno:1, pay:8940, rank:5,  info:'card', pop:null,
+ {name:'桐生6R 一般',        date:'2026-09-24', pay:2880, rank:17, info:'card', fwd:true, pop:9},
+ {name:'桐生12R 一般特賞',    date:'2026-09-24', pay:860,  rank:1,  info:'card', fwd:true, pop:1},
+ {name:'三国1R みくにあさイチ', date:'2026-09-25', rno:1, pay:8940, rank:5,  info:'card', fwd:true, pop:null,
   hit:'3-1-2', picks:['1-2-3','1-3-2','1-2-5','2-1-3','3-1-2','1-2-6']},
- {name:'三国2R みくにあさガチ', date:'2026-09-25', rno:2, pay:6270, rank:18, info:'card', pop:null,
-  hit:'1-3-5', picks:['1-2-4','1-2-3','1-2-5','1-4-2','1-3-2','2-1-4']}
+ {name:'三国2R みくにあさガチ', date:'2026-09-25', rno:2, pay:6270, rank:18, info:'card', fwd:true, pop:null,
+  hit:'1-3-5', picks:['1-2-4','1-2-3','1-2-5','1-4-2','1-3-2','2-1-4']},
+ {name:'三国7R 一般',          date:'2026-09-25', rno:7, pay:4270, rank:25, info:'card', fwd:true, pop:17,
+  hit:'3-1-4', picks:['1-2-3','2-1-3','1-3-2','1-2-4','1-2-5','2-1-4']}
 ];
 
 /* 避けたほう（外にA級あり）の記録。
@@ -43,19 +53,16 @@ module.exports = [
    picked（外にA級なし）か avoided（外にA級あり）のどちらかに入れる。
    一部だけ拾うと、都合のいいレースだけ数えることになる。 */
 module.exports.avoided = [
- {name:'三国3R みくにあさズバ', date:'2026-09-25', rno:3,  pay:1020,  rank:5,  info:'card', hit:'1-3-4'},
- {name:'三国4R みくにあさ推し', date:'2026-09-25', rno:4,  pay:4200,  rank:15, info:'card', hit:'1-6-5'},
- {name:'三国5R 一般',          date:'2026-09-25', rno:5,  pay:1590,  rank:3,  info:'card', hit:'1-2-4'},
- {name:'三国6R 一般',          date:'2026-09-25', rno:6,  pay:27110, rank:74, info:'card', hit:'6-2-4'}
+ {name:'三国3R みくにあさズバ', date:'2026-09-25', rno:3,  pay:1020,  rank:5,  info:'card', fwd:true, hit:'1-3-4'},
+ {name:'三国4R みくにあさ推し', date:'2026-09-25', rno:4,  pay:4200,  rank:15, info:'card', fwd:true, hit:'1-6-5'},
+ {name:'三国5R 一般',          date:'2026-09-25', rno:5,  pay:1590,  rank:3,  info:'card', fwd:true, hit:'1-2-4'},
+ {name:'三国6R 一般',          date:'2026-09-25', rno:6,  pay:27110, rank:74, info:'card', fwd:true, hit:'6-2-4'}
 ];
 
 /* 結果待ち。レース前に選んだことを残すための欄。
    ここに書いた時点でコミットされるので、あとから差し替えられない。
    結果が出たら pay と rank を入れて下の配列へ移す。 */
 module.exports.pending = [
- {name:'三国7R 一般', date:'2026-09-25', rno:7, close:'11:19',
-  picks:['1-2-3','2-1-3','1-3-2','1-2-4','1-2-5','2-1-4'], p1:0.46,
-  group:'picked', note:''},
  {name:'三国8R 一般', date:'2026-09-25', rno:8, close:'11:50',
   picks:['1-2-3','1-2-5','1-3-2','1-5-2','2-1-3','1-2-6'], p1:0.61,
   group:'avoided', note:''},
