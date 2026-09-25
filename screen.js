@@ -109,11 +109,20 @@ for(const R of CARD.races){
 
 if(process.argv.includes('--emit')){
   console.log('\n── screened.js の pending に貼る ──');
-  for(const r of rows.filter(x=>!x.outA)){
+  /* 買うレースを「外にA級なし」に限らないときのために、全レース出す。
+     group は結果が出たあとに picked / avoided のどちらへ移すかの目印。
+     どちらに入れるかは card.js の級別で決まるので、人が選び直せない。 */
+  const SCe=require('./screened.js');
+  const done=new Set([...SCe, ...(SCe.avoided||[])]
+    .filter(e=>e.date===CARD.date).map(e=>e.rno));
+  /* もう結果を入れたレースは出さない。上書きして記録を消さないため。 */
+  const only=(process.argv.includes('--nolimit') ? rows : rows.filter(x=>!x.outA))
+    .filter(r=>!done.has(r.rno));
+  for(const r of only){
     const R=CARD.races.find(x=>x.rno===r.rno);
     console.log(` {name:'${CARD.venue}${r.rno}R ${R.type}', date:'${CARD.date}', rno:${r.rno}, close:'${r.close}',`);
     console.log(`  picks:[${r.top6.map(c=>`'${c}'`).join(',')}], p1:${r.p1[1].toFixed(2)},`);
-    console.log(`  note:''},`);
+    console.log(`  group:'${r.outA?'avoided':'picked'}', note:''},`);
   }
   console.log('──────────────────────────────');
 }
