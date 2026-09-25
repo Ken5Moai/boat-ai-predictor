@@ -53,6 +53,7 @@ function scoreRace(R){
     head: sorted[0].lane,
     gap: sorted[0].score - sorted[1].score,
     p1, top3: combos.slice(0,3).map(c=>c.combo),
+    top6: combos.slice(0,6).map(c=>String(c.combo)),
     topP: combos[0].p
   };
 }
@@ -72,6 +73,51 @@ for(const R of CARD.races){
     `${s.gap.toFixed(1).padStart(4)}  ${s.top3.join(' ')}`);
 }
 
+/* 前夜に書いた買い目が、モデルの出力と本当に一致しているか毎回照合する。
+   ------------------------------------------------------------------
+   2026-09-25、三国1R・2Rの買い目を screened.js に手で書き写すときに間違えた。
+   1Rは6点のうち3点が違っていて、しかも正解の 3-1-2（¥8,940）が
+   モデルの5番目に入っていたのに、手書きのリストからは抜け落ちていた。
+   つまり「モデルは当てていたが、私が渡したリストでは外れ」という状態。
+   原因は手で書き写す工程そのものなので、ここで機械に照合させる。
+   ズレていたら止める（黙って通すと、どちらが本当の成績か分からなくなる）。
+
+   node screen.js --emit  で貼り付け用の pending ブロックを出す。
+   以後、買い目は手で書かない。 */
+{
+  const SC=require('./screened.js');
+  const pend=(SC.pending||[]).filter(e=>e.date===CARD.date);
+  let bad=0;
+  for(const e of pend){
+    if(e.rno==null){ console.log(`\n!! ${e.name} に rno が無い。照合できない`); bad++; continue; }
+    const r=rows.find(x=>x.rno===e.rno);
+    if(!r){ console.log(`\n!! ${e.name} は card.js に無い`); bad++; continue; }
+    const a=(e.picks||[]).join(' '), b=r.top6.join(' ');
+    if(a!==b){
+      console.log(`\n!! ${e.name} の買い目がモデルの出力と違う`);
+      console.log(`     書いてある : ${a}`);
+      console.log(`     モデル     : ${b}`);
+      bad++;
+    }
+  }
+  if(bad){
+    console.log('\n   買い目を手で直さず、node screen.js --emit の出力をそのまま貼ること。');
+    process.exit(1);
+  }
+  if(pend.length) console.log(`\n（結果待ち${pend.length}件の買い目はモデルの出力と一致している）`);
+}
+
+if(process.argv.includes('--emit')){
+  console.log('\n── screened.js の pending に貼る ──');
+  for(const r of rows.filter(x=>!x.outA)){
+    const R=CARD.races.find(x=>x.rno===r.rno);
+    console.log(` {name:'${CARD.venue}${r.rno}R ${R.type}', date:'${CARD.date}', rno:${r.rno}, close:'${r.close}',`);
+    console.log(`  picks:[${r.top6.map(c=>`'${c}'`).join(',')}], p1:${r.p1[1].toFixed(2)},`);
+    console.log(`  note:''},`);
+  }
+  console.log('──────────────────────────────');
+}
+
 const pick=rows.filter(r=>!r.outA);
 console.log(`\n■ 「外にA級なし」のレース  ${pick.length}件`);
 if(!pick.length){
@@ -81,7 +127,14 @@ if(!pick.length){
   for(const r of pick)
     console.log(`  ${String(r.rno).padStart(2)}R ${r.close}  1号艇${(r.p1[1]*100).toFixed(0)}%  `+
                 `上位3 ${r.top3.join(' ')}`);
-  console.log('\n  ※ 配当は安い（実測の中央値¥790）。当たっても大きくはならない。');
+  /* 配当の実測。最初の28レースの集計では中央値¥790で「安い」と書いていたが、
+     2026-09-25の三国で1R ¥8,940・2R ¥6,270 が出て前提が崩れた。
+     ここは書き換わる値なので、そのつど screened.js から数え直して出す。 */
+  const P=require('./screened.js').map(r=>r.pay).sort((a,b)=>a-b);
+  const med=P.length%2 ? P[(P.length-1)/2] : (P[P.length/2-1]+P[P.length/2])/2;
+  console.log(`\n  ※ このグループの配当 実測${P.length}件  中央値¥${med.toLocaleString()}  `+
+              `最高¥${P[P.length-1].toLocaleString()}  最低¥${P[0].toLocaleString()}`);
+  console.log('  ※ 当初は「安い（中央値¥790）」と書いていたが、¥8,940が出て前提が崩れた。');
   console.log('  ※ この条件はまだ採用していない。20レースそろってから判定する。');
 }
 
