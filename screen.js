@@ -122,7 +122,7 @@ if(process.argv.includes('--emit')){
     const R=CARD.races.find(x=>x.rno===r.rno);
     console.log(` {name:'${CARD.venue}${r.rno}R ${R.type}', date:'${CARD.date}', rno:${r.rno}, close:'${r.close}',`);
     console.log(`  picks:[${r.top6.map(c=>`'${c}'`).join(',')}], p1:${r.p1[1].toFixed(2)},`);
-    console.log(`  group:'${r.outA?'avoided':'picked'}', note:''},`);
+    console.log(`  group:'${r.outA?'avoided':'picked'}', fwd:true, note:''},`);
   }
   console.log('──────────────────────────────');
 }
@@ -227,12 +227,46 @@ console.log(`  ${avoid.map(r=>r.rno+'R').join(' ')}`);
               `回収率 ${all.rate.toFixed(0)}%`);
   console.log(`    いちばん効いた2レースを除くと ${all.rest!=null?all.rest.toFixed(0)+'%':'—'}`);
   console.log(`    引き直してプラスになる割合   ${all.boot.toFixed(0)}%`);
-  const nCard = SC.filter(r=>r.info==='card').length;
-  if(nCard){
-    console.log(`\n  うち${nCard}レースは出走予定表だけで採点（展示が入っていない）。`);
-    console.log(`  直前情報まで入れた${full.n}レースだけなら  回収率 ${full.rate.toFixed(0)}%  `+
-                `除くと ${full.rest!=null?full.rest.toFixed(0)+'%':'—'}  引き直し ${full.boot.toFixed(0)}%`);
-    console.log('  採点に使った情報が違うので、本来は混ぜられない。両方見ること。');
+  /* 採点に使った情報で分けて出す。
+     いま選んでいるのは card（前夜・展示なし）のほうなので、
+     そちらの数字を見ないと、いまのやり方を評価したことにならない。
+     full の良い数字に card をまぜて見るのがいちばん危ない。 */
+  const cardA = SC.filter(r=>r.info==='card');
+  if(cardA.length){
+    const card = calc(cardA);
+    const pf=[...SC.filter(r=>r.info==='full')].map(r=>r.pay).sort((a,b)=>a-b);
+    const pc=[...cardA].map(r=>r.pay).sort((a,b)=>a-b);
+    const md=a=>a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2;
+    console.log('\n  採点に使った情報で分ける（混ぜて見ないこと）');
+    console.log(`    直前情報あり ${full.n}件  的中${full.hit}/${full.n}  回収率 ${full.rate.toFixed(0)}%  `+
+                `除くと ${full.rest!=null?full.rest.toFixed(0)+'%':'—'}  引き直し ${full.boot.toFixed(0)}%  `+
+                `配当中央値¥${md(pf).toLocaleString()}`);
+    console.log(`    出走予定表だけ ${card.n}件  的中${card.hit}/${card.n}  回収率 ${card.rate.toFixed(0)}%  `+
+                `除くと ${card.rest!=null?card.rest.toFixed(0)+'%':'—'}  引き直し ${card.boot.toFixed(0)}%  `+
+                `配当中央値¥${md(pc).toLocaleString()}`);
+    console.log('    ← いま選んでいるのは下（前夜・展示なし）。');
+  }
+
+  /* もっと大事な区別。2026-09-25 に気づいた。
+     ------------------------------------------------------------------
+     最初の7件は、この条件を「見つけた」28レースの中にあったレース。
+     見つけたデータで測れば当たるのは当たり前で、検証になっていない。
+     条件を決めたあとに前向きに選んだのは、いまのところ card の5件だけ。
+     「7件すべて的中」を根拠にしていたのが間違いだった。 */
+  const fwd = SC.filter(r=>r.fwd), ins = SC.filter(r=>!r.fwd);
+  if(fwd.length && ins.length){
+    const F=calc(fwd), I=calc(ins);
+    /* 7/7 と 2/5 の差がどれくらい珍しいか。超幾何分布で厳密に出す。 */
+    const C=(n,k)=>{ let r=1; for(let i=0;i<k;i++) r=r*(n-i)/(i+1); return r; };
+    const N=SC.length, K=SC.filter(r=>r.rank<=6).length, n=ins.length;
+    let pv=0; for(let x=I.hit;x<=Math.min(K,n);x++) pv += C(K,x)*C(N-K,n-x)/C(N,n);
+    console.log('\n  【重要】条件を見つけたデータか、決めたあとのデータか');
+    console.log(`    見つけた28レースの中 ${I.n}件  的中${I.hit}/${I.n}  回収率 ${I.rate.toFixed(0)}%`);
+    console.log(`      → 見つけたデータで測っているので、当たって当たり前。検証ではない。`);
+    console.log(`    条件を決めたあと   ${F.n}件  的中${F.hit}/${F.n}  回収率 ${F.rate.toFixed(0)}%  `+
+                `除くと ${F.rest!=null?F.rest.toFixed(0)+'%':'—'}  引き直し ${F.boot.toFixed(0)}%`);
+    console.log(`      → 本当の成績はこちら。`);
+    console.log(`    この的中率の差が偶然で起きる確率 ${(pv*100).toFixed(1)}%（片側）`);
   }
 
   /* 先に決めた判定。ここは結果を見てから変えない。 */
@@ -246,6 +280,19 @@ console.log(`  ${avoid.map(r=>r.rno+'R').join(' ')}`);
   ok('引き直し95%以上         ', all.boot, 95);
   const left = Math.max(0, 20 - all.n);
   console.log(left ? `    → あと${left}レース` : '    → 20レースに到達。上の3つで判定する');
+  console.log('    ※ この判定は先に書いたとおり全件で見る。都合が悪いからといって変えない。');
+
+  /* 上の判定は全件で書いてしまったが、in-sample を混ぜているので甘い。
+     2026-09-25 に気づいたので、前向きぶんだけの判定をここで新しく先に書く。
+     いまの数字を見て決めたと言われないように、条件は上とまったく同じにする。 */
+  const F2 = calc(SC.filter(r=>r.fwd));
+  console.log('\n  【判定その2・2026-09-25に追加】条件を決めたあとの20レースだけで、同じ3条件を見る');
+  ok('回収率100%以上          ', F2.rate, 100);
+  ok('上位2件を除いても100%以上', F2.rest, 100);
+  ok('引き直し95%以上         ', F2.boot, 95);
+  const left2 = Math.max(0, 20 - F2.n);
+  console.log(left2 ? `    → あと${left2}レース（いま${F2.n}件）` : '    → 20レースに到達。ここで判定する');
+  console.log('    ※ 条件は上とまったく同じ。数字を見てから緩めていない。');
 }
 
 console.log('\n※ 当日は必ずアプリで採点し直すこと。');
