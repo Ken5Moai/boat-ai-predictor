@@ -76,5 +76,35 @@ ok(/rank:\s*5/.test(scr) && /pay:8940/.test(scr),
    '三国1Rは rank:5 の的中として記録されている（モデルの順位で数える）');
 ok(/rank:\s*18/.test(scr) && /pay:6270/.test(scr),
    '三国2Rは rank:18 の外れとして記録されている');
+/* 振り分けの照合。
+   「外にA級あり」を避ける理由は「そちらのほうが当たらない」なので、
+   避けたほうも数えないと理由が検証できない。数えるからには、
+   都合のいいレースだけ拾えないようにしておく。 */
+function split(rows, picked, avoided){
+  let bad=0;
+  for(const r of rows){
+    if(picked.includes(r.rno)&&avoided.includes(r.rno)) bad++;
+    if(picked.includes(r.rno)&&r.outA) bad++;
+    if(avoided.includes(r.rno)&&!r.outA) bad++;
+  }
+  return bad>0;
+}
+const RS=[{rno:1,outA:false},{rno:2,outA:false},{rno:3,outA:true},{rno:4,outA:true}];
+console.log('\n振り分けの照合');
+ok(split(RS,[1,2],[3,4])===false, '正しい振り分けは通る');
+ok(split(RS,[1,2,3],[3,4])===true, '同じレースが両方にあれば止まる');
+ok(split(RS,[3],[4])===true,       '外にA級ありを picked 側に入れたら止まる');
+ok(split(RS,[1],[2])===true,       '外にA級なしを avoided 側に入れたら止まる');
+ok(split(RS,[1],[])===false,       'まだ結果を入れていないレースがあっても止めない');
+
+const SC=require(path.join(DIR,'screened.js'));
+ok(Array.isArray(SC.avoided)&&SC.avoided.length>0, '避けたほうの記録が存在する');
+ok(SC.avoided.every(r=>r.rank!=null&&r.pay!=null&&r.rno!=null),
+   '避けたほうの記録に rank・pay・rno がそろっている');
+ok(SC.avoided.some(r=>r.pay>=20000&&r.rank>50),
+   '高配当でモデルが遠かった例が残っている（三国6R ¥27,110 / 74番目）');
+ok(/避けたほうを6点で買っていたら/.test(out), '避けたほうの成績が表示されている');
+ok(!/振り分けが card\.js と合っていない/.test(out), '振り分けの警告が出ていない');
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
