@@ -1486,6 +1486,9 @@ async function lookupAllRacers(){
       log('[照合] 出走表が使えないため選手ページへ切替');
     }
     setStatus('選手ページから1人ずつ照合中…');
+    /* 失敗した理由を画面にも出す。ログにしか書かないと、
+       「通信が通らない」のか「登番が違う」のか本人には区別できない。 */
+    const fails = [];
     for(let i=0;i<6;i++){
       const b = state.boats[i];
       setBar((i/6)*100);
@@ -1498,17 +1501,28 @@ async function lookupAllRacers(){
         if(r.grade) setField(b,'grade',r.grade,'official');
         if(r.branch)setField(b,'branch',r.branch,'official');
         log(`  ✓ ${b.lane}号艇 ${r.name||'?'} ${r.grade||'?'}`);
-      }catch(e){ log(`  ✗ ${b.lane}号艇 照合失敗: ${e.message}`); }
+      }catch(e){
+        log(`  ✗ ${b.lane}号艇 照合失敗: ${e.message}`);
+        fails.push(`${b.lane}号艇: ${e.message}`);
+      }
     }
     setBar(100);
-    finishLookup();
+    finishLookup(fails);
   }finally{ btn.disabled=false; state.busy = false; }
 }
-function finishLookup(){
+function finishLookup(fails){
   const ok = state.boats.filter(b=>has(b.name) && has(b.grade)).length;
+  /* うまくいかなかった理由を1つだけ添える。全部並べると読めなくなる。
+       通信が理由なら「スクショから読み取る」へ誘導する（通信不要な経路）。 */
+  let tail = '';
+  if(ok !== 6 && Array.isArray(fails) && fails.length){
+    const net = fails.some(f=>/取得|通信|timeout|タイム|Failed|network|proxy|403|404|500/i.test(f));
+    tail = `<br>理由（1件目）: ${esc(fails[0])}` +
+           (net ? '<br>通信が通らない場合は、出走表のスクショを「スクショから読み取る」で入れてください（通信不要です）。' : '');
+  }
   notice('regNotice', ok===6?'ok':'warn',
     ok===6 ? '6艇すべての選手名・級別を公式照合しました。'
-           : `照合できたのは ${ok}/6艇 です。残りは「STEP3 出走表を取得」でも補完できます。入力した登録番号は保持しています。`);
+           : `照合できたのは ${ok}/6艇 です。残りは「STEP3 出走表を取得」でも補完できます。入力した登録番号は保持しています。${tail}`);
   setStatus(`公式照合 ${ok}/6艇 完了`);
   renderBoats(); validateAll();
 }
@@ -2656,15 +2670,82 @@ function extractRacelistFromOCR(texts){
   return out;
 }
 
+/* スクショの中に「登番らしきもの」がいくつ写っているかを調べる。
+   ------------------------------------------------------------------
+   「見つかりません」とだけ言われても、原因が
+     ・文字が小さくて読めなかったのか
+     ・そもそも別のレースのスクショなのか
+   の区別がつかない。実際 2026-09-25 に、8Rの登録番号を入れた状態で
+   7Rの出走表を読ませて「0/6艇」になった。アプリの動作は正しいのに、
+   画面には原因が出ていなかった。
+
+   出走表では登番のすぐ後ろに級別が来る（例: 5143 / B1）ので、
+   その形だけを拾う。ただの4桁は拾わない（モーター番号や年齢と紛れるため）。 */
+function scanRegsInOCR(texts){
+  const list = Array.isArray(texts) ? texts : [texts];
+  const full = splitConcatNumbers(normalizeOcrDigits(list.join('\n')));
+  const out = [];
+  const re = /(\d{4})\s*[\/／|]?\s*(A1|A2|B1|B2)/g;
+  let m;
+  while((m = re.exec(full))){
+    const reg = m[1];
+    if(out.some(o=>o.reg===reg)) continue;      /* 同じ登番は1回だけ */
+    out.push({ reg, grade:m[2], at:m.index });
+  }
+  return out;
+}
+
+/* スクショから読んだ登番を、STEP2の入力欄へ入れ替える。
+   入力を書き換えるので、必ず本人に確認してから実行する。 */
+function useScannedRegs(regs){
+  const list = String(regs).split(',').filter(r=>/^\d{4}$/.test(r));
+  if(list.length !== 6){ alert('6艇ぶんそろっていないため入れ替えできません。'); return; }
+  const now = state.boats.map(b=>b.registrationNumber||'(空)').join(' / ');
+  if(!confirm(`STEP2の登録番号を入れ替えます。\n\n いま: ${now}\n あと: ${list.join(' / ')}\n\nよろしいですか？`)) return;
+  list.forEach((r,i)=>{ const el = $('reg'+(i+1)); if(el) el.value = r; });
+  syncRegsFromInputs();
+  notice('racelistOcrNotice','ok',
+    '登録番号を入れ替えました。もう一度「スクショから読み取る」を押してください。');
+  renderBoats(); validateAll();
+}
+
+/* 反映できなかったときに、原因を1段掘って文章にする。
+   画面に出す文言をここに集めておく（テストから直接呼べるようにするため）。 */
+function diagnoseOCRMiss(texts){
+  const seen = scanRegsInOCR(texts);
+  const mine = state.boats.map(b=>b.registrationNumber).filter(Boolean);
+  const hit  = seen.filter(o=>mine.includes(o.reg));
+  if(!seen.length)
+    return '<br><b>スクショから登録番号を1つも読み取れませんでした。</b>' +
+           '出走表の表全体が入った、大きめのスクショでもう一度お試しください。';
+  if(!hit.length)
+    return `<br><b>スクショに写っているのは 登番 ${seen.map(o=>esc(o.reg)).join(' / ')} です。</b>` +
+           `<br>入力した6艇（${mine.map(esc).join(' / ')}）と1つも一致しません。` +
+           '<br><b>別のレースのスクショの可能性が高いです。</b>' +
+           'レース番号（7R / 8R など）が合っているか確かめてください。' +
+           (seen.length === 6
+             ? `<br><button type="button" onclick="useScannedRegs('${seen.map(o=>o.reg).join(',')}')">` +
+               'スクショの登番に入れ替える</button>'
+             : '');
+  return `<br>スクショに写っていた登番: ${seen.map(o=>esc(o.reg)).join(' / ')}` +
+         `<br>このうち ${hit.length}艇 が入力と一致しました。` +
+         '残りは写っていないか、文字が小さくて読み取れていません。';
+}
+
 /* OCRで読んだ出走表を艇へ反映。信頼度は ocr-medium なので、
    あとから公式取得や手入力があればそちらが優先される。 */
 function applyRacelistOCR(recs){
   let applied = 0;
   const missing = [];
+  const notFound = [];
   for(const r of recs){
     const b = boatByReg(r.reg);
     if(!b) continue;
-    if(!r.found){ missing.push(`${b.lane}号艇(登番${r.reg})はスクショ内に見つかりません`); continue; }
+    if(!r.found){
+      notFound.push(r.reg);
+      missing.push(`${b.lane}号艇(登番${r.reg})はスクショ内に見つかりません`);
+      continue;
+    }
 
     let n = 0;
     const put = (key,val) => { if(val!=null && setField(b,key,val,'ocr-medium')) n++; };
@@ -2694,7 +2775,7 @@ function applyRacelistOCR(recs){
     log(`  [出走表OCR] ${b.lane}号艇 登番${r.reg}: ${n}項目 ` +
         `全国${r.nationalWinRate??'-'} 当地${r.localWinRate??'-'} M${r.motor2Rate??'-'}`);
   }
-  return { applied, missing };
+  return { applied, missing, notFound };
 }
 
 async function runRacelistOCR(){
@@ -2722,9 +2803,15 @@ async function runRacelistOCR(){
     setBar(100);
 
     const got = state.boats.filter(b=>has(b.nationalWinRate)).length;
+
+    /* 「見つかりません」で終わらせない。スクショに何が写っていたかを必ず出す。
+       写っている登番が入力とまったく別なら、原因は読み取り精度ではなく
+       レース違いなので、そう書く。ここを黙っていると直しようがない。 */
+    const why = res.notFound.length ? diagnoseOCRMiss(texts) : '';
+
     notice('racelistOcrNotice', got>=5 ? 'ok' : 'warn',
       `スクショから <b>${res.applied}/6艇</b> に反映しました（全国勝率が入ったのは ${got}艇）。` +
-      (res.missing.length ? `<br>${res.missing.map(esc).join('<br>')}` : '') +
+      (res.missing.length ? `<br>${res.missing.map(esc).join('<br>')}` : '') + why +
       `<br><b>下の6艇カードで数値が合っているか必ず見比べてください。</b>` +
       `違う場合はカードの欄を直接タップして直せます（手入力が最優先されます）。`);
     setStatus(`出走表OCR 完了（${got}/6艇）`);

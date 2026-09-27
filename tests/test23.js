@@ -59,5 +59,25 @@ const hasPending=/\{name:/.test(pendSrc);
 ok(hasPending ? /結果まちのレース/.test(out) : !/結果まちのレース/.test(out),
    hasPending ? '結果待ちがあるので、その節が出ている' : '結果待ちが無いので、その節は出ていない');
 
+/* odds.js はオブジェクトなので、同じレース名を2回書くと
+   古いほうが JavaScript の時点で消える。消えてからでは気づけない。
+   2026-09-27、9/25の三国8Rを足すときに実際に踏みかけた
+   （9/24にも「三国8R 一般」があった）。 */
+function dupKeys(src){
+  const names=[...src.matchAll(/^\s*'([^']+)'\s*:\s*\{/gm)].map(m=>m[1]);
+  const c=new Map(); for(const n of names) c.set(n,(c.get(n)||0)+1);
+  return [...c].filter(([,v])=>v>1).map(([k])=>k);
+}
+console.log('\nodds.js の見出しの重複');
+ok(dupKeys("module.exports={\n 'A': {\n 'B': {\n}").length===0, '重複が無ければ通る');
+ok(dupKeys("module.exports={\n 'A': {\n 'A': {\n}")[0]==='A', '同じ名前が2回あれば見つかる');
+const oddsSrc=fs.readFileSync(path.join(DIR,'odds.js'),'utf8');
+ok(dupKeys(oddsSrc).length===0, 'いまの odds.js に重複した見出しが無い');
+const names=[...oddsSrc.matchAll(/^\s*'([^']+)'\s*:\s*\{/gm)].map(m=>m[1]);
+ok(names.length===Object.keys(require(path.join(DIR,'odds.js'))).length,
+   '見出しの数と読み込めたレース数が一致する（消えていない）');
+ok(/odds\.js に同じレース名が2回書かれています/.test(src),
+   'backtest.js にその検査が入っている');
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
