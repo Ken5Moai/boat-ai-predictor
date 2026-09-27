@@ -609,6 +609,31 @@ if(require.main===module){
         process.exit(1);
       }
     }
+
+    /* odds.js はオブジェクトなので、同じレース名で2回書くと
+       古いほうが JavaScript の時点で黙って消える。
+       消えたあとでは Object.keys を見ても何も分からないので、
+       ファイルの文字列のほうを数えて突き合わせる。
+       2026-09-27、9/25の三国8Rを足すときに実際に踏みかけた
+       （9/24にも「三国8R 一般」があった）。 */
+    {
+      const src = fs.readFileSync(path.join(__dirname,'odds.js'),'utf8');
+      const names = [...src.matchAll(/^\s*'([^']+)'\s*:\s*\{/gm)].map(m=>m[1]);
+      const cnt = new Map();
+      for(const n of names) cnt.set(n,(cnt.get(n)||0)+1);
+      const dupK = [...cnt].filter(([,v])=>v>1).map(([k])=>k);
+      if(dupK.length){
+        console.error(`★ odds.js に同じレース名が2回書かれています: ${dupK.join(', ')}`);
+        console.error('  オブジェクトなので、あとに書いたほうだけが残り、前のオッズは消えます。');
+        console.error('  日付を名前に入れて分けてください（例「三国8R 一般(9/25)」）。');
+        process.exit(1);
+      }
+      if(names.length !== Object.keys(ODDS).length){
+        console.error(`★ odds.js の見出し ${names.length}件に対し、読み込めたのは ${Object.keys(ODDS).length}件です。`);
+        console.error('  どこかで名前が重なって消えています。');
+        process.exit(1);
+      }
+    }
   }
   /* 書き写したオッズと、実際の払戻が合っているかを毎回照合する。
      3連単の払戻は「当たった組のオッズ×100円」なので、
