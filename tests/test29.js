@@ -1,0 +1,91 @@
+/* 収支の記録（bets.js）が、あとから都合よく書き換わらないこと
+   ------------------------------------------------------------------
+   お金の記録でいちばん起きやすい崩れ方は3つある。
+     1. まとめ表記と実際の買い目がずれる（10点のつもりが11点になっている）
+     2. 分からない値を 0 で埋める（「120番目」と「分からない」が同じになる）
+     3. 当たった回だけ残る（外れを消せば回収率はいくらでも上がる）
+   ここで全部止める。 */
+const fs=require('fs'),path=require('path'),{JSDOM}=require('jsdom');
+let pass=0,fail=0;
+const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.log('  ✗ FAIL: '+m);} };
+
+const DIR=path.join(__dirname,'..');
+const BETS=require(path.join(DIR,'bets.js'));
+const src=fs.readFileSync(path.join(DIR,'bets.js'),'utf8');
+const HTML=fs.readFileSync(path.join(DIR,'index.html'),'utf8');
+const dom=new JSDOM(HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
+ beforeParse(w){w.Tesseract={createWorker:async()=>({})};w.fetch=async()=>{throw new Error('x')};w.alert=()=>{}}});
+const w=dom.window;
+w.Element.prototype.scrollIntoView=function(){};
+
+const COMBO=/^[1-6]-[1-6]-[1-6]$/;
+const valid=c=>COMBO.test(c) && new Set(c.split('-')).size===3;
+
+function expand(terms){
+  const out=[];
+  for(const t of terms){
+    const [A,B,C]=t.split('-').map(x=>x.split(''));
+    for(const a of A) for(const b of B) for(const c of C)
+      if(a!==b&&a!==c&&b!==c) out.push(`${a}-${b}-${c}`);
+  }
+  return out;
+}
+
+console.log('\n記録そのものの形');
+ok(Array.isArray(BETS) && BETS.length>0, `記録がある（${BETS.length}件）`);
+for(const b of BETS){
+  ok(Array.isArray(b.picks) && b.picks.length>0, `${b.name}: 買い目がある`);
+  ok(b.picks.every(valid), `${b.name}: 買い目がすべて正しい3連単の形`);
+  ok(new Set(b.picks).size===b.picks.length, `${b.name}: 同じ組を2回買っていない`);
+  ok(typeof b.unit==='number' && b.unit>0, `${b.name}: 1点あたりの金額が入っている`);
+}
+
+console.log('\n1. まとめ表記と買い目がずれていないこと');
+for(const b of BETS){
+  if(!b.form) continue;
+  const ex=expand(b.form);
+  ok(ex.length===b.picks.length, `${b.name}: まとめ表記を展開すると${b.picks.length}点（${ex.length}点）`);
+  ok(new Set(ex).size===ex.length, `${b.name}: 展開に重複が無い`);
+  ok(ex.every(x=>b.picks.includes(x)) && b.picks.every(x=>ex.includes(x)),
+     `${b.name}: まとめ表記と買い目の中身が完全に同じ`);
+  /* アプリ側のまとめ方とも突き合わせる（表記の作り方が2つに分かれないように） */
+  const f=w.compressCombos(b.picks);
+  ok(f.ok && f.terms.reduce((a,t)=>a+t.n,0)===b.picks.length,
+     `${b.name}: アプリのまとめ方でも点数が変わらない`);
+}
+
+console.log('\n2. 分からない値を 0 で埋めていないこと');
+for(const b of BETS){
+  ok(b.rank===null || (Number.isInteger(b.rank) && b.rank>=1 && b.rank<=120),
+     `${b.name}: rank は null か 1〜120（0 は使わない）`);
+  ok(b.pop===null || (Number.isInteger(b.pop) && b.pop>=1),
+     `${b.name}: 人気は null か 1以上`);
+}
+ok(/0 にはしない/.test(src), '0で埋めない決まりがファイルに書いてある');
+
+console.log('\n3. 当たりと外れの扱いが一致していること');
+for(const b of BETS){
+  ok(valid(b.hit), `${b.name}: 結果の組が正しい形`);
+  ok(typeof b.pay==='number' && b.pay>0, `${b.name}: 払戻が入っている`);
+  const win=b.picks.includes(b.hit);
+  /* 当たりなら払戻は1点ぶん以上あるはず。外れなら収支は投資ぶんの丸損。 */
+  const pl = (win ? b.pay : 0) - b.picks.length*b.unit;
+  ok(win ? pl === b.pay - b.picks.length*b.unit : pl === -b.picks.length*b.unit,
+     `${b.name}: 収支の計算が ${win?'的中':'外れ'} と矛盾しない（${pl>=0?'+':''}${pl}）`);
+}
+ok(/当たった回だけ載せる、ということはしない/.test(src),
+   '全部載せる決まりがファイルに書いてある');
+
+console.log('\n件数が少ないうちは回収率を強調しないこと');
+const out=require('child_process').execFileSync(process.execPath,[path.join(DIR,'bets.js')],{encoding:'utf8'});
+ok(/回収率/.test(out), '回収率は出る');
+ok(BETS.length>=20 || /何も意味しない数字/.test(out),
+   '20レース未満なら「意味しない」と添える');
+ok(BETS.every(b=>b.rank!=null) || /順位が未計算/.test(out),
+   'モデルの順位が未計算なら、そう書く');
+ok(BETS.every(b=>b.date) || /日付が未確認/.test(out),
+   '日付が未確認なら、そう書く');
+for(const b of BETS) ok(out.includes(b.hit), `${b.name}: 結果が出力に出る（外れも消えない）`);
+
+console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
+process.exit(fail?1:0);
