@@ -11,6 +11,8 @@
      ・レース前に出した買い目と金額を、結果が出る前に書く
      ・結果が出たら hit と pay を入れる。買い目のほうは書き換えない
      ・当たった回だけ載せる、ということはしない（全部載せる）
+     ・本線と穴は別々に数える。混ぜると、穴枠が成績を下げているのか
+       上げているのかが永久に分からなくなる
      ・rank（モデルが正解を何番目に置いたか）は、入力データが
        手元にあるときだけ入れる。無いときは null。0 にはしない
        （「120番目」と「分からない」はまったく別の情報なので）
@@ -32,6 +34,7 @@ module.exports = [
       モデルが 4-3-5 を何番目に置いていたかは計算できない。
       いいかげんな数字を入れるより、空けておく。 */
    rank:null,
+   ana:[],                                  /* 穴枠は使っていない */
    note:'4号艇頭は 4-1-3 の1点だけ持っていた。4-3-5 は圏外。'
  }
 ];
@@ -39,15 +42,21 @@ module.exports = [
 if(require.main===module){
   const B=module.exports;
   const row=b=>{
+    const ana=b.ana||[];
     const n=b.picks.length, inv=n*b.unit;
-    const win=b.picks.includes(b.hit);
-    const back=win ? b.pay : 0;
-    return {...b, n, inv, win, back, pl:back-inv};
+    const an=ana.length, ainv=an*(b.anaUnit||100);
+    const win=b.picks.includes(b.hit), awin=ana.includes(b.hit);
+    const back=win ? b.pay : 0, aback=awin ? b.pay : 0;
+    return {...b, n, inv, win, back, an, ainv, awin, aback,
+            pl:(back+aback)-(inv+ainv)};
   };
   const rs=B.map(row);
   const inv=rs.reduce((a,r)=>a+r.inv,0);
   const back=rs.reduce((a,r)=>a+r.back,0);
   const wins=rs.filter(r=>r.win).length;
+  const ainv=rs.reduce((a,r)=>a+r.ainv,0);
+  const aback=rs.reduce((a,r)=>a+r.aback,0);
+  const awins=rs.filter(r=>r.awin).length;
 
   console.log('\n実際に出した予想の収支');
   console.log('────────────────────────────────────────────────');
@@ -64,10 +73,18 @@ if(require.main===module){
     if(r.note) console.log(`             ${r.note}`);
   }
   console.log('────────────────────────────────────────────────');
-  console.log(`${rs.length}レース  的中${wins}/${rs.length}  `+
+  console.log(`本線 ${rs.length}レース  的中${wins}/${rs.length}  `+
     `投資¥${inv.toLocaleString()} 払戻¥${back.toLocaleString()}  `+
     `収支 ${back-inv>=0?'+':''}${(back-inv).toLocaleString()}  `+
     `回収率 ${inv?(back/inv*100).toFixed(0):'—'}%`);
+  /* 穴枠は必ず別で出す。本線に混ぜると、穴が足を引っ張っていても見えない。 */
+  console.log(`穴枠 ${rs.filter(r=>r.an).length}レース  的中${awins}/${rs.length}  `+
+    `投資¥${ainv.toLocaleString()} 払戻¥${aback.toLocaleString()}  `+
+    `収支 ${aback-ainv>=0?'+':''}${(aback-ainv).toLocaleString()}  `+
+    `回収率 ${ainv?(aback/ainv*100).toFixed(0):'—'}%`);
+  console.log(`合計  投資¥${(inv+ainv).toLocaleString()} 払戻¥${(back+aback).toLocaleString()}  `+
+    `収支 ${(back+aback)-(inv+ainv)>=0?'+':''}${((back+aback)-(inv+ainv)).toLocaleString()}  `+
+    `回収率 ${(inv+ainv)?((back+aback)/(inv+ainv)*100).toFixed(0):'—'}%`);
 
   const noRank=rs.filter(r=>r.rank==null).length;
   if(noRank) console.log(`\n※ ${noRank}レースはモデルの順位が未計算。`+

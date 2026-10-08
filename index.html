@@ -283,6 +283,45 @@ BOAT RACE公式から取得します。<br>
   <div><label>&nbsp;</label><div class="mini" style="padding-top:11px">
     点数を増やすと的中率は上がりますが、回収率は下がります。→</div></div>
 </div>
+<div class="g2" style="margin-top:6px">
+  <div><label>穴の口数（本線とは別枠）</label><select id="anaCount">
+    <option value="0" selected>0口（買わない・推奨）</option>
+    <option value="2">2口</option>
+    <option value="3">3口</option>
+    <option value="4">4口</option>
+    <option value="6">6口</option></select></div>
+  <div><label>穴とみなす下限オッズ</label><select id="anaMinOdds">
+    <option value="30">30倍以上</option>
+    <option value="50" selected>50倍以上</option>
+    <option value="100">100倍以上</option>
+    <option value="200">200倍以上</option></select></div>
+</div>
+<details style="margin-top:6px">
+<summary class="mini" style="color:#f0c040">穴枠を足すと、実測では回収率が下がります（28レース）</summary>
+<div class="dbody">
+<table class="tbl"><tr><th>構成</th><th>本線</th><th>穴</th><th>合計回収率</th></tr>
+<tr><td>本線6のみ</td><td>89%</td><td>—</td><td>89%</td></tr>
+<tr><td>本線6＋穴4（20倍以上）</td><td>89%</td><td>109%（3/28）</td><td>97%</td></tr>
+<tr><td>本線6＋穴4（50倍以上）</td><td>89%</td><td>60%（1/28）</td><td>77%</td></tr>
+<tr><td>本線6＋穴4（100倍以上）</td><td>89%</td><td><b>0%（0/28）</b></td><td>53%</td></tr>
+<tr><td><b>本線10のみ</b></td><td><b>106%</b></td><td>—</td><td><b>106%</b></td></tr>
+</table>
+<div class="mini" style="margin-top:8px">
+<b>28レースで、100倍以上の穴は一度も当たっていません。</b>
+50倍以上でも1回だけ（下関2R ¥6,700）で、そこに¥11,200を払っています。<br><br>
+理由ははっきりしています。<b>モデルは高配当のレースがいちばん苦手です。</b>
+払戻¥5,000超のレースで、正解がモデルの何番目にあったかの平均は<b>41.3番目</b>。
+三国6Rの¥27,110は<b>74番目</b>でした。120通り中74番目なので、
+4口どころか74口買わないと届きません。<br><br>
+<b>同じお金を使うなら、本線を10点に増やすほうが実測では上です（106%）。</b>
+それでも穴枠を使うなら、「当てるため」ではなく
+「たまに大きいのを取れたら面白い」という遊びとして、
+下がるぶんを承知のうえで使ってください。既定は0口です。<br><br>
+穴の選び方は<b>モデルの確率が高い順</b>で、下限オッズ以上の組だけを対象にします。
+期待値順にはしません（期待値で選ぶ方式は実測でいちばん悪く、19レース2的中・回収率52%でした）。
+</div>
+</div>
+</details>
 <details style="margin-top:6px">
 <summary class="mini">点数ごとの実測（28レース・1点100円）</summary>
 <div class="dbody">
@@ -4148,15 +4187,26 @@ function generateReport(){
   /* --- 買い目：上位6点（予算が少なければ自動で点数を減らす） --- */
   const budget = Math.max(100, Number($('budget').value)||1000);
   const want = Number($('betCount') ? $('betCount').value : 6) || 6;
-  const maxPoints = Math.min(want, Math.max(1, Math.floor(budget/100)));
+  /* 穴枠は本線の予算の中から取る（上限を黙って超えないため）。
+     予算が足りなければ穴の口数を減らす。本線は必ず1点は残す。 */
+  const anaWant0 = anaCountValue();
+  const unitsAll = Math.max(1, Math.floor(budget/100));
+  const anaWant  = Math.max(0, Math.min(anaWant0, unitsAll - 1));
+  const anaCut   = anaWant < anaWant0;
+  const mainBudget = Math.max(100, budget - anaWant*100);
+  const maxPoints = Math.min(want, Math.max(1, Math.floor(mainBudget/100)));
   /* オッズが入っていれば期待値順、入っていなければ従来どおり確率順。
      期待値が基準に届く組が1つも無ければ points は空になり、「見送り」を出す。 */
   state.lastCombos = combos;
   const picked = choosePoints(combos, maxPoints);
   const points = picked.points;
   const odds = points.length && points.every(p=>p.odds) ? points.map(p=>p.odds) : null;
-  const amounts = points.length ? allocate(points, budget, odds) : [];
+  const amounts = points.length ? allocate(points, mainBudget, odds) : [];
+  const anaPick = chooseAna(combos, points, anaWant, anaMinOddsValue());
+  const anaPoints = anaPick.points;
+  const anaAmounts = anaPoints.map(()=>100);
   const hitProb = points.reduce((a,p)=>a+p.p,0);
+  const anaHitProb = anaPoints.reduce((a,p)=>a+p.p,0);
 
   /* --- 信頼度：データ充足率 と スコア差 を分けて表示 --- */
   const fill = vres.fill;
@@ -4405,7 +4455,8 @@ ${(()=>{
   </div></div>`;
 })()}
 
-<div class="card"><div class="chead">買い目（3連単 ${points.length}点）<span class="mini">${
+<div class="card"><div class="chead">買い目（3連単 ${points.length + anaPoints.length}点${
+  anaPoints.length ? ` ＝ 本線${points.length}口 ＋ 穴${anaPoints.length}口` : ''}）<span class="mini">${
   picked.mode==='ev' ? `期待値${evMinValue().toFixed(2)}以上で選定` : '確率の高い順'} ／ 予算 ${budget.toLocaleString()}円</span></div><div class="cbody">
 ${(()=>{
   /* まとめ表記を先に出す。点数が増えるほど1点ずつでは追えなくなるため。
@@ -4445,6 +4496,37 @@ ${points.map((p,i)=>{
     <span class="betamt">${(amounts[i]||0).toLocaleString()}円</span>
   </div>`;
 }).join('')}
+${anaPoints.length ? `
+<div style="margin-top:12px;padding:10px;border:1px solid #5a4420;border-radius:6px;background:#1c1710">
+  <div style="font-weight:700;color:#f0c040;margin-bottom:6px">
+    穴枠 ${anaPoints.length}口（${anaMinOddsValue()}倍以上・各100円＝${(anaPoints.length*100).toLocaleString()}円）</div>
+  <div class="mini" style="margin-bottom:6px">${
+    (()=>{ const f=compressCombos(anaPoints.map(p=>p.combo));
+      return f.ok ? f.terms.map(t=>`<b style="font-size:16px">${t.text}</b> <span class="mini">${t.n}点</span>`).join('　')
+                  : anaPoints.map(p=>`<b>${p.combo}</b>`).join(' '); })()}</div>
+  ${anaPoints.map(p=>`<div class="betrow">
+    <span class="betkind" style="background:#5a4420;color:#f0c040">穴</span>
+    <span class="betno">${p.combo}</span>
+    <span class="betprob">${(p.p*100).toFixed(2)}%</span>
+    <span class="mini" style="width:96px;text-align:right">${
+      state.oddsMap[p.combo]!=null ? `${state.oddsMap[p.combo]}倍`
+        : `<span style="color:#8291aa">推定${(0.75/p.p).toFixed(0)}倍</span>`}</span>
+    <span class="betamt">100円</span>
+  </div>`).join('')}
+  <div class="mini" style="margin-top:6px">
+    この4口が当たる確率（モデル推定）<b>${(anaHitProb*100).toFixed(2)}%</b>。
+    ${anaPick.estimated ? 'オッズが入っていない組はモデルの確率から見積もっています（実際のオッズと違う場合があります）。' : ''}
+    ${anaCut ? '<br><b style="color:#ef6262">予算が足りないため、穴の口数を減らしました。</b>' : ''}
+    ${anaPick.pool < anaPoints.length ? '' : ''}
+  </div>
+  <div class="mini" style="margin-top:6px;color:#f0c040">
+    <b>この枠は実測で回収率を下げます。</b>28レースでは100倍以上の穴は0/28、
+    50倍以上でも1/28でした。モデルは高配当がいちばん苦手で、
+    払戻¥5,000超のレースでは正解が平均41.3番目にあります。
+    同じ金額なら本線を10点にするほうが上でした（106% 対 77%）。
+    <b>当てるための枠ではなく、下がるぶんを承知で遊ぶ枠です。</b>
+  </div>
+</div>` : ''}
 ${picked.mode!=='ev' ? `<div class="mini" style="margin-top:8px;color:#f0c040">
   ※ オッズを入れていないので、確率の高い順に選んでいます。
   各行の「○倍以上」を公式のオッズと見比べて、届いていない組は外してください。
@@ -5115,6 +5197,48 @@ function choosePoints(combos, want){
   return { points: good.slice(0, want), mode:'ev',
            skipped: solid.length - good.length, checked: known.length, thin };
 }
+
+/* 穴枠。本線に入らなかった組のうち、オッズが下限以上のものを
+   モデルの確率が高い順に取る。
+   ------------------------------------------------------------------
+   ▲この枠を既定で有効にしてはいけない▲
+
+   28レースで測った結果（本線6口に穴4口を足した場合）
+     下限 20倍   穴 3/28 的中 回収109%  合計 97%
+     下限 50倍   穴 1/28 的中 回収 60%  合計 77%
+     下限100倍   穴 0/28 的中 回収  0%  合計 53%
+     本線10口のみ                        合計106%
+   穴枠を足すほど下がり、同じ金額なら本線を10点にするほうが上だった。
+
+   理由ははっきりしている。モデルは高配当のレースがいちばん苦手で、
+   払戻¥5,000超のレースでは正解がモデルの平均41.3番目にある
+   （三国6Rの¥27,110は74番目）。4口では届かない。
+
+   それでも残すのは、「当てるため」ではなく
+   「たまに大きいのを取れたら面白い」という使い方があるから。
+   既定は0口にして、選んだときだけ効くようにしてある。
+
+   選び方は確率順。期待値順にはしない（期待値方式は実測で最悪、
+   19レース2的中・回収率52%）。 */
+function chooseAna(combos, exclude, want, minOdds){
+  if(!want) return { points:[], estimated:false, pool:0 };
+  const taken = new Set((exclude||[]).map(p=>p.combo));
+  /* オッズが入っていればそれを使う。入っていなければ
+     モデルの確率から 0.75/p で見積もる（控除率25%ぶんを戻した値）。
+     見積もりを使ったことは画面に必ず出す。 */
+  let estimated = false;
+  const oddsOf = c => {
+    const o = state.oddsMap[c.combo];
+    if(o != null && o > 0) return o;
+    estimated = true;
+    return c.p > 0 ? 0.75 / c.p : Infinity;
+  };
+  const pool = combos.filter(c=>!taken.has(c.combo) && oddsOf(c) >= minOdds);
+  return { points: pool.slice(0, want), estimated, pool: pool.length };
+}
+
+function anaCountValue(){ return Number(($('anaCount')||{}).value) || 0; }
+function anaMinOddsValue(){ return Number(($('anaMinOdds')||{}).value) || 50; }
 
 /* ==================================================================
    単勝（1着だけを買う）
