@@ -4190,13 +4190,16 @@ function generateReport(){
   /* --- 買い目：上位6点（予算が少なければ自動で点数を減らす） --- */
   const budget = Math.max(100, Number($('budget').value)||1000);
   const want = Number($('betCount') ? $('betCount').value : 6) || 6;
-  /* 穴枠は本線の予算の中から取る（上限を黙って超えないため）。
-     予算が足りなければ穴の口数を減らす。本線は必ず1点は残す。 */
+  /* 穴枠は本線に「上乗せ」する（本線の点数を削らない）。
+     削ると、成績が下がったとき穴のせいか本線を減らしたせいか分からなくなる。
+     そのかわり、上乗せぶんは必ず1日の上限から引く（markBought / bankState）。
+     残りが足りないときは穴の口数を減らし、減らしたことを画面に出す。 */
   const anaWant0 = anaCountValue();
-  const unitsAll = Math.max(1, Math.floor(budget/100));
-  const anaWant  = Math.max(0, Math.min(anaWant0, unitsAll - 1));
-  const anaCut   = anaWant < anaWant0;
-  const mainBudget = Math.max(100, budget - anaWant*100);
+  const bk = bankState();
+  const roomForAna = Math.max(0, Math.floor((bk.left - budget) / 100));
+  const anaWant = bk.cap > 0 ? Math.max(0, Math.min(anaWant0, roomForAna)) : anaWant0;
+  const anaCut  = anaWant < anaWant0;
+  const mainBudget = budget;
   const maxPoints = Math.min(want, Math.max(1, Math.floor(mainBudget/100)));
   /* オッズが入っていれば期待値順、入っていなければ従来どおり確率順。
      期待値が基準に届く組が1つも無ければ points は空になり、「見送り」を出す。 */
@@ -4502,7 +4505,10 @@ ${points.map((p,i)=>{
 ${anaPoints.length ? `
 <div style="margin-top:12px;padding:10px;border:1px solid #5a4420;border-radius:6px;background:#1c1710">
   <div style="font-weight:700;color:#f0c040;margin-bottom:6px">
-    穴枠 ${anaPoints.length}口（${anaMinOddsValue()}倍以上・各100円＝${(anaPoints.length*100).toLocaleString()}円）</div>
+    穴枠 ${anaPoints.length}口（${anaMinOddsValue()}倍以上・各100円＝${(anaPoints.length*100).toLocaleString()}円・本線に上乗せ）</div>
+  <div class="mini" style="margin-bottom:6px">
+    このレースの総額 本線${budget.toLocaleString()}円 ＋ 穴${(anaPoints.length*100).toLocaleString()}円
+    ＝ <b>${(budget + anaPoints.length*100).toLocaleString()}円</b></div>
   <div class="mini" style="margin-bottom:6px">${
     (()=>{ const f=compressCombos(anaPoints.map(p=>p.combo));
       return f.ok ? f.terms.map(t=>`<b style="font-size:16px">${t.text}</b> <span class="mini">${t.n}点</span>`).join('　')
@@ -4519,7 +4525,9 @@ ${anaPoints.length ? `
   <div class="mini" style="margin-top:6px">
     この4口が当たる確率（モデル推定）<b>${(anaHitProb*100).toFixed(2)}%</b>。
     ${anaPick.estimated ? 'オッズが入っていない組はモデルの確率から見積もっています（実際のオッズと違う場合があります）。' : ''}
-    ${anaCut ? '<br><b style="color:#ef6262">予算が足りないため、穴の口数を減らしました。</b>' : ''}
+    ${anaCut ? `<br><b style="color:#ef6262">今日の残り（${bk.left.toLocaleString()}円）では
+      本線${budget.toLocaleString()}円の上に${anaWant0}口を乗せられないため、
+      ${anaWant}口に減らしました。</b>` : ''}
     ${anaPick.pool < anaPoints.length ? '' : ''}
   </div>
   <div class="mini" style="margin-top:6px;color:#f0c040">
@@ -5142,38 +5150,56 @@ function loadBank(){
 function saveBank(b){
   try{ localStorage.setItem(BANK_KEY, JSON.stringify(b)); }catch(e){}
 }
-/* 1レースの金額。上限とレース数から決まり、100円単位に切り下げる。 */
+/* 1レースの本線の金額。上限とレース数から決まり、100円単位に切り下げる。 */
 function perRace(){
   const cap = Number(($('dayCap')||{}).value) || 0;
   const n   = Math.max(1, Number(($('dayRaces')||{}).value) || 1);
   return Math.max(100, Math.floor(cap/n/100)*100);
 }
+/* 穴枠の金額。本線とは別に上乗せする（本線を削らない）。
+   ------------------------------------------------------------------
+   穴を本線の予算の中から取ると、本線の点数が減る。
+   実測でいちばん良かったのは本線10点なので、そこを削ると
+   成績が下がったときに「穴のせい」か「本線を減らしたせい」か分からなくなる。
+   なので上乗せにする。ただし上乗せぶんも必ず1日の上限から引く。
+   ここを引き忘れると、穴枠を使うほど上限を黙って超えることになる。 */
+function anaSpend(){ return anaCountValue() * 100; }
+/* そのレースで実際に出ていく総額。打ち止めの判定もこれで行う。 */
+function raceSpend(){ return perRace() + anaSpend(); }
 function bankState(){
   const b = loadBank();
   const cap = Number(($('dayCap')||{}).value) || 0;
-  const per = perRace();
-  return { ...b, cap, per, left: Math.max(0, cap - b.used), done: (cap - b.used) < per };
+  const per = perRace(), ana = anaSpend(), spend = per + ana;
+  return { ...b, cap, per, ana, spend,
+           left: Math.max(0, cap - b.used), done: (cap - b.used) < spend };
 }
 function onBankChange(){
   const st = bankState();
   if($('budget')) $('budget').value = st.per;
   const el = $('bankBox'); if(!el) return;
   el.className = 'notice ' + (st.done ? 'warn' : 'info');
+  const breakdown = st.ana
+    ? `本線 ${st.per.toLocaleString()}円 ＋ 穴枠 ${st.ana.toLocaleString()}円 ＝ `+
+      `<b>${st.spend.toLocaleString()}円</b>`
+    : `<b>${st.per.toLocaleString()}円</b>`;
   el.innerHTML = st.done
     ? `<b>今日はここまでです。</b>上限 ${st.cap.toLocaleString()}円 のうち `+
       `${st.used.toLocaleString()}円 を使い、残り ${st.left.toLocaleString()}円。`+
-      `1レース ${st.per.toLocaleString()}円 に足りません。<br>`+
+      `1レース ${breakdown} に足りません。<br>`+
       `<b>明日また来てください。</b>ここで上限を上げるのが、いちばんよくある負け方です。`
-    : `1レース <b>${st.per.toLocaleString()}円</b>（上限 ${st.cap.toLocaleString()}円 ÷ ${
+    : `1レース ${breakdown}（上限 ${st.cap.toLocaleString()}円 ÷ ${
         Math.max(1,Number(($('dayRaces')||{}).value)||1)}レース）<br>`+
+      (st.ana ? `<span style="color:#f0c040">穴枠は本線に上乗せしています。`+
+                `そのぶん1日に買えるレース数は減ります。</span><br>` : '')+
       `今日 ${st.races}レース購入・${st.used.toLocaleString()}円 使用。`+
-      `残り <b>${st.left.toLocaleString()}円</b>（あと${Math.floor(st.left/st.per)}レースぶん）`;
+      `残り <b>${st.left.toLocaleString()}円</b>（あと${Math.floor(st.left/st.spend)}レースぶん）`;
 }
 function markBought(){
   const st = bankState();
   if(st.done){ onBankChange(); return; }
   const b = loadBank();
-  b.used += st.per; b.races += 1; b.day = todayKey();
+  /* 穴枠を使ったぶんも必ず引く。本線だけ引くと上限を超えていく。 */
+  b.used += st.spend; b.races += 1; b.day = todayKey();
   saveBank(b); onBankChange();
   /* すでにレポートが出ているなら、結論カードを打ち止め表示に描き直す。 */
   if($('report') && $('report').innerHTML.trim() && !$('btnGen').disabled) generateReport();

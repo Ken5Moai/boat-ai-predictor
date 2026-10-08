@@ -66,10 +66,54 @@ ok(a2.points.every(p=>state.oddsMap[p.combo]>=100), '実オッズが下限以上
 ok(a2.points.every(p=>state.oddsMap[p.combo]!==5), 'オッズ5倍の組は穴に入らない');
 state.oddsMap={};
 
-console.log('\n4. 予算を黙って超えないこと');
-ok(/budget - anaWant\*100/.test(HTML), '穴のぶんを本線の予算から引いている');
-ok(/unitsAll - 1/.test(HTML), '本線が0点にならないよう口数を抑えている');
-ok(/穴の口数を減らしました/.test(HTML), '予算不足で減らしたときに画面へ出す');
+/* 穴枠は本線に「上乗せ」する（本線の点数を削らない）。
+   削ると、成績が下がったとき穴のせいか本線を減らしたせいか分からなくなる。
+   そのかわり、上乗せぶんを1日の上限から引き忘れると、
+   穴枠を使うほど上限を黙って超えることになる。ここがいちばん危ない。 */
+console.log('\n4. 上乗せぶんが1日の上限から必ず引かれること');
+const setBank=(cap,races,ana)=>{
+  d.getElementById('dayCap').value=String(cap);
+  d.getElementById('dayRaces').value=String(races);
+  d.getElementById('anaCount').value=String(ana);
+  try{ w.localStorage.removeItem('boat-bank-v1'); }catch(e){}
+};
+setBank(3000,3,0);
+ok(w.perRace()===1000, `本線は1レース1,000円（${w.perRace()}）`);
+ok(w.anaSpend()===0, '穴0口なら上乗せ0円');
+ok(w.raceSpend()===1000, '総額は本線のみ');
+setBank(3000,3,4);
+ok(w.perRace()===1000, '穴を足しても本線の金額は変わらない（削らない）');
+ok(w.anaSpend()===400, '穴4口で400円');
+ok(w.raceSpend()===1400, `総額は1,400円（${w.raceSpend()}）`);
+ok(w.bankState().spend===1400, '打ち止めの判定も総額で見ている');
+
+console.log('\n   買ったときに上限から引かれる額');
+setBank(3000,3,4);
+w.markBought();
+let bk=w.bankState();
+ok(bk.used===1400, `1回目で1,400円引かれる（${bk.used}）← 本線だけだと1,000円になってしまう`);
+ok(bk.left===1600, `残りは1,600円（${bk.left}）`);
+w.markBought();
+bk=w.bankState();
+ok(bk.used===2800, `2回目で合計2,800円（${bk.used}）`);
+ok(bk.done===true, '残り200円では1,400円に足りないので打ち止めになる');
+ok(/今日はここまでです/.test(d.getElementById('bankBox').innerHTML), '打ち止めが画面に出る');
+ok(/本線 1,000円 ＋ 穴枠 400円 ＝/.test(d.getElementById('bankBox').innerHTML),
+   '内訳（本線＋穴＝総額）が画面に出る');
+
+console.log('\n   残りが足りなければ穴を減らすこと（本線は削らない）');
+setBank(3000,3,6);
+w.markBought();                       /* 1回買って残り1,400円 */
+bk=w.bankState();
+ok(bk.left===1400, `残り1,400円（${bk.left}）`);
+/* 残り1,400円 − 本線1,000円 = 400円 → 穴は4口までしか乗らない */
+ok(Math.floor((bk.left-1000)/100)===4, '残りから乗せられるのは4口まで');
+ok(/穴の口数を減らしました|口に減らしました/.test(HTML), '減らしたことを画面に出す作りになっている');
+ok(/const mainBudget = budget;/.test(HTML), '本線の予算は穴に削られない');
+ok(/b\.used \+= st\.spend/.test(HTML), '上限から引くのは総額（本線だけではない）');
+setBank(5000,5,0);
+try{ w.localStorage.removeItem('boat-bank-v1'); }catch(e){}
+w.onBankChange();
 
 console.log('\n選び方が確率順であること（期待値順にしない）');
 const a3=w.chooseAna(LIST, main, 5, 50);
