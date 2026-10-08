@@ -4407,6 +4407,23 @@ ${(()=>{
 
 <div class="card"><div class="chead">買い目（3連単 ${points.length}点）<span class="mini">${
   picked.mode==='ev' ? `期待値${evMinValue().toFixed(2)}以上で選定` : '確率の高い順'} ／ 予算 ${budget.toLocaleString()}円</span></div><div class="cbody">
+${(()=>{
+  /* まとめ表記を先に出す。点数が増えるほど1点ずつでは追えなくなるため。
+     各行の点数と合計を必ず添えて、下の1点ずつの表と突き合わせられるようにする。 */
+  if(!points.length) return '';
+  const f = compressCombos(points.map(p=>p.combo));
+  if(!f.ok) return `<div class="mini" style="margin-bottom:8px;color:#f0c040">
+    まとめ表記にすると点数が変わってしまうため、1点ずつ出しています。</div>`;
+  const sum = f.terms.reduce((a,t)=>a+t.n,0);
+  return `<div style="margin-bottom:10px;padding:8px 10px;border:1px solid #2a3550;border-radius:6px">
+    <div class="mini" style="margin-bottom:4px">まとめ表記（下の1点ずつと同じ中身です）</div>
+    ${f.terms.map(t=>`<div style="font-size:17px;letter-spacing:.5px">
+      <b>${t.text}</b> <span class="mini">${t.n}点</span></div>`).join('')}
+    <div class="mini" style="margin-top:4px;border-top:1px solid #2a3550;padding-top:4px">
+      計 ${sum}点 ／ ${amounts.reduce((a,c)=>a+c,0).toLocaleString()}円
+      ${sum===points.length ? '' : '<b style="color:#ef6262">（点数が合いません。1点ずつのほうを見てください）</b>'}</div>
+  </div>`;
+})()}
 ${points.length===0 ? `
   <div class="notice warn" style="margin:0">
     <b>買う価値のある組がありませんでした。見送りを推めます。</b><br>
@@ -4814,6 +4831,84 @@ const POST_NOTE = [
   '※ 当たることを保証するものではありません。購入は自己判断でお願いします。'
 ];
 
+/* 買い目をフォーメーション表記にまとめる
+   ------------------------------------------------------------------
+   1点ずつ縦に並べると、10点を超えたあたりから目で追えなくなる。
+     1-3-2 1-2-3 1-3-4 1-4-3 3-1-2 1-2-4 2-1-3 1-4-2 3-1-4 4-1-3
+   これは次の3行とまったく同じ10点。
+     1-234-234   6点
+     3-1-24      2点
+     24-1-3      2点
+
+   まとめ方の決まり（ここを外すと買い間違いが起きる）
+     ・各項は「1着の候補 - 2着の候補 - 3着の候補」。同じ艇は重複しない組だけ数える
+     ・どの項も、元の買い目の部分集合でなければならない（勝手に足さない）
+     ・項どうしは重ならない（重なると同じ組を2回買うことになる）
+     ・まとめた結果を展開し直して、元の点数・中身と完全に一致することを必ず確かめる
+       一致しなければ、まとめずに1点ずつ出す（見やすさより正しさを優先する）。 */
+function expandFormationTerm(A, B, C){
+  const out = [];
+  for(const a of A) for(const b of B) for(const c of C)
+    if(a!==b && a!==c && b!==c) out.push(`${a}-${b}-${c}`);
+  return out;
+}
+
+function compressCombos(combos){
+  const target = [...new Set((combos||[]).map(String))];
+  const plain  = { ok:false, terms:[], list:target.slice(), n:target.length };
+  if(!target.length) return { ok:true, terms:[], list:[], n:0 };
+  if(!target.every(t=>/^[1-6]-[1-6]-[1-6]$/.test(t))) return plain;
+
+  const want = new Set(target);
+  /* 各桁に出てくる数字だけを候補にする（出てこない艇は組み合わせない） */
+  const digits = [0,1,2].map(i => [...new Set(target.map(t=>t[i*2]))].sort());
+  const subsets = ds => {
+    const out = [];
+    for(let m=1; m<(1<<ds.length); m++){
+      const s = [];
+      for(let i=0;i<ds.length;i++) if(m & (1<<i)) s.push(ds[i]);
+      out.push(s);
+    }
+    return out;
+  };
+  const SA = subsets(digits[0]), SB = subsets(digits[1]), SC = subsets(digits[2]);
+
+  const cands = [];
+  for(const A of SA) for(const B of SB) for(const C of SC){
+    const ex = expandFormationTerm(A,B,C);
+    if(!ex.length) continue;
+    if(!ex.every(x=>want.has(x))) continue;     /* 元に無い組を1つでも作る項は捨てる */
+    cands.push({ ex, text:`${A.join('')}-${B.join('')}-${C.join('')}` });
+  }
+  /* 大きくまとまる項から順に、重ならないように取っていく。
+     1点だけの項（1-2-3 のような形）も候補に入っているので、必ず全部覆える。 */
+  cands.sort((x,y)=> y.ex.length - x.ex.length
+                  || x.text.length - y.text.length
+                  || (x.text < y.text ? -1 : 1));
+  const used = new Set(), terms = [];
+  for(const c of cands){
+    if(c.ex.some(x=>used.has(x))) continue;
+    c.ex.forEach(x=>used.add(x));
+    terms.push(c);
+    if(used.size === want.size) break;
+  }
+
+  /* 展開し直して突き合わせる。1点でも違えば、まとめずに出す。 */
+  const back = terms.flatMap(t=>t.ex);
+  if(back.length !== target.length || new Set(back).size !== want.size
+     || !back.every(x=>want.has(x))) return plain;
+
+  return { ok:true, n:target.length, list:target.slice(),
+           terms: terms.map(t=>({ text:t.text, n:t.ex.length, ex:t.ex.slice() })) };
+}
+
+/* 投稿やレポートに貼る行。まとめられなければ1点ずつ返す。 */
+function formationLines(combos){
+  const f = compressCombos(combos);
+  if(!f.ok || !f.terms.length) return (f.list||[]).slice();
+  return f.terms.map(t=>`${t.text}  ${t.n}点`);
+}
+
 function buildPostText(points, amounts){
   const jcd  = ($('venue')||{}).value || '';
   const name = (typeof VENUES!=='undefined' && VENUES[jcd]) ? VENUES[jcd].name : '';
@@ -4825,10 +4920,16 @@ function buildPostText(points, amounts){
                 `${String(now.getDate()).padStart(2,'0')} `+
                 `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const combos = points.map((p,i)=>`${p.combo}  ${(amounts[i]||0).toLocaleString()}円`);
+  /* まとめ表記を先に、1点ずつを後に。読む側はまとめだけ見れば足り、
+     買う側は1点ずつで突き合わせられる。 */
+  const form = formationLines(points.map(p=>p.combo));
   return [
     `【${date} ${name}${rno}R】`,
     '',
     `3連単 ${points.length}点  計${total.toLocaleString()}円`,
+    ...form.map(l=>'  '+l),
+    '',
+    '  （1点ずつ）',
     ...combos.map(c=>'  '+c),
     '',
     `予想時刻 ${stamp}（締切前に出しています）`,
@@ -4858,7 +4959,9 @@ function buildPostShort(points, amounts){
   return [
     `${name}${rno}R`,
     `3連単${points.length}点 各${unit.toLocaleString()}円（計${total.toLocaleString()}円）`,
-    points.map(p=>p.combo).join(' '),
+    /* Xは140字までなので、まとめ表記のほうが点数を多く載せられる。
+       まとめられなかったときだけ1点ずつに戻す。 */
+    ...formationLines(points.map(p=>p.combo)).map(l=>l.replace(/\s+(\d+)点$/,'')),
     '',
     career,
     '※全レース記録・選別なし',
