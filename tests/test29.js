@@ -76,9 +76,20 @@ for(const b of BETS){
 ok(/当たった回だけ載せる、ということはしない/.test(src),
    '全部載せる決まりがファイルに書いてある');
 
+console.log('\n本線と穴を混ぜて数えないこと');
+for(const b of BETS){
+  const ana=b.ana||[];
+  ok(Array.isArray(ana), `${b.name}: 穴枠の欄がある（使っていなければ空）`);
+  ok(ana.every(valid), `${b.name}: 穴枠の組がすべて正しい形`);
+  ok(ana.every(c=>!b.picks.includes(c)), `${b.name}: 本線と穴が重なっていない`);
+}
+ok(/本線と穴は別々に数える/.test(src), '別々に数える決まりがファイルに書いてある');
+
 console.log('\n件数が少ないうちは回収率を強調しないこと');
 const out=require('child_process').execFileSync(process.execPath,[path.join(DIR,'bets.js')],{encoding:'utf8'});
 ok(/回収率/.test(out), '回収率は出る');
+ok(/本線 /.test(out) && /穴枠 /.test(out) && /合計 /.test(out),
+   '本線・穴枠・合計が別々の行で出る');
 ok(BETS.length>=20 || /何も意味しない数字/.test(out),
    '20レース未満なら「意味しない」と添える');
 ok(BETS.every(b=>b.rank!=null) || /順位が未計算/.test(out),
