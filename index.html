@@ -551,6 +551,20 @@ BOAT RACE公式から取得します。<br>
     取れなくても下の表に手入力すれば同じ判定ができます。
   </div>
   <button class="ghost" onclick="openOfficialPage('odds3t')" style="margin-top:6px">公式のオッズ画面を開く</button>
+  <details style="margin-top:8px">
+  <summary class="mini">取れない時：オッズのページを開いて貼り付け（通信不要）</summary>
+  <div class="dbody">
+  <div class="mini">
+    ① 上の「公式のオッズ画面を開く」を押す<br>
+    ② 3連単のタブにして、文字を長押し →「すべてを選択」→「コピー」<br>
+    ③ 戻って下に貼り付け →「貼り付けから取り込む」<br><br>
+    <b>自動取得とまったく同じ3つの検算</b>を通します。
+    通らなければ採用しません（読めたことにしません）。
+  </div>
+  <textarea id="oddsPasteBox" placeholder="3連単オッズのページ内容を貼り付け"></textarea>
+  <button class="secondary" onclick="parseOddsPaste()">貼り付けから取り込む</button>
+  </div>
+  </details>
 </div>
 <div style="margin-top:10px">
   <div class="mini" style="margin-bottom:6px">
@@ -4828,6 +4842,40 @@ async function fetchOdds(){
   }finally{
     if(btn) btn.disabled = false;
     state.busy = false;
+  }
+}
+
+/* 貼り付けたオッズのページから取り込む。
+   ------------------------------------------------------------------
+   自動取得はプロキシ経由なので、通らない日がある。
+   そのたびに120個の数字を人が書き写すのは、時間がかかるうえに間違える。
+   読み取りの規則は自動取得とまったく同じ parseOdds3t を使い、
+   検算も同じものを通す。通らなければ採用しない（読めたことにしない）。 */
+function parseOddsPaste(){
+  const box = $('oddsPasteBox');
+  const raw = box ? box.value : '';
+  if(!raw.trim()){ alert('オッズのページ内容を貼り付けてください。'); return; }
+  try{
+    const res = parseOdds3t(raw, modelProbMap());
+    res.tried.forEach(t=>log('  ・'+t));
+    if(!res.map){
+      notice('oddsNotice','warn',
+        '貼り付けた内容からオッズの表を読み取れませんでした。'+
+        '<br>3連単のタブで「すべてを選択」してコピーできているか確かめてください。'+
+        '<b>手入力でも期待値の判定はできます。</b>');
+      log('  貼り付け内容の先頭: '+String(raw).replace(/\s+/g,' ').slice(0,400));
+      return;
+    }
+    state.oddsMap = res.map;
+    notice('oddsNotice','ok',
+      `貼り付けから3連単オッズを120通り取り込みました（${esc(res.how)}）。`+
+      `検算 Σ(1/オッズ)=${res.chk.inv.toFixed(2)} / ${esc(res.chk.how||'')}との順位相関 ${res.chk.rho.toFixed(2)}。`+
+      'もう一度「予想レポート生成」を押すと、期待値の高い順に買い目を選び直します。');
+    log(`  ✓ 貼り付けから120通り Σ(1/オッズ)=${res.chk.inv.toFixed(3)}`);
+    renderOddsBox();
+  }catch(e){
+    notice('oddsNotice','warn','貼り付けの解析に失敗しました（'+esc(e.message)+'）。手入力でも判定できます。');
+    log('  ✗ オッズ貼り付けエラー: '+(e && e.stack ? e.stack : e));
   }
 }
 
