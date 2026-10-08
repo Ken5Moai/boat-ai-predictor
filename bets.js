@@ -36,11 +36,27 @@ module.exports = [
    rank:null,
    ana:[],                                  /* 穴枠は使っていない */
    note:'4号艇頭は 4-1-3 の1点だけ持っていた。4-3-5 は圏外。'
+ },
+ {
+   name:'若松10R 準優勝戦',
+   date:'2026-10-08',
+   /* 公式の出走表・直前情報・展示情報・3連単オッズ（21:54更新）を入れて採点。
+      締切22:05 の前に出している。結果が出たら hit と pay を入れる。 */
+   picks:['1-2-3','1-3-2','2-1-3','3-1-2','1-2-5','1-3-5','1-2-4','1-5-2','1-3-4','1-5-3'],
+   form:['1-23-2345','1-5-23','23-1-23'],
+   unit:100,
+   ana:[],                                  /* 穴枠は使っていない（既定どおり0口） */
+   hit:null, pay:null, pop:null, rank:null,
+   note:'モデルの1号艇60%に対し市場は77%。展示ST F.03・展示タイム6.83（6艇で最も遅い）'+
+        'を見ているぶん、モデルのほうが1号艇に慎重。'+
+        '2-1-3(50.3倍)と3-1-2(47.6倍)がモデルの3・4番手で、市場は1.5%前後しか置いていない。'
  }
 ];
 
 if(require.main===module){
   const B=module.exports;
+  /* 結果がまだ出ていないレースは、収支に混ぜない。
+     未確定を0として数えると、外れたのと同じ扱いになってしまう。 */
   const row=b=>{
     const ana=b.ana||[];
     const n=b.picks.length, inv=n*b.unit;
@@ -50,7 +66,8 @@ if(require.main===module){
     return {...b, n, inv, win, back, an, ainv, awin, aback,
             pl:(back+aback)-(inv+ainv)};
   };
-  const rs=B.map(row);
+  const rs=B.filter(b=>b.hit!=null).map(row);
+  const waiting=B.filter(b=>b.hit==null);
   const inv=rs.reduce((a,r)=>a+r.inv,0);
   const back=rs.reduce((a,r)=>a+r.back,0);
   const wins=rs.filter(r=>r.win).length;
@@ -93,4 +110,10 @@ if(require.main===module){
     console.log(`※ まだ${rs.length}レース。回収率は何も意味しない数字です（20レースで一度見る）。`);
   const noDate=rs.filter(r=>!r.date).length;
   if(noDate) console.log(`※ ${noDate}レースは日付が未確認。`);
+  if(waiting.length){
+    console.log(`\n結果待ち ${waiting.length}件（収支には入れていない）`);
+    for(const b of waiting)
+      console.log(`  ${b.date||'日付未確認'}  ${b.name}  ${b.picks.length}点 `+
+        `¥${(b.picks.length*b.unit).toLocaleString()}  ${(b.form||b.picks).join(' ')}`);
+  }
 }
