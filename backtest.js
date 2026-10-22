@@ -729,6 +729,60 @@ if(require.main===module){
   console.log(`検証レース ${RACES.length}件\n`);
   console.log('=== 現在の重み ===');
   const base=runWith({},null,{detail:true});
+  /* index.html の関数（upsetView / outerSecond）をそのまま使う。
+     検証用に書き写すと本体とずれるので、本体を読み込んで呼ぶ。 */
+  const WIN = (()=>{
+    const d2=new JSDOM(HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
+      beforeParse(w){w.Tesseract={createWorker:async()=>({})};w.fetch=async()=>{throw new Error('x')};w.alert=()=>{}}});
+    d2.window.Element.prototype.scrollIntoView=function(){};
+    return d2.window;
+  })();
+  /* 波乱ブロックを足すと、どうなるか
+     ==================================================================
+     「本線10点＋波乱9点＝19点なら良い」という案を測った。
+     波乱ブロックは index.html の upsetView / outerSecond で作ったもので、
+     本命が飛んだ場合に限った条件つき確率の上位から3艇×3点を取る。
+
+     結果は厳しかった。自分で作ったものだが、そのまま書く。 */
+  {
+    const toCombos = r => Object.entries(r.probOf)
+      .map(([combo,p])=>({combo,p})).sort((a,b)=>b.p-a.p);
+    const done = base.filter((r,i)=>RACES[i] && RACES[i].pay!=null);
+    const payOf = {}; for(const R of RACES) if(R.pay!=null) payOf[R.name]={pay:R.pay, result:R.result};
+
+    const haran = (combos, mode) => {
+      const fav = Number(String(combos[0].combo)[0]);
+      const U = WIN.upsetView(combos, fav);
+      const out = [];
+      for(const x of U.lanes.filter(y=>y.cond>=0.10).slice(0,3)){
+        const src = mode==='outer' ? WIN.outerSecond(x, x.lane).list : x.list;
+        for(const c of src.slice(0,3)) out.push(String(c.combo));
+      }
+      return out;
+    };
+    const run = (label, pick) => {
+      let inv=0, back=0, hit=0, pts=0;
+      for(const r of done){
+        const info = payOf[r.name]; if(!info) continue;
+        const ks = [...new Set(pick(toCombos(r)))];
+        pts += ks.length; inv += ks.length*100;
+        if(ks.includes(info.result)){ back += info.pay; hit++; }
+      }
+      console.log(`  ${label.padEnd(26)} 平均${(pts/done.length).toFixed(1)}点  `+
+        `回収率${(back/inv*100).toFixed(0).padStart(4)}%  的中${String(hit).padStart(2)}/${done.length}`);
+    };
+    console.log('\n=== 波乱ブロックを足すと回収率はどうなるか ===');
+    console.log('  「本線10点＋波乱9点＝19点」という案を測った結果。');
+    run('本線10点のみ',          c=>c.slice(0,10).map(x=>String(x.combo)));
+    run('確率順19点',            c=>c.slice(0,19).map(x=>String(x.combo)));
+    run('本線10＋波乱9（モデル順）', c=>[...c.slice(0,10).map(x=>String(x.combo)), ...haran(c,'model')]);
+    run('本線10＋波乱9（外に限る）', c=>[...c.slice(0,10).map(x=>String(x.combo)), ...haran(c,'outer')]);
+    run('波乱9だけ（モデル順）',    c=>haran(c,'model'));
+    run('波乱9だけ（外に限る）',    c=>haran(c,'outer'));
+    console.log('  ※ 的中数に注目すること。波乱を足しても的中数が増えていなければ、');
+    console.log('    波乱が当てた回は本線でも当てていたということ。投資だけが増える。');
+  }
+
   /* 1着が決まったあと、2着は誰か（モデルは「どう勝ったか」を見ていない）
      ==================================================================
      きっかけは 2026-10-22 若松10R。本人が 4-全-5 で 4-3-5 を取ったときの説明。
