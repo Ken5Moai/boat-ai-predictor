@@ -126,6 +126,36 @@ module.exports = [
         '3号艇 西村は当地8.30・当地3連率100.00だが、'+
         '当地2連率60.00との差から分母が小さい（数走ぶん）と見られる。'+
         'モーター77は2連率26.14で6艇中最下位、直前にキャブ交換あり。'
+ },
+ {
+   name:'若松10R 予選特賞',
+   date:'2026-10-22',
+   picks:['1-2-4','1-4-2','1-2-5','1-5-2','1-4-5','1-2-3','1-5-4','2-1-4','1-4-3','1-3-2'],
+   form:['1-24-2345','1-35-2','1-5-4','2-1-4'],
+   unit:100,
+   ana:[],
+   hit:null, pay:null, pop:null, rank:null,
+   /* 中継画面からの採点。出走表のタブが「勝率」ではなかったため、
+      全国勝率・当地勝率・平均ST が未取得（重み0.26ぶんが空）。
+      そのぶんは残りの項目で再正規化されている。推測では埋めていない。 */
+   missing:['全国勝率','当地勝率','平均ST'],
+   /* 同じレースに、有料note（禅-zen）の買い目がある。
+      人の予想とモデルを、同じレースで前向きに突き合わせる記録。
+      買ったかどうかとは別に、当たり外れだけを数える。 */
+   expert:{ who:'禅-zen（note有料）',
+     picks:['4-5-1','4-5-2','4-5-6','4-1-5','4-2-5','4-6-5',
+            '4-2-1','4-2-3','4-2-6','5-2-4','5-2-6','5-4-1','5-4-2','5-4-6','3-2-4',
+            '2-3-4','2-3-5','2-4-3','2-4-5'],
+     note:'本線 4-5=126 ／ 抑 4-2-136・5-2-46・5-4-126・3-2-4・2-34-345。'+
+          '「2.4が攻めの起点。直捲りから4金田の二段捲りもあり得る。'+
+          'そうなると5藤森の突き抜けも」。'+
+          'モデルの10点との重なりは0点。モデルから見た19点の合計的中確率は8.4%、'+
+          'モデルの順位は中央値58/120（最良18・最悪99）。'+
+          'モデルと市場はどちらも1号艇が本線で、禅-zenだけが4・5号艇頭。' },
+   note:'中継画面のみで採点。全国勝率・当地勝率・平均STが未取得（重み0.26が空）。'+
+        'モデルの1着確率は 1:52% 2:14% 4:13% 5:10% 3:8% 6:2%。'+
+        '市場も1号艇頭が人気（1-4-2が8.0倍で1番人気）。'+
+        '人気上位の 1-2-4(8.5倍)・1-4-2(8.0倍) はどちらも期待値1未満。'
  }
 ];
 
@@ -175,6 +205,32 @@ if(require.main===module){
     `投資¥${ainv.toLocaleString()} 払戻¥${aback.toLocaleString()}  `+
     `収支 ${aback-ainv>=0?'+':''}${(aback-ainv).toLocaleString()}  `+
     `回収率 ${ainv?(aback/ainv*100).toFixed(0):'—'}%`);
+  /* 人の予想（有料noteなど）と同じレースで突き合わせた記録。
+     買ったかどうかとは別に、当たり外れだけを数える。
+     こちらが外れた回だけ比べる、ということをしないため、
+     expert がある全レースを必ず出す。 */
+  {
+    const ex=B.filter(b=>b.expert && b.expert.picks && b.expert.picks.length);
+    if(ex.length){
+      console.log('\n人の予想との突き合わせ（買ったかどうかとは別）');
+      let eh=0, mh=0, done=0;
+      for(const b of ex){
+        const ewin = b.hit!=null && b.expert.picks.includes(b.hit);
+        const mwin = b.hit!=null && b.picks.includes(b.hit);
+        if(b.hit!=null){ done++; if(ewin) eh++; if(mwin) mh++; }
+        const over=b.expert.picks.filter(k=>b.picks.includes(k)).length;
+        console.log(`  ${b.date||'日付未確認'}  ${b.name}`);
+        console.log(`    ${b.expert.who}  ${b.expert.picks.length}点  `+
+          (b.hit==null?'結果待ち':(ewin?`的中（${b.hit}）`:`外れ（正解${b.hit}）`)));
+        console.log(`    こちら            ${b.picks.length}点  `+
+          (b.hit==null?'結果待ち':(mwin?`的中（${b.hit}）`:`外れ（正解${b.hit}）`))+
+          `  重なり${over}点`);
+      }
+      if(done) console.log(`  結果が出た${done}レース  人の予想 ${eh}/${done}  こちら ${mh}/${done}`);
+      else     console.log('  まだ結果が出たレースはありません。');
+    }
+  }
+
   console.log(`合計  投資¥${(inv+ainv).toLocaleString()} 払戻¥${(back+aback).toLocaleString()}  `+
     `収支 ${(back+aback)-(inv+ainv)>=0?'+':''}${((back+aback)-(inv+ainv)).toLocaleString()}  `+
     `回収率 ${(inv+ainv)?((back+aback)/(inv+ainv)*100).toFixed(0):'—'}%`);
