@@ -3686,6 +3686,28 @@ function outerSecond(cond, a){
   return { list, tot, share: cond.win ? tot/cond.win : 0 };
 }
 
+/* 予想を3段に分けて見せる（至極の一点 / 抑え / 波乱）
+   ==================================================================
+   有料note（禅-zen）の見せ方が読みやすかったので、形だけ借りる。
+   ただし点数は借りない。実測31レースでこうなっているため。
+
+     1点 46% / 6点 80% / 8点 94% / 10点 96% / 12点 92%
+     15点 73% / 18点 69% / 19点 66% / 20点 63%
+
+   禅-zenの19点は66%の帯。10点の96%とは30ポイント違う。
+   見せ方（3段に分ける）と点数（いくつ買うか）は別の話なので、
+   見せ方だけ借りて、点数は実測どおり10点に据え置く。
+
+   「至極の一点」は1点だけで買うと実測46%（2/31）。
+   頭に立てるのはよいが、それ1点で勝負する券ではない。
+   画面にもそう書く。 */
+function buildTiers(combos, mainN){
+  const n = Math.max(1, mainN || 10);
+  const top  = combos[0];
+  const osae = combos.slice(1, n);
+  return { top, osae, n };
+}
+
 /* 金額配分：100円単位。確率に比例して配る。
    ------------------------------------------------------------------
    どれか1つしか当たらない（排他的な）買い目に予算を配るとき、
@@ -4682,6 +4704,53 @@ ${(()=>{
 })()}
 
 ${(()=>{
+  /* 至極の一点 / 抑え の2段。波乱はこの下の別カードに出る。
+     点数は実測どおり（10点あたりが山）。見せ方だけ3段にする。 */
+  if(!points.length) return '';
+  const T = buildTiers(points.map(p=>({combo:p.combo,p:p.p})), points.length);
+  const f = list => { const r = compressCombos(list.map(c=>c.combo));
+    return r.ok ? r.terms.map(t=>`${t.text}`).join('　') : list.map(c=>c.combo).join(' '); };
+  return `<div class="card"><div class="chead">予想<span class="mini">
+    至極の一点 ／ 抑え ／ 波乱</span></div><div class="cbody">
+  <div style="padding:10px;border:1px solid #5a4420;border-radius:6px;background:#1c1710">
+    <div class="mini" style="color:#f0c040;margin-bottom:4px">至極の一点</div>
+    <div style="font-size:26px;font-weight:700;letter-spacing:2px">${T.top.combo}</div>
+    <div class="mini" style="margin-top:4px">モデルの確率 ${(T.top.p*100).toFixed(1)}%
+      ／ ${(1/T.top.p).toFixed(0)}倍以上で買い</div>
+    <div class="mini" style="margin-top:4px;color:#ef6262">
+      <b>この1点だけで買うと実測46%（31レース・2/31）。</b>
+      頭に立てる印であって、1点勝負する券ではありません。</div>
+  </div>
+  ${T.osae.length ? `<div style="margin-top:10px;padding:10px;border:1px solid #2a3550;border-radius:6px">
+    <div class="mini" style="margin-bottom:4px">抑え ${T.osae.length}点</div>
+    <div style="font-size:17px;letter-spacing:.5px">${f(T.osae)}</div>
+    <div class="mini" style="margin-top:4px">
+      至極の一点と合わせて ${T.n}点。合計的中確率 ${(hitProb*100).toFixed(1)}%</div>
+  </div>` : ''}
+  <div class="mini" style="margin-top:8px">
+    波乱はこの下の「荒れ予想」に出ます。<b>別枠なので、買うと点数が増えます。</b>
+  </div>
+  <details style="margin-top:8px">
+  <summary class="mini" style="color:#f0c040">点数を増やすといくら落ちるか（実測31レース）</summary>
+  <div class="dbody"><table class="tbl"><tr><th>点数</th><th>回収率</th><th>的中</th></tr>
+  <tr><td>1点</td><td>46%</td><td>2/31</td></tr>
+  <tr><td>6点</td><td>80%</td><td>11/31</td></tr>
+  <tr><td>8点</td><td>94%</td><td>14/31</td></tr>
+  <tr><td><b>10点</b></td><td><b>96%</b></td><td>17/31</td></tr>
+  <tr><td>12点</td><td>92%</td><td>19/31</td></tr>
+  <tr><td>15点</td><td>73%</td><td>19/31</td></tr>
+  <tr><td>19点</td><td>66%</td><td>21/31</td></tr>
+  <tr><td>20点</td><td>63%</td><td>21/31</td></tr>
+  </table>
+  <div class="mini" style="margin-top:8px">
+  有料noteでよく見る19点前後は<b>66%の帯</b>です。10点の96%とは30ポイント違います。
+  見せ方を3段に分けることと、点数を増やすことは別の話なので、
+  <b>ここでは見せ方だけ借りて、点数は実測どおり10点に据え置いています。</b>
+  </div></div></details>
+  </div></div>`;
+})()}
+
+${(()=>{
   /* 荒れ予想。本命が飛んだ場合に限った見方を、別枠で出す。
      穴枠（下限オッズで選ぶ方式）は実測で回収率を下げたので、ここでは使わない。
      ここでやるのは確率を足し直して見せることだけで、新しい仮定は足さない。 */
@@ -5366,9 +5435,20 @@ function buildPostText(points, amounts){
   /* まとめ表記を先に、1点ずつを後に。読む側はまとめだけ見れば足り、
      買う側は1点ずつで突き合わせられる。 */
   const form = formationLines(points.map(p=>p.combo));
+  /* 至極の一点 / 抑え の2段で出す。波乱は別枠なのでここには混ぜない。
+     混ぜると、読んだ人が何点買えばいいのか分からなくなる。 */
+  const T = points.length ? buildTiers(points.map(p=>({combo:p.combo,p:p.p})), points.length) : null;
+  const tier = T ? [
+    '◎ 至極の一点',
+    `   ${T.top.combo}   （モデル ${(T.top.p*100).toFixed(1)}%／${(1/T.top.p).toFixed(0)}倍以上で買い）`,
+    ...(T.osae.length ? ['', `○ 抑え ${T.osae.length}点`,
+      ...formationLines(T.osae.map(c=>c.combo)).map(l=>'   '+l)] : []),
+    ''
+  ] : [];
   return [
     `【${date} ${name}${rno}R】`,
     '',
+    ...tier,
     `3連単 ${points.length}点  計${total.toLocaleString()}円`,
     ...form.map(l=>'  '+l),
     '',
@@ -5403,7 +5483,9 @@ function buildPostShort(points, amounts){
     `${name}${rno}R`,
     `3連単${points.length}点 各${unit.toLocaleString()}円（計${total.toLocaleString()}円）`,
     /* Xは140字までなので、まとめ表記のほうが点数を多く載せられる。
-       まとめられなかったときだけ1点ずつに戻す。 */
+       まとめられなかったときだけ1点ずつに戻す。
+       先頭に「◎」で至極の一点を立てる（読む側がどれが本命か分かるように）。 */
+    ...(points.length ? ['◎ '+points[0].combo] : []),
     ...formationLines(points.map(p=>p.combo)).map(l=>l.replace(/\s+(\d+)点$/,'')),
     '',
     career,
