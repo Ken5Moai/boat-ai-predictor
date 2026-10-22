@@ -729,6 +729,79 @@ if(require.main===module){
   console.log(`検証レース ${RACES.length}件\n`);
   console.log('=== 現在の重み ===');
   const base=runWith({},null,{detail:true});
+  /* 1着が決まったあと、2着は誰か（モデルは「どう勝ったか」を見ていない）
+     ==================================================================
+     きっかけは 2026-10-22 若松10R。本人が 4-全-5 で 4-3-5 を取ったときの説明。
+       「3が凹んで4がいったら、5はついていける確率が高い。
+         でも等級が低いから腕がまだない。前走や成績は悪くないから3着には残る」
+     これは条件つきの読みで、モデルにはその考え方が無い。
+
+     モデルの2着は Plackett-Luce で s_b/(total - s_a) と決まる。
+     つまり「1着が誰か」で分母が変わるだけで、
+     「その1着がどうやって勝ったか」はまったく見ていない。
+     2号艇が1着ということは1号艇を飲んでいるはずだが、
+     モデルはそれでも「2着は1号艇」と言う。
+
+     ここで毎回測る。結果を見てから基準を変えないよう、判定を先に書く。 */
+  {
+    const own = runWith();
+    const rows = [];
+    for(let i=0;i<RACES.length;i++){
+      const R = RACES[i]; if(!R.result) continue;
+      const r = own[i]; if(!r || r.name !== R.name) continue;
+      const [a,b] = R.result.split('-').map(Number);
+      if(a === 1) continue;                      /* 1号艇が勝った回は対象外 */
+      const cond = {}; let tot = 0;
+      for(const [k,p] of Object.entries(r.probOf)){
+        if(+k[0] !== a) continue;
+        cond[+k[2]] = (cond[+k[2]]||0) + p; tot += p;
+      }
+      rows.push({ win:a, second:b, p1:(cond[1]||0)/tot, name:R.name });
+    }
+    console.log('\n=== 1号艇以外が1着のとき、1号艇は2着に残るか ===');
+    if(!rows.length){ console.log('  対象レースがまだありません。'); }
+    else{
+      const show = (label, a) => {
+        if(!a.length){ console.log(`  ${label} 0件`); return; }
+        const hit = a.filter(x=>x.second===1).length;
+        const exp = a.reduce((t,x)=>t+x.p1, 0);
+        console.log(`  ${label}  ${a.length}件  実際 ${hit}回  モデルの予想 ${exp.toFixed(1)}回  `+
+                    `差 ${(hit-exp>=0?'+':'')}${(hit-exp).toFixed(1)}`);
+      };
+      show('全体                 ', rows);
+      show('2号艇が1着（内を飲む）', rows.filter(x=>x.win===2));
+      show('3号艇が1着            ', rows.filter(x=>x.win===3));
+      show('4号艇以上が1着        ', rows.filter(x=>x.win>=4));
+      console.log('  2着は1着より外か内か');
+      for(const wv of [2,3,4,5,6]){
+        const a = rows.filter(x=>x.win===wv); if(!a.length) continue;
+        console.log(`    ${wv}号艇が1着: 外${a.filter(x=>x.second>wv).length}回 / `+
+          `内${a.filter(x=>x.second<wv).length}回   2着の枠 → ${a.map(x=>x.second).join(',')}`);
+      }
+      console.log('  理屈はこう。2号艇が1着なら1号艇を飲んでいるので1号艇は沈む。');
+      console.log('  3号艇が1着なら差しが多いので1号艇は粘れる。');
+      console.log('  モデルはこの区別をしていない。');
+
+      /* 先に決めた判定（2026-10-22）。結果を見てから変えない。
+         二項検定（片側）で、モデルの言う確率より実際が少ないかを見る。 */
+      const g2 = rows.filter(x=>x.win===2);
+      const hit2 = g2.filter(x=>x.second===1).length;
+      const pbar = g2.length ? g2.reduce((t,x)=>t+x.p1,0)/g2.length : 0;
+      const C = (n,k)=>{ let r=1; for(let i=0;i<k;i++) r=r*(n-i)/(i+1); return r; };
+      let pv = 0;
+      for(let x=0; x<=hit2; x++) pv += C(g2.length,x)*Math.pow(pbar,x)*Math.pow(1-pbar,g2.length-x);
+      console.log('\n  【判定・2026-10-22に先に書いた】2着の条件つき補正を入れるか');
+      console.log('    対象は「2号艇が1着になったレース」。20件たまった時点で判定する。');
+      console.log(`    いま ${g2.length}/20 件  1号艇が2着 ${hit2}回 / モデルの平均予想 ${(pbar*100).toFixed(0)}%`);
+      if(g2.length >= 20){
+        console.log(`    二項検定（片側） p=${pv.toFixed(4)}  → ${pv<0.05?'0.05未満。補正を入れる。':'0.05以上。入れない。'}`);
+      }else{
+        console.log(`    （参考 p=${pv.toFixed(4)}。件数が足りないので根拠にしない）`);
+      }
+      console.log('    条件は「p<0.05」だけ。あとから緩めない。');
+    }
+  }
+
   base.forEach(x=>console.log(
     `  ${x.name.padEnd(12)} 結果 ${x.result}${x.pop?`(${x.pop}番人気)`:''} は ${String(x.rank).padStart(3)} 番目`+
     `   採点順 ${x.order.join(' ')}`));
