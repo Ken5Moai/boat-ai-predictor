@@ -3544,6 +3544,68 @@ function buildProbabilities(ctx){
   return combos;
 }
 
+/* 着順ごとの確率と、軸を決めて流す買い方
+   ==================================================================
+   きっかけは 2026-10-22 若松10R。モデルの10点も、有料noteの19点も外れ、
+   本人が 4-全-5（4点）で 4-3-5 を取った（388.7倍）。
+   本人の言葉は「4がいって、5がついていけず3着、2着は分からんけん全」。
+
+   これはモデルに出せない形だった。理由ははっきりしている。
+   モデルは120通りを確率順に並べることしかしておらず、
+   「誰が1着か」「誰が3着か」という着順ごとの確信を、外に出していなかった。
+
+   しかもこのファイルの別の場所（EV_MIN_P の説明）に、こう書いてある。
+     「モデルは『誰が勝つか』は市場並みに当てられるが、
+       『2着3着の細かい並び』の確率までは解像度が無い」
+   本人のやり方は、まさにその弱点を避けている。
+   強いところ（1着・3着の見当）だけ使い、弱いところ（2着）は全部買う。
+
+   確率そのものは Plackett-Luce の計算の中にすでにある。
+   出していなかっただけなので、ここで出す。 */
+
+/* 艇ごとの、1着・2着・3着になる確率。combos を足し合わせるだけ。 */
+function positionProbs(combos){
+  const out = {};
+  for(let l=1;l<=6;l++) out[l] = { p1:0, p2:0, p3:0 };
+  for(const c of combos){
+    const [a,b,d] = String(c.combo).split('-').map(Number);
+    out[a].p1 += c.p; out[b].p2 += c.p; out[d].p3 += c.p;
+  }
+  return out;
+}
+
+/* 軸を決めて流す買い方の候補。
+   A-全-C（1着と3着を決めて2着を流す）など、1か所だけ流す形を全部作り、
+   合計確率の高い順に並べる。
+   点数が少ないほど1点あたりの確率は高いが、合計は下がる。
+   どちらを取るかは買う人が決めることなので、両方を並べて見せる。 */
+function wheelCandidates(combos){
+  const byCombo = {};
+  for(const c of combos) byCombo[String(c.combo)] = c.p;
+  const L = [1,2,3,4,5,6];
+  const out = [];
+  const add = (text, keys) => {
+    const ks = keys.filter(k=>byCombo[k] !== undefined);
+    if(ks.length < 2) return;                 /* 1点なら「流し」ではない */
+    out.push({ text, combos:ks, n:ks.length,
+               p: ks.reduce((t,k)=>t+byCombo[k], 0) });
+  };
+  for(const a of L) for(const c of L){
+    if(a===c) continue;
+    add(`${a}-全-${c}`, L.filter(b=>b!==a&&b!==c).map(b=>`${a}-${b}-${c}`));
+  }
+  for(const a of L) for(const b of L){
+    if(a===b) continue;
+    add(`${a}-${b}-全`, L.filter(c=>c!==a&&c!==b).map(c=>`${a}-${b}-${c}`));
+  }
+  for(const b of L) for(const c of L){
+    if(b===c) continue;
+    add(`全-${b}-${c}`, L.filter(a=>a!==b&&a!==c).map(a=>`${a}-${b}-${c}`));
+  }
+  out.sort((x,y)=> y.p - x.p || x.n - y.n);
+  return out;
+}
+
 /* 金額配分：100円単位。確率に比例して配る。
    ------------------------------------------------------------------
    どれか1つしか当たらない（排他的な）買い目に予算を配るとき、
@@ -4500,6 +4562,42 @@ ${(()=>{
       「当たる」と書いて売ると、実測が支持していない以上、景品表示法の優良誤認にあたる可能性があります。
       いま入っている数字はすべて実測値です。
     </div>
+  </div></div>`;
+})()}
+
+${(()=>{
+  /* 着順ごとの確率と、軸を決めて流す買い方。
+     2026-10-22 若松10R で、本人が 4-全-5 で 4-3-5（388.7倍）を取ったのがきっかけ。
+     「4がいって、5がついていけず3着、2着は分からんけん全」。
+     モデルは120通りを確率順に並べるだけで、着順ごとの確信を外に出していなかった。
+     計算の中にはあるので、出す。 */
+  const PP = positionProbs(combos);
+  const mx = k => Math.max(...[1,2,3,4,5,6].map(l=>PP[l][k]));
+  const wh = wheelCandidates(combos).slice(0,6);
+  return `<div class="card"><div class="chead">着順ごとの確率<span class="mini">
+    どの着が読めて、どの着が読めないか</span></div><div class="cbody">
+  <table class="tbl"><tr><th>艇</th><th>1着</th><th>2着</th><th>3着</th></tr>
+  ${[1,2,3,4,5,6].map(l=>`<tr>
+    <td><span class="betno" style="font-size:14px">${l}</span></td>
+    ${['p1','p2','p3'].map(k=>`<td${PP[l][k]===mx(k)?' style="color:#f0c040;font-weight:700"':''}>${
+      (PP[l][k]*100).toFixed(0)}%</td>`).join('')}
+  </tr>`).join('')}</table>
+  <div class="mini" style="margin-top:8px">
+    いちばん高い艇で 1着${(mx('p1')*100).toFixed(0)}% / 2着${(mx('p2')*100).toFixed(0)}% / 3着${(mx('p3')*100).toFixed(0)}%。
+    ${mx('p2') < 0.35 ? '<b style="color:#f0c040">2着は誰も35%に届きません。'+
+      '2着を1艇に決めるより、流したほうが理にかなっています。</b>' :
+      '2着も比較的はっきりしています。'}
+  </div>
+  <div style="margin-top:12px;padding:8px 10px;border:1px solid #2a3550;border-radius:6px">
+    <div class="mini" style="margin-bottom:5px">軸を決めて流す買い方（合計確率の高い順）</div>
+    ${wh.map(x=>`<div style="font-size:16px">
+      <b>${x.text}</b> <span class="mini">${x.n}点 ／ 合計${(x.p*100).toFixed(1)}%
+      ／ 1点あたり${(x.p/x.n*100).toFixed(1)}%</span></div>`).join('')}
+    <div class="mini" style="margin-top:6px">
+      読める着だけ決めて、読めない着を流す形です。
+      <b>上の「買い目」とは別の考え方</b>なので、どちらかを選んでください。両方買うと点数が倍になります。
+    </div>
+  </div>
   </div></div>`;
 })()}
 
