@@ -781,6 +781,39 @@ if(require.main===module){
     run('波乱9だけ（外に限る）',    c=>haran(c,'outer'));
     console.log('  ※ 的中数に注目すること。波乱を足しても的中数が増えていなければ、');
     console.log('    波乱が当てた回は本線でも当てていたということ。投資だけが増える。');
+
+    /* 「当たったときの払戻が大きいなら、的中率が低くても元が取れる」という考え方の検算。
+       正しい考え方だが、このブロックでは成立していなかった。
+       条件つき確率の上位を取ると、結局「安い組」が並ぶため。 */
+    {
+      let miss=0, saved=0, cost=0, back=0;
+      const rows=[];
+      for(const r of done){
+        const info = payOf[r.name]; if(!info) continue;
+        const c = toCombos(r);
+        const main = c.slice(0,10).map(x=>String(x.combo));
+        const H = [...new Set(haran(c,'model'))];
+        cost += H.length*100;
+        if(H.includes(info.result)) back += info.pay;
+        if(!main.includes(info.result)){
+          miss++; if(H.includes(info.result)) saved++;
+          rows.push({pay:info.pay, result:info.result, rank:r.rank, name:r.name});
+        }
+      }
+      console.log(`\n  本線10点が外したのは ${miss}レース。そのうち波乱で拾えたのは ${saved}レース。`);
+      console.log('  本線が外した回の払戻と、モデルの順位');
+      rows.sort((a,b)=>b.pay-a.pay).slice(0,6).forEach(x=>
+        console.log(`    ¥${String(x.pay).padStart(6)}  ${x.result}  ${String(x.rank).padStart(3)}番目  ${x.name}`));
+      console.log('  高配当ほどモデルの順位が遠い。波乱ブロックは上位9点しか取らないので届かない。');
+      console.log(`  波乱ブロック単体  投資¥${cost.toLocaleString()} 払戻¥${back.toLocaleString()}`);
+      console.log('  損益分岐に必要な的中数（1回あたりの払戻別）');
+      for(const X of [5000,10000,20000,30000]){
+        const n = cost/X;
+        console.log(`    1回¥${String(X).padStart(6)} なら ${n.toFixed(1)}回／${done.length}レース必要`);
+      }
+      console.log('  「当たれば大きい」は正しい考え方だが、このブロックの実測は');
+      console.log('  2回あたって平均¥1,275。安い組ばかりで、大きいのは1回も取れていない。');
+    }
   }
 
   /* 1着が決まったあと、2着は誰か（モデルは「どう勝ったか」を見ていない）
