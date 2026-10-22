@@ -3606,6 +3606,86 @@ function wheelCandidates(combos){
   return out;
 }
 
+/* 荒れ予想（1号艇が飛んだらどうなるか）
+   ==================================================================
+   ここで作るのは「荒れる確率を上げる道具」ではない。
+   モデルが持っている数字を、条件つきで見せ直すだけ。
+
+   なぜそうするか。実測でこうなっているため。
+     ・穴枠（下限オッズ以上から確率順に選ぶ）は回収率を下げた
+       本線6＋穴4で 50倍以上 77% / 100倍以上 53%（本線10のみは106%）
+       100倍以上の穴は28レースで0回しか当たっていない
+     ・払戻¥5,000超のレースで、正解はモデルの平均41.3番目にある
+       三国6Rの¥27,110は74番目だった
+   つまり「モデルの確率で穴を選ぶ」はうまくいかない。
+
+   できるのは、確率を足し直して見せることだけ。
+     ・1号艇が1着を外した場合に限ったときの、各艇の1着確率
+     ・誰が1着になった場合の、2着・3着の分布
+   これは新しい仮定を足していないので、嘘にならない。
+
+   ただし大きな但し書きがある。2着の条件つき分布には既知の欠陥がある。
+   実測では、2号艇が1着になった4レースで1号艇が2着に残ったのは0回。
+   モデルは平均61%と言っていた。
+   モデルは「1着がどうやって勝ったか」を見ていないため。
+   件数が足りないので直していない（判定は backtest.js に先に書いた）。
+   画面にもこの但し書きを必ず出す。 */
+function conditionalOnWinner(combos, a){
+  const p2 = {}, p3 = {}, list = [];
+  let tot = 0;
+  for(const c of combos){
+    const [x,b,d] = String(c.combo).split('-').map(Number);
+    if(x !== a) continue;
+    tot += c.p; list.push(c);
+    p2[b] = (p2[b]||0) + c.p;
+    p3[d] = (p3[d]||0) + c.p;
+  }
+  if(!tot) return { win:0, p2:{}, p3:{}, list:[] };
+  for(const k in p2) p2[k] /= tot;
+  for(const k in p3) p3[k] /= tot;
+  list.sort((x,y)=>y.p-x.p);
+  return { win:tot, p2, p3, list };
+}
+
+/* 1号艇が1着を外した場合に限った、各艇の1着確率。
+   足して100%になるよう割り直すだけ。 */
+function upsetView(combos, favourite){
+  const fav = favourite || 1;
+  let rest = 0;
+  const byWin = {};
+  for(const c of combos){
+    const a = Number(String(c.combo)[0]);
+    byWin[a] = (byWin[a]||0) + c.p;
+    if(a !== fav) rest += c.p;
+  }
+  const out = [];
+  for(let l=1;l<=6;l++){
+    if(l === fav) continue;
+    out.push({ lane:l, raw:byWin[l]||0, cond: rest ? (byWin[l]||0)/rest : 0,
+               ...conditionalOnWinner(combos, l) });
+  }
+  out.sort((x,y)=>y.raw-x.raw);
+  return { favourite:fav, favP:byWin[fav]||0, restP:rest, lanes:out };
+}
+
+/* 「展開どおりなら」の読み方（2着を外の艇に限る）
+   ------------------------------------------------------------------
+   外の艇が1着ということは、内を飲んでいることが多い。
+   実測（1号艇以外が1着になった9レース）はこうだった。
+     2号艇が1着 → 2着は 3,4,5,3  外が4回／内が0回
+     3号艇が1着 → 2着は 1,1,4,1  外が1回／内が3回
+   2号艇が勝つのは捲りなので1号艇が沈み、
+   3号艇が勝つのは差しもあるので1号艇が粘る、という理屈に合う。
+
+   モデルはこの区別をしておらず、どちらでも「2着は1号艇」と言う。
+   ただし n は 4件 と 4件 しかない。だからモデルを書き換えず、
+   両方の読み方を並べて出すだけにする。選ぶのは買う人。 */
+function outerSecond(cond, a){
+  const list = cond.list.filter(c=>Number(String(c.combo)[2]) > a);
+  const tot = list.reduce((t,c)=>t+c.p, 0);
+  return { list, tot, share: cond.win ? tot/cond.win : 0 };
+}
+
 /* 金額配分：100円単位。確率に比例して配る。
    ------------------------------------------------------------------
    どれか1つしか当たらない（排他的な）買い目に予算を配るとき、
@@ -4597,6 +4677,54 @@ ${(()=>{
       読める着だけ決めて、読めない着を流す形です。
       <b>上の「買い目」とは別の考え方</b>なので、どちらかを選んでください。両方買うと点数が倍になります。
     </div>
+  </div>
+  </div></div>`;
+})()}
+
+${(()=>{
+  /* 荒れ予想。本命が飛んだ場合に限った見方を、別枠で出す。
+     穴枠（下限オッズで選ぶ方式）は実測で回収率を下げたので、ここでは使わない。
+     ここでやるのは確率を足し直して見せることだけで、新しい仮定は足さない。 */
+  const U = upsetView(combos, Number(ranked[0].lane));
+  if(U.restP < 0.08) return '';     /* 本命が堅すぎる場合は出さない */
+  const top = U.lanes.filter(x=>x.cond >= 0.10).slice(0,3);
+  if(!top.length) return '';
+  return `<div class="card"><div class="chead">荒れ予想<span class="mini">
+    ${U.favourite}号艇が飛んだ場合に限った見方</span></div><div class="cbody">
+  <div class="mini" style="margin-bottom:8px">
+    本命 <b>${U.favourite}号艇</b> の1着確率 <b>${(U.favP*100).toFixed(0)}%</b>
+    ／ 飛ぶ確率 <b style="color:#f0c040">${(U.restP*100).toFixed(0)}%</b>。
+    以下は<b>飛んだ場合に限って</b>確率を足し直したものです。
+  </div>
+  ${top.map(x=>{
+    const os = outerSecond(x, x.lane);
+    const f = o => [1,2,3,4,5,6].filter(l=>o[l]>=0.08)
+      .map(l=>`${l}号艇${(o[l]*100).toFixed(0)}%`).join('・');
+    return `<div style="margin-bottom:10px;padding:8px 10px;border:1px solid #2a3550;border-radius:6px">
+      <div><b style="font-size:16px">${x.lane}号艇が勝つなら</b>
+        <span class="mini">飛んだ場合に限れば ${(x.cond*100).toFixed(0)}%</span></div>
+      <div class="mini" style="margin-top:4px">モデルの2着 ${f(x.p2)}　／　3着 ${f(x.p3)}</div>
+      <div style="margin-top:5px">
+        <div class="mini">① モデルどおりに買うなら</div>
+        <div style="font-size:15px">${x.list.slice(0,4).map(c=>`<b>${c.combo}</b>`).join('　')}</div>
+      </div>
+      ${os.list.length ? `<div style="margin-top:5px">
+        <div class="mini">② 「内を飲んだ」とみて2着を外に限るなら
+          <span style="color:#f0c040">（モデルより${(os.share*100).toFixed(0)}%ぶんだけ）</span></div>
+        <div style="font-size:15px">${os.list.slice(0,4).map(c=>`<b>${c.combo}</b>`).join('　')}</div>
+      </div>` : ''}
+    </div>`;
+  }).join('')}
+  <div class="notice warn" style="margin:0">
+    <b>この枠は当てるための道具ではありません。</b><br>
+    ・下限オッズで穴を選ぶ方式は実測で回収率を下げました
+    （本線6＋穴4で50倍以上77%／100倍以上53%。本線10のみは106%）。<br>
+    ・払戻¥5,000超のレースで、正解はモデルの平均41.3番目にあります。<br>
+    ・<b>②の読み方はまだ検証できていません。</b>
+    1号艇以外が1着になった9レースで、2号艇が勝った4件では2着が全部「外」、
+    3号艇が勝った4件では3件が「内」でした。n=4ずつなので採用していません
+    （判定は20件で、backtest.js に先に書いてあります）。<br>
+    ・<b>上の「買い目」とは別枠です。</b>両方買うと点数も金額も増えます。
   </div>
   </div></div>`;
 })()}
