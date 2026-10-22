@@ -551,6 +551,34 @@ BOAT RACE公式から取得します。<br>
     取れなくても下の表に手入力すれば同じ判定ができます。
   </div>
   <button class="ghost" onclick="openOfficialPage('odds3t')" style="margin-top:6px">公式のオッズ画面を開く</button>
+  <div class="g2" style="margin-top:8px">
+    <div><label>そのオッズは締切まで何分のもの？</label>
+      <input id="oddsLeadMin" type="number" value="3" min="0" max="120" step="1"
+             oninput="renderOddsBox()"></div>
+    <div><label>&nbsp;</label><div class="mini" id="oddsLeadNote" style="padding-top:11px"></div></div>
+  </div>
+  <details style="margin-top:6px">
+  <summary class="mini" style="color:#f0c040">締切前のオッズは、確定とどれだけ違ったか（実測6件）</summary>
+  <div class="dbody">
+  <table class="tbl"><tr><th>締切まで</th><th>事前</th><th>確定</th><th>ズレ</th></tr>
+  <tr><td>22分前</td><td>161.6倍</td><td>264.6倍</td><td>+63.7%</td></tr>
+  <tr><td>18分前</td><td>19.6倍</td><td>18.8倍</td><td>−4.1%</td></tr>
+  <tr><td>14分前</td><td>52.6倍</td><td>28.2倍</td><td><b>−46.4%</b></td></tr>
+  <tr><td>11分前</td><td>29.7倍</td><td>25.2倍</td><td>−15.2%</td></tr>
+  <tr><td>11分前</td><td>13.1倍</td><td>16.6倍</td><td>+26.7%</td></tr>
+  <tr><td>4分前</td><td>10.9倍</td><td>11.1倍</td><td>+1.8%</td></tr>
+  </table>
+  <div class="mini" style="margin-top:8px">
+  <b>5分以上前のオッズは、中央値で26.7%、最大63.7%ずれました。</b>
+  向きも一方向ではありません（勝った組に締切直前の金が入れば下がり、
+  入らなければ上がります）。<br><br>
+  <b>5分未満はまだ1件（+1.8%）しかありません。</b>
+  「直前なら安全」と言えるほどのデータではないことも、あわせて書いておきます。<br><br>
+  これは「当たった組」だけを見た数字です。当たる組は締切直前に買われやすいので、
+  ズレは実際より大きく見えている可能性があります。
+  </div>
+  </div>
+  </details>
   <details style="margin-top:8px">
   <summary class="mini">取れない時：オッズのページを開いて貼り付け（通信不要）</summary>
   <div class="dbody">
@@ -4552,6 +4580,15 @@ ${anaPoints.length ? `
     <b>当てるための枠ではなく、下がるぶんを承知で遊ぶ枠です。</b>
   </div>
 </div>` : ''}
+${Object.keys(state.oddsMap).length && !oddsTrust().ok ? `
+<div class="notice warn" style="margin-top:10px">
+  <b>このオッズで組を外さないでください。</b><br>${esc(oddsTrust().why)}<br>
+  実行できる形はこの2つだけです。<br>
+  ① 締切の直前（できれば3分以内）にオッズを取り直し、そこで大きく割っている組だけ外す<br>
+  ② 取り直せないなら、オッズを使わずこのまま確率順で買う<br>
+  <span class="mini">「締切時オッズを見てから買う」はできません（締切後にしか出ないため）。
+  そう書いていたのは間違いでした。</span>
+</div>` : ''}
 ${picked.mode!=='ev' ? `<div class="mini" style="margin-top:8px;color:#f0c040">
   ※ オッズを入れていないので、確率の高い順に選んでいます。
   各行の「○倍以上」を公式のオッズと見比べて、届いていない組は外してください。
@@ -4843,6 +4880,45 @@ async function fetchOdds(){
     if(btn) btn.disabled = false;
     state.busy = false;
   }
+}
+
+/* そのオッズを、期待値の判断に使ってよいか
+   ------------------------------------------------------------------
+   「締切時オッズを見てから買え」と書いたが、それは実行できない。
+   締切時オッズは締切後にしか出ないので、見た時にはもう買えない。
+   実行できない助言を書いたのは間違いだった。
+
+   実測（当たった組6件）で、締切前のオッズと確定払戻のズレはこうだった。
+     22分前 +63.7% / 18分前 -4.1% / 14分前 -46.4%
+     11分前 -15.2% / 11分前 +26.7% /  4分前  +1.8%
+   5分以上前は中央値26.7%・最大63.7%ずれ、向きも一方向ではない。
+   5分未満は1件しかないので「直前なら安全」とも言えない。
+
+   なので、できるのは次の2つだけ。
+     ・締切直前に取り直したオッズで、届いていない組を外す
+     ・それができないなら、オッズで外す判断をしない（確率順のまま買う）
+   ここでは、どちらなのかを画面にはっきり出す。 */
+function oddsLeadMin(){
+  const v = Number(($('oddsLeadMin')||{}).value);
+  return Number.isFinite(v) && v >= 0 ? v : 3;
+}
+function oddsTrust(){
+  const m = oddsLeadMin();
+  if(m >= 5) return { ok:false, lead:m,
+    why:`締切${m}分前のオッズです。実測では5分以上前のオッズは中央値26.7%・最大63.7%ずれました。`+
+        'この数字で「期待値が足りない」と判断して組を外さないでください。'+
+        '外すなら、締切直前に取り直してからにしてください。' };
+  return { ok:true, lead:m,
+    why:`締切${m}分前のオッズです。ズレは小さいほうですが、`+
+        '5分未満の実測はまだ1件（+1.8%）しかありません。'+
+        '大きく割っている組だけを外し、きわどい組は残すほうが安全です。' };
+}
+function updateOddsLeadNote(){
+  const el = $('oddsLeadNote'); if(!el) return;
+  const t = oddsTrust();
+  el.innerHTML = t.ok
+    ? '<span style="color:#79e3a5">この数字で外す判断をしてもよい範囲です。</span>'
+    : '<span style="color:#ef6262">この数字で外す判断をしないでください。</span>';
 }
 
 /* 貼り付けたオッズのページから取り込む。
@@ -5377,6 +5453,7 @@ function renderWinOdds(){
 
 const ODDS_CANDIDATES = 30;   /* オッズを見てもらう候補の数 */
 function renderOddsBox(){
+  updateOddsLeadNote();
   const box = $('oddsBox'); if(!box) return;
   const lb = state.lastCombos;
   if(!lb || !lb.length){ box.innerHTML='まだ買い目が生成されていません。'; return; }
