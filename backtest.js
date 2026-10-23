@@ -27,6 +27,18 @@ const VENUE_IN_RATE = (()=>{
 //   夕方に開くと「16:40現在 風速5m 波高5cm」。実際のレース時は 風速4m 波高4cm）。
 //   展示タイム・チルト・体重・展示STは直前情報でよい。気象だけが別扱い。
 const RACES=[
+// 唐津3R 予選: 「枠の重み+0.12」の判定に入る4件目。締切時オッズ（ズレ0.0%）。
+// 展示で2・3・4・6号艇の4艇がフライング（F.02 F.02 F.01 F.01）という珍しい回。
+// 本番では全艇そろって、1号艇 新田が .12 で逃げ切り。展示のFは本番の目安にならなかった。
+{name:'唐津3R 予選(10/20)',jcd:'23',rno:3,date:'2026-10-20',result:'1-2-4',pop:8,pay:2610,
+ wind:null,ws:4,wave:4,temp:28,wtemp:22,
+ B:[
+ {reg:'4344',g:'A1',nat:7.38,loc:7.44,mot:17.65,bt:31.58,st:0.14,F:2,exST:0.12,exF:null,exT:6.70,tilt:-0.5,wt:52.5,entry:1,rec:[[5,.11,5],[4,.34,6],[3,.13,2]]},
+ {reg:'4500',g:'A1',nat:8.05,loc:8.37,mot:42.11,bt:36.23,st:0.13,F:1,exST:0.02,exF:'F', exT:6.67,tilt: 0.0,wt:53.4,entry:2,rec:[[1,.19,1],[4,.13,4],[3,.09,2]]},
+ {reg:'3941',g:'A1',nat:7.76,loc:7.00,mot:43.75,bt:30.94,st:0.12,F:1,exST:0.02,exF:'F', exT:6.73,tilt:-0.5,wt:52.0,entry:3,rec:[[5,.14,3],[6,.25,1],[2,.11,3]]},
+ {reg:'4772',g:'A1',nat:7.00,loc:5.71,mot:32.14,bt:37.12,st:0.11,F:0,exST:0.01,exF:'F', exT:6.66,tilt: 0.0,wt:54.7,entry:4,rec:[[3,.09,4],[6,.11,6]]},
+ {reg:'5088',g:'A1',nat:6.14,loc:6.37,mot:41.18,bt:40.15,st:0.15,F:1,exST:0.12,exF:null,exT:6.70,tilt: 0.0,wt:45.0,adj:2.0,entry:5,rec:[[6,.09,6],[2,.15,4],[3,.09,4]]},
+ {reg:'4686',g:'A1',nat:7.84,loc:9.00,mot:15.79,bt:29.41,st:0.14,F:0,exST:0.01,exF:'F', exT:6.72,tilt: 0.0,wt:53.1,entry:6,rec:[[2,.08,2],[5,.12,4],[1,.09,1]]}]},
 // 唐津2R 予選: 「枠の重み+0.12」の判定に入る3件目。締切時オッズなので払戻とのズレは0.0%
 // （5-3-6 = 140.4倍 → ¥14,040）。書き写したオッズから出した人気順位42も、結果画面の42と一致。
 // 1号艇 上野が5着に沈み、5号艇 佐藤が差して1着。決まり手は「抜き」。
@@ -1800,6 +1812,72 @@ if(require.main===module){
     const patched = HTML.split(find).join(repl);
     if(patched === HTML){ console.log(`  ${name.padEnd(18)}${String(n).padStart(3)}件  該当箇所が見つからない（コードが変わった？）`); continue; }
     console.log(`  ${name.padEnd(18)}${String(n).padStart(3)}件  ${fmt(runWith({},null,{html:patched}).map(r=>r.rank))}`);
+  }
+
+  /* 2026-10-23に先に書いた判定。
+     「F持ちを外したほうが平均順位が良い」はずっと同じ向きに出ているが、
+     この表は設定を選んだのと同じレースで測った数字なので根拠にならない。
+     ここから足すレースだけで判定する。下の名前はその時点で持っていた34件。 */
+  const PREREG_F_NAMES = new Set([
+      '唐津3R 予選(10/20)',
+      '唐津2R 予選(10/20)',
+      '唐津1R 予選(10/20)',
+      '大村12R 発祥地選抜',
+      '若松11R 準優勝戦',
+      '若松10R 準優勝戦',
+      '桐生8R 女子',
+      '桐生9R 男子',
+      '桐生12R 特選',
+      '徳山1R 一般',
+      '徳山2R 特選',
+      '徳山3R 特賞',
+      '徳山4R 予選',
+      '徳山5R 予選',
+      '徳山6R 予選',
+      '三国1R 一般',
+      '三国3R 一般',
+      '三国5R 一般',
+      '三国6R 一般',
+      '三国7R 一般',
+      '三国8R 一般',
+      '三国9R 一般',
+      '三国10R 準優勝戦',
+      '三国11R 準優勝戦',
+      '三国12R 準優勝戦',
+      '下関1R 予選',
+      '徳山1R 朝トク予選',
+      '下関2R 予選',
+      '徳山2R 狙いトク特選',
+      '徳山3R 決めトク特賞',
+      '徳山4R ガチトク予選',
+      '徳山5R 予選 4日目',
+      '下関10R 予選特賞',
+      '下関11R 予選特選',
+  ]);
+  {
+    const patched = HTML.split('if(b.flagF)  bump(').join('if(false)  bump(');
+    if(patched === HTML){
+      console.log('\n  【判定・F持ち】該当箇所が見つからない（コードが変わった？）');
+    } else {
+      const off = runWith({},null,{html:patched});
+      const fwdBase = base.filter(x=>!PREREG_F_NAMES.has(x.name));
+      const fwdOff  = off .filter(x=>!PREREG_F_NAMES.has(x.name));
+      const avg = a => a.length ? a.reduce((s,r)=>s+r.rank,0)/a.length : null;
+      const in12 = a => a.filter(r=>r.rank<=12).length;
+      console.log('\n  【判定・2026-10-23に先に書いた】F持ちの減点を半分にするか');
+      console.log('    これから足すレースで判定する。いま ' + fwdBase.length + '/15 レース。');
+      if(fwdBase.length){
+        console.log('    （参考）そのレースだけで  いまのまま 平均' + avg(fwdBase).toFixed(1) +
+                    ' 12点' + in12(fwdBase) + '/' + fwdBase.length +
+                    '  /  外すと 平均' + avg(fwdOff).toFixed(1) +
+                    ' 12点' + in12(fwdOff) + '/' + fwdOff.length);
+      }
+      console.log('    15件たまった時点で、その15件だけを見て');
+      console.log('      ・F持ちを外したほうが平均順位が良い');
+      console.log('      ・12点の的中数が落ちていない');
+      console.log('    の両方を満たしたら、減点を半分にする。満たさなければ据え置く。');
+      console.log('    条件はこれだけ。あとから緩めない。');
+    }
   }
   console.log('\n  外したほうが平均が良くなる補正は、値が大きすぎる可能性がある。');
   console.log('  ただし12点の的中数が変わらないなら、8レース程度では偶然の幅。すぐには変えないこと。');
