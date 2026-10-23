@@ -2354,6 +2354,7 @@ if(require.main===module){
         console.log('  1着確率（モデル）  ' + [1,2,3,4,5,6]
           .map(n=>`${n}号艇 ${((head[n]||0)*100).toFixed(1)}%`).join(' / '));
         console.log(`  至極の一点  ${sorted[0][0]}（${(sorted[0][1]*100).toFixed(2)}%）`);
+        console.log('  確率順  ' + sorted.slice(0,19).map(([k,v],i)=>(i+1)+'.'+k+' '+(v*100).toFixed(1)+'%').join('  '));
         for(const n of [10, 19]){
           const list = sorted.slice(0, n).map(([k])=>k);
           const c = WIN.compressCombos(list);
