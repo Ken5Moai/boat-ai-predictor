@@ -53,16 +53,31 @@ for(const r of RACES){
     continue;
   }
   checked++;
+  /* 返還艇がある回は、その艇が絡む買い目が全部返金される。
+     ・払戻は締切時オッズのままでは出ない（売上が減るので安くなる）
+     ・人気順位は「返還艇を除いた組の中での順位」になる
+     どちらも素通りさせず、できるほうの照合をする。 */
+  const ref = Array.isArray(r.refund) ? r.refund.map(String) : [];
+  const alive = Object.entries(o)
+    .filter(([k])=>!k.split('-').some(d=>ref.includes(d)));
   if(typeof r.pay==='number'){
     const want=Math.round(o[r.result]*100);
-    ok(Math.abs(want-r.pay)<=10,
-       `${r.name} 払戻 ${r.result} = ${o[r.result]}倍 → ¥${want}（結果画面 ¥${r.pay}）`);
+    if(!ref.length){
+      ok(Math.abs(want-r.pay)<=10,
+         `${r.name} 払戻 ${r.result} = ${o[r.result]}倍 → ¥${want}（結果画面 ¥${r.pay}）`);
+    }else{
+      const share = 1 - r.pay/want;
+      ok(r.pay < want && share > 0 && share < 1,
+         `${r.name} 返還艇${ref.join('・')}号艇あり。払戻¥${r.pay}は締切時オッズ換算¥${want}より安い`
+         + `（売上の${(share*100).toFixed(0)}%が返還艇がらみだった計算）`);
+    }
   }
   if(typeof r.pop==='number'){
-    const rank=Object.entries(o).sort((a,b)=>a[1]-b[1])
-                 .findIndex(([k])=>k===r.result)+1;
+    const list = ref.length ? alive : Object.entries(o);
+    const rank=[...list].sort((a,b)=>a[1]-b[1]).findIndex(([k])=>k===r.result)+1;
     ok(rank===r.pop,
-       `${r.name} 人気 ${r.result} はオッズ順${rank}番目（結果画面 ${r.pop}番人気）`);
+       `${r.name} 人気 ${r.result} は${ref.length?`返還艇を除く${list.length}通りの中で`:'オッズ順'}${rank}番目`
+       + `（結果画面 ${r.pop}番人気）`);
   }
 }
 ok(checked>0, `締切時オッズのレースが ${checked} 件あり、照合できている`);
