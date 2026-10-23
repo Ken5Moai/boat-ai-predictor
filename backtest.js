@@ -27,6 +27,28 @@ const VENUE_IN_RATE = (()=>{
 //   夕方に開くと「16:40現在 風速5m 波高5cm」。実際のレース時は 風速4m 波高4cm）。
 //   展示タイム・チルト・体重・展示STは直前情報でよい。気象だけが別扱い。
 const RACES=[
+{name:'若松12R 一般特選(10/23)',jcd:'20',rno:12,date:'2026-10-23',result:'3-1-4',pop:9,pay:2220,
+ weatherFrom:'直前情報22:33の表示（結果ページをもらっていない）',
+ wind:null,ws:5,wave:5,temp:19,wtemp:22,
+ /* 正解 3-1-4 ¥2,220（9番人気）。本線10点は外れ、19点で当たった（モデル12番目）。
+    展示を入れる前の予想では 3-1-4 は4番目だった。展示と進入変更を入れたら12番目に下がった。
+    このレースに限れば、展示を入れたことで読みが悪くなっている。1件なので傾向とは言えない。
+    締切時オッズと本番STはもらっていないので入れていない。
+    展示情報(22:45着)を反映して入れ直した。枠なりではない。
+      コース1:1号艇 / 2:2号艇 / 3:3号艇 / 4:5号艇 / 5:6号艇 / 6:4号艇
+    5号艇が内へ、4号艇と6号艇が外へ動いた。3艇動いているので、採点の温度が上がり
+    確率の山がなだらかになる（index.html の temperatureFor）。
+    展示で4号艇と6号艇がフライング（F.15 / F.13）。
+    チルトと調整重量はこの画面に出ていないので、まだ欠測のまま。
+    今節成績の進入コースもスマホ画面には無いので、艇番色から枠番を取り、
+    枠なりだったと見なしている。ここは推測。 */
+ B:[
+ {reg:'4193',g:'A2',nat:6.15,loc:5.81,mot:34.27,bt:39.53,st:0.15,F:0,exST:0.07,exF:null,exT:6.84,tilt:null,wt:52.0,entry:1,rec:[[4,.11,1],[1,.11,1],[6,.15,3],[2,.14,2]]},
+ {reg:'4458',g:'B1',nat:5.45,loc:5.18,mot:26.32,bt:34.48,st:0.15,F:0,exST:0.12,exF:null,exT:6.9,tilt:null,wt:53.0,entry:2,rec:[[3,.12,3],[6,.18,3],[1,.01,6],[4,.19,5]]},
+ {reg:'4809',g:'A1',nat:5.61,loc:6.76,mot:37.56,bt:35.16,st:0.16,F:0,exST:0.07,exF:null,exT:6.92,tilt:null,wt:52.0,entry:3,rec:[[2,.13,1],[1,.21,4],[4,.25,3],[5,.18,1]]},
+ {reg:'3853',g:'A2',nat:5.89,loc:5.91,mot:39.42,bt:35.56,st:0.20,F:0,exST:0.15,exF:'F',exT:6.85,tilt:null,wt:52.1,entry:6,rec:[[6,.27,3],[2,.11,2],[1,.06,3],[3,.31,3]]},
+ {reg:'5007',g:'B1',nat:4.57,loc:3.38,mot:28.57,bt:34.18,st:0.18,F:1,exST:0.01,exF:null,exT:6.91,tilt:null,wt:53.4,entry:4,rec:[[2,.18,5],[3,.12,5],[5,.14,6],[4,.11,3]]},
+ {reg:'4887',g:'B1',nat:5.05,loc:0.00,mot:36.32,bt:40.23,st:0.13,F:1,exST:0.13,exF:'F',exT:6.83,tilt:null,wt:53.8,entry:5,rec:[[2,.16,1],[5,.12,4],[3,.03,4],[4,.23,3]]}]},
 {name:'若松11R 予選特選(10/23)',jcd:'20',rno:11,date:'2026-10-23',result:'1-3-2',pop:3,pay:970,
  wind:null,ws:6,wave:6,temp:19,wtemp:22,
  /* 至極の一点（モデルの1番手 1-3-2）がそのまま来た1件。払戻¥970。
@@ -1931,6 +1953,31 @@ if(require.main===module){
       console.log('\n  ※ 1日は12レースしかない。ここの数字だけで買い方を決めないこと。');
       console.log('     選り好みの無い日が何日かたまって、はじめて意味を持つ。');
     }
+  }
+
+  /* 展示の情報を入れると、本当に読みが良くなるのか。
+     きっかけは 2026-10-23 若松12R。展示が来る前の予想では正解 3-1-4 が4番目、
+     展示（と進入変更）を入れ直したら12番目に下がり、本線10点から外れた。
+     1件では何も言えないので、記録ぜんぶで測る。
+     展示タイム・展示ST・展示Fの3つを落として、同じレースを採点し直す。 */
+  console.log('\n=== 展示の情報は、読みを良くしているのか ===');
+  {
+    const stripped = RACES.map(r=>({ ...r,
+      B: r.B.map(b=>({ ...b, exST:null, exT:null, exF:null })) }));
+    const off = runWith({}, null, {races:stripped});
+    const line = (a)=> {
+      const ranks = a.map(x=>x.rank);
+      const avg = ranks.reduce((s,c)=>s+c,0)/ranks.length;
+      return `平均順位 ${avg.toFixed(1)}  6点${ranks.filter(x=>x<=6).length}/${ranks.length}`
+           + ` 12点${ranks.filter(x=>x<=12).length}/${ranks.length}`
+           + ` 19点${ranks.filter(x=>x<=19).length}/${ranks.length}`;
+    };
+    console.log('  展示あり（いまのまま）  ' + line(base));
+    console.log('  展示なし（3項目を落とす）' + line(off));
+    const up = base.filter((x,i)=> x.rank < off[i].rank).length;
+    const dn = base.filter((x,i)=> x.rank > off[i].rank).length;
+    console.log(`  展示を入れて順位が上がったレース ${up}件 / 下がった ${dn}件 / 変わらず ${base.length-up-dn}件`);
+    console.log('  ※ 平均順位は1回の大外しで動く。6点・12点・19点の的中数のほうを見ること。');
   }
 
   console.log('\n=== 展示でフライングした艇は、本番で沈むのか ===');
