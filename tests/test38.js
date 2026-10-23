@@ -73,13 +73,20 @@ ok(unresolved===Object.keys(UNRESOLVED).length,
 console.log('\n=== 今節成績の着順が、記録ずみのレース結果と食い違っていないか ===');
 /* 同じ日・同じ場で、この選手が出ていた「前のレース」を古い順に並べる。
    今節成績は古い→新しい順なので、末尾からその数だけが前のレースに対応する。 */
-let checked=0, notRecorded=0;
+let checked=0, notRecorded=0, stChecked=0;
 for(const r of RACES){
   if(!r.date) continue;
   for(const b of r.B){
-    const earlier=RACES.filter(x=>x!==r && x.date===r.date && x.jcd===r.jcd
-                                && x.rno<r.rno && x.B.some(q=>q.reg===b.reg))
-                       .sort((a,c)=>a.rno-c.rno);
+    /* 今節成績は1節ぶん（何日かにまたがる）積み上がる。同じ場で、この
+       レースより前に走った「記録ずみの」レースを古い順に並べる。
+       末尾からその数だけが対応する、という並べ方なので、途中の
+       レースを記録していない日が挟まると合わなくなる。そのときは
+       わざと失敗させて気づけるようにしてある（黙って通さない）。 */
+    const before = (x) => x.date < r.date || (x.date === r.date && x.rno < r.rno);
+    const earlier=RACES.filter(x=>x!==r && x.jcd===r.jcd && x.date && before(x)
+                                && Math.abs(new Date(r.date)-new Date(x.date)) <= 7*864e5
+                                && x.B.some(q=>q.reg===b.reg))
+                       .sort((a,c)=> a.date===c.date ? a.rno-c.rno : (a.date<c.date?-1:1));
     if(!earlier.length) continue;
     const rec=b.rec||[];
     if(rec.length===0){
@@ -106,10 +113,18 @@ for(const r of RACES){
         ok(!(got>=1 && got<=3),
            `${r.name} 登番${b.reg} の今節成績「${got}」は、${x.name}（${x.result}）に入っていないので4着以下のはず`);
       }
+      /* 今節成績のST欄は「本番ST」そのもの。こちらが結果ページから写した
+         actualST と突き合わせれば、展示STの検証に使っている数字を確かめられる。 */
+      if(x.actualST && x.actualST[lane]!=null && typeof tail[i][1]==='number'){
+        stChecked++;
+        ok(Math.abs(x.actualST[lane]-tail[i][1])<1e-9,
+           `${r.name} 登番${b.reg} の今節成績ST ${tail[i][1]} ＝ ${x.name} の本番ST ${x.actualST[lane]}（${lane}号艇）`);
+      }
     });
   }
 }
 ok(checked>0, `記録ずみのレースと突き合わせできた走行が ${checked} 件ある`);
+ok(stChecked>0, `そのうち本番ST（actualST）まで突き合わせできたのが ${stChecked} 件`);
 if(notRecorded) console.log(`  － 今節成績を取っていないため突き合わせできなかった選手 ${notRecorded} 人（古い記録。誤りではない）`);
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
