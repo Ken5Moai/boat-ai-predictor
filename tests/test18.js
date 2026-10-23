@@ -67,8 +67,13 @@ console.log('\n=== C. 単勝が薦められない理由を画面に書いてあ�
 {
   const box = d.getElementById('winOddsRow').parentElement.textContent;
   ok(box.includes('単勝は薦めません'), '薦めないと明記する');
-  ok(box.includes('8/11'), '1着の予想が「常に1号艇」と同成績だと示す');
-  ok(box.includes('100%を超えていません'), '実測の回収率を示す');
+  /* 2026-10-23に文言を直した。
+     それまでは「8/11」「100%を超えていません」を見ていたが、
+     21レースまで増えて単勝1点の回収率が106%になり、どちらも事実と違うようになった。
+     薦めない理由は回収率ではなく「モデルの上乗せが無い（常に1号艇と同成績）」の
+     ほうなので、そちらを見るように変えた。数字は最新値が書いてあることだけ確かめる。 */
+  ok(box.includes('同成績'), '1着の予想が「常に1号艇」と同成績だと示す');
+  ok(/\d+レース/.test(box) && /\d+%/.test(box), '実測の件数と回収率を示す');
   ok(d.getElementById('winOddsRow').querySelectorAll('input').length===6, '入力欄は6つ残す');
 }
 
