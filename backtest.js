@@ -27,6 +27,21 @@ const VENUE_IN_RATE = (()=>{
 //   夕方に開くと「16:40現在 風速5m 波高5cm」。実際のレース時は 風速4m 波高4cm）。
 //   展示タイム・チルト・体重・展示STは直前情報でよい。気象だけが別扱い。
 const RACES=[
+{name:'若松11R 予選特選(10/23)',jcd:'20',rno:11,date:'2026-10-23',result:'1-3-2',pop:null,pay:970,
+ wind:null,ws:6,wave:6,temp:19,wtemp:22,
+ /* 至極の一点（モデルの1番手 1-3-2）がそのまま来た1件。払戻¥970。
+    人気順位と本番STはもらっていないので入れていない。締切時オッズも無いので
+    odds.js には足していない。市場との比較はこのレースではできない。
+    直前情報22:08の表示。チルトと調整重量はこの画面に出ていないので入れていない。
+    今節成績の「進入コース」もこの画面には無い。艇番色から枠番は分かるので、
+    枠なりだったと見なして rec のコースに枠番を入れている。ここだけ推測が入る。 */
+ B:[
+ {reg:'4036',g:'A1',nat:6.32,loc:6.33,mot:35.91,bt:28.26,st:0.16,F:0,exST:0.05,exF:null,exT:6.99,tilt:null,wt:52.0,entry:1,rec:[[5,.23,4],[3,.12,4],[4,.04,1],[2,.22,1]]},
+ {reg:'4803',g:'B1',nat:3.92,loc:2.50,mot:30.88,bt:47.78,st:0.19,F:0,exST:0.02,exF:null,exT:6.89,tilt:null,wt:57.1,entry:2,rec:[[3,.09,3],[5,.33,4],[6,.26,6],[1,.14,2]]},
+ {reg:'4771',g:'A1',nat:6.83,loc:7.13,mot:38.24,bt:34.15,st:0.16,F:0,exST:0.03,exF:'F', exT:6.96,tilt:null,wt:54.1,entry:3,rec:[[4,.16,1],[6,.11,5],[2,.23,3],[1,.15,1]]},
+ {reg:'5177',g:'B1',nat:4.68,loc:4.96,mot:38.50,bt:31.76,st:0.20,F:0,exST:0.01,exF:'F', exT:6.95,tilt:null,wt:51.5,entry:4,rec:[[2,.21,6],[4,.33,3],[3,.15,3],[5,.24,4]]},
+ {reg:'4394',g:'A2',nat:6.13,loc:5.49,mot:30.77,bt:22.89,st:0.15,F:0,exST:0.04,exF:'F', exT:7.10,tilt:null,wt:54.0,entry:5,rec:[[4,.25,2],[1,.11,2],[3,.24,4],[2,.09,5]]},
+ {reg:'4572',g:'B1',nat:5.03,loc:6.86,mot:35.48,bt:37.21,st:0.16,F:0,exST:0.12,exF:null,exT:7.09,tilt:null,wt:56.2,entry:6,rec:[[1,.14,1],[5,.20,3],[2,.19,2],[3,.17,1]]}]},
 // 尼崎4R 予選(10/23): 2号艇が1着で、しかも1号艇が2着に残った。
 //   判定②（2着の条件つき補正）にとって、いちばん中身のある1件。
 //   展示で1・2・4・6号艇の4艇がフライング。本番は2号艇 宇佐見が .11 で差して1着。
@@ -2314,15 +2329,34 @@ if(require.main===module){
   });
 
   if(PENDING.length){
-    console.log('\n=== 結果まちのレース（モデルと市場の見方） ===');
-    console.log('  結果が出たら pending.js から RACES へ移す。買い目を出すためのものではない。');
+    console.log('\n=== 結果まちのレース（モデルの買い目と、市場との見方の差） ===');
+    console.log('  結果が出たら pending.js から RACES へ移す。');
+    /* 2026-10-23に起きたこと：若松11Rの予想を出すとき、使い捨てのスクリプトを
+       書いてモデルを呼んだ。そこで項目名を averageST→avgST、b.flagF→flyingCount と
+       取り違えており、平均STとF数がモデルに届かないまま採点していた。
+       買い目は19点中17点しか合っておらず、確率も 12.22%→7.92% とずれていた。
+       同じことを繰り返さないよう、買い目はここ（runWith を通る唯一の道）で出す。
+       使い捨てのスクリプトでモデルを呼ばないこと。 */
     const res = runWith({},null,{races:PENDING, detail:true});
     res.forEach((r,i)=>{
       const R = PENDING[i];
       const map = ODDS[R.name];
       console.log(`\n  ${R.name}`);
       console.log(`  モデルの並び  ${r.order.join(' ')}`);
-      console.log(`  モデルの上位3 ${r.top3.join(' / ')}`);
+      {
+        const sorted = Object.entries(r.probOf).sort((a,b)=>b[1]-a[1]);
+        const head = {};
+        for(const [k,v] of sorted) head[k[0]] = (head[k[0]]||0) + v;
+        console.log('  1着確率（モデル）  ' + [1,2,3,4,5,6]
+          .map(n=>`${n}号艇 ${((head[n]||0)*100).toFixed(1)}%`).join(' / '));
+        console.log(`  至極の一点  ${sorted[0][0]}（${(sorted[0][1]*100).toFixed(2)}%）`);
+        for(const n of [10, 19]){
+          const list = sorted.slice(0, n).map(([k])=>k);
+          const c = WIN.compressCombos(list);
+          console.log(`  ${String(n).padStart(2)}点  ` +
+            (c && c.ok ? c.terms.map(t=>t.text).join(' / ') : list.join(' ')));
+        }
+      }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
       if(ks.length !== 120){ console.log(`  オッズが${ks.length}通りしかない（120通り必要）`); return; }
