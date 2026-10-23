@@ -27,6 +27,20 @@ const VENUE_IN_RATE = (()=>{
 //   夕方に開くと「16:40現在 風速5m 波高5cm」。実際のレース時は 風速4m 波高4cm）。
 //   展示タイム・チルト・体重・展示STは直前情報でよい。気象だけが別扱い。
 const RACES=[
+// 唐津6R 予選(10/21): 2026-10-23に書いた判定③（F持ちの減点を半分にするか）の15件目。
+//   枠なり進入。展示でフライングは1艇も出ず、2〜6号艇の展示STが .01〜.05 に揃った。
+//   それでも本番は1号艇 池田が .11 で逃げ切り、展示で最も遅かった1号艇が勝った。
+// 出走6人全員が前日(10/20)も走っており、今節成績・本番STもすべて一致した。
+{name:'唐津6R 予選(10/21)',jcd:'23',rno:6,date:'2026-10-21',result:'1-2-5',pop:3,pay:1040,
+ actualST:{1:.11,2:.19,3:.21,4:.14,5:.14,6:.14},
+ wind:null,ws:1,wave:1,temp:18,wtemp:23,
+ B:[
+ {reg:'3941',g:'A1',nat:7.76,loc:7.00,mot:43.75,bt:30.94,st:0.12,F:1,exST:0.14,exF:null,exT:6.70,tilt:-0.5,wt:52.0,entry:1,rec:[[5,.14,3],[6,.25,1],[2,.11,3],[3,.08,6],[4,.13,4]]},
+ {reg:'4848',g:'A1',nat:7.64,loc:8.20,mot:50.00,bt:31.25,st:0.15,F:0,exST:0.05,exF:null,exT:6.69,tilt:-0.5,wt:52.0,entry:2,rec:[[4,.11,4],[5,.14,3],[5,.12,6],[1,.14,2]]},
+ {reg:'5026',g:'A1',nat:6.48,loc:6.52,mot:58.82,bt:42.45,st:0.16,F:0,exST:0.02,exF:null,exT:6.73,tilt: 0.0,wt:53.9,entry:3,rec:[[5,.19,4],[4,.10,3],[3,.11,1],[3,.23,2]]},
+ {reg:'4787',g:'A1',nat:7.67,loc:6.27,mot:44.44,bt:33.82,st:0.14,F:1,exST:0.03,exF:null,exT:6.76,tilt:-0.5,wt:52.8,entry:4,rec:[[6,.35,6],[5,.16,4],[1,.10,1],[5,.13,3]]},
+ {reg:'4205',g:'A1',nat:7.47,loc:7.00,mot:13.64,bt:36.36,st:0.14,F:0,exST:0.01,exF:null,exT:6.69,tilt:-0.5,wt:52.7,parts:'リング2',entry:5,rec:[[2,.13,6],[2,.21,5],[4,.10,'転'],[1,.03,1],[3,.16,2]]},
+ {reg:'4659',g:'A1',nat:7.60,loc:6.88,mot:16.67,bt:37.31,st:0.15,F:0,exST:0.02,exF:null,exT:6.81,tilt:-0.5,wt:52.7,entry:6,rec:[[2,.14,2],[5,.11,2],[1,.08,2],[5,.13,3],[2,.05,2]]}]},
 // 唐津5R 予選(10/21): 枠なり進入。展示でフライングは1艇も出なかった。
 //   本番STが全艇 .00〜.06 に揃った。雨・無風（風速1m・波高1cm）で水面が
 //   落ち着いていた影響と思われる。記録のなかでいちばん速いスタートの回。
@@ -2190,18 +2204,37 @@ if(require.main===module){
       const avg = a => a.length ? a.reduce((s,r)=>s+r.rank,0)/a.length : null;
       const in12 = a => a.filter(r=>r.rank<=12).length;
       console.log('\n  【判定・2026-10-23に先に書いた】F持ちの減点を半分にするか');
-      console.log('    これから足すレースで判定する。いま ' + fwdBase.length + '/15 レース。');
-      if(fwdBase.length){
-        console.log('    （参考）そのレースだけで  いまのまま 平均' + avg(fwdBase).toFixed(1) +
-                    ' 12点' + in12(fwdBase) + '/' + fwdBase.length +
-                    '  /  外すと 平均' + avg(fwdOff).toFixed(1) +
-                    ' 12点' + in12(fwdOff) + '/' + fwdOff.length);
+      if(fwdBase.length < 15){
+        console.log('    これから足すレースで判定する。いま ' + fwdBase.length + '/15 レース。');
+        if(fwdBase.length){
+          console.log('    （参考）そのレースだけで  いまのまま 平均' + avg(fwdBase).toFixed(1) +
+                      ' 12点' + in12(fwdBase) + '/' + fwdBase.length +
+                      '  /  外すと 平均' + avg(fwdOff).toFixed(1) +
+                      ' 12点' + in12(fwdOff) + '/' + fwdOff.length);
+        }
+        console.log('    15件たまった時点で、その15件だけを見て');
+        console.log('      ・F持ちを外したほうが平均順位が良い');
+        console.log('      ・12点の的中数が落ちていない');
+        console.log('    の両方を満たしたら、減点を半分にする。満たさなければ据え置く。');
+        console.log('    条件はこれだけ。あとから緩めない。');
+      }else{
+        /* 判定する側の15件だけを使う。あとから足したレースで薄めないよう、
+           先頭15件（＝判定を書いたあと最初に足した15レース）に固定する。 */
+        const by = a => [...a].sort((x,y)=> x.name < y.name ? -1 : 1);
+        const base15 = fwdBase.slice(0, 15);
+        const names15 = new Set(base15.map(x=>x.name));
+        const off15 = fwdOff.filter(x=>names15.has(x.name));
+        const c1 = avg(off15) < avg(base15);
+        const c2 = in12(off15) >= in12(base15);
+        console.log('    判定に使う15レース（この判定を書いたあと最初に足した15件）で測った。');
+        console.log(`    ${c1?'○':'×'} 外したほうが平均順位が良い   外すと ${avg(off15).toFixed(1)} / いま ${avg(base15).toFixed(1)}`);
+        console.log(`    ${c2?'○':'×'} 12点の的中数が落ちていない   外すと ${in12(off15)}/15 / いま ${in12(base15)}/15`);
+        console.log(c1 && c2
+          ? '    → 2つとも満たした。F持ちの減点を半分にする。'
+          : '    → 欠けたので捨てる。F持ちの減点はいまのままにする。');
+        if(fwdBase.length > 15)
+          console.log(`    （判定後に足した ${fwdBase.length-15} レースは、この判定には入れない）`);
       }
-      console.log('    15件たまった時点で、その15件だけを見て');
-      console.log('      ・F持ちを外したほうが平均順位が良い');
-      console.log('      ・12点の的中数が落ちていない');
-      console.log('    の両方を満たしたら、減点を半分にする。満たさなければ据え置く。');
-      console.log('    条件はこれだけ。あとから緩めない。');
     }
   }
   console.log('\n  外したほうが平均が良くなる補正は、値が大きすぎる可能性がある。');
