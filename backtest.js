@@ -27,6 +27,21 @@ const VENUE_IN_RATE = (()=>{
 //   夕方に開くと「16:40現在 風速5m 波高5cm」。実際のレース時は 風速4m 波高4cm）。
 //   展示タイム・チルト・体重・展示STは直前情報でよい。気象だけが別扱い。
 const RACES=[
+// 唐津11R 予選: 枠なり進入。展示で1号艇と5号艇がフライング（F.09 / F.03）。
+//   その1号艇 桐生が本番は .07 で逃げ切り、5号艇 水谷が .15 で2着。
+//   展示でフライングした2艇が、そのまま1着2着。8R〜10Rに続いて4件目で、
+//   「展示のFは本番の出遅れを意味しない」側の記録がまた増えた。
+// 同じ日に走った選手が4人（島村=5R / 前田=4R / 池田=3R / 末永=6R）。
+{name:'唐津11R 予選(10/20)',jcd:'23',rno:11,date:'2026-10-20',result:'1-5-6',pop:18,pay:4950,
+ actualST:{1:.07,2:.12,3:.12,4:.13,5:.15,6:.19},
+ wind:null,ws:6,wave:6,temp:27,wtemp:22,
+ B:[
+ {reg:'4444',g:'A1',nat:7.64,loc:7.00,mot:52.63,bt:39.29,st:0.13,F:0,exST:0.09,exF:'F', exT:6.67,tilt: 0.0,wt:52.0,entry:1,rec:[[5,.13,4],[2,.18,4],[6,.17,5]]},
+ {reg:'4685',g:'A1',nat:7.08,loc:6.41,mot:22.22,bt:30.83,st:0.14,F:1,exST:0.16,exF:null,exT:6.73,tilt: 0.0,wt:51.5,adj:0.5,entry:2,rec:[[3,.21,2],[1,.17,2],[4,.14,5],[6,.14,2]]},
+ {reg:'4504',g:'A1',nat:6.81,loc:6.87,mot:35.29,bt:41.48,st:0.15,F:0,exST:0.07,exF:null,exT:6.65,tilt:-0.5,wt:53.3,entry:3,rec:[[4,.12,4],[5,.09,6],[1,.07,2]]},
+ {reg:'3941',g:'A1',nat:7.76,loc:7.00,mot:43.75,bt:30.94,st:0.12,F:1,exST:0.07,exF:null,exT:6.68,tilt: 0.0,wt:52.0,entry:4,rec:[[5,.14,3],[6,.25,1],[2,.11,3],[3,.08,6]]},
+ {reg:'5298',g:'A1',nat:7.02,loc:6.83,mot:23.53,bt:32.35,st:0.16,F:0,exST:0.03,exF:'F', exT:6.73,tilt:-0.5,wt:51.5,adj:0.5,entry:5,rec:[[2,.13,3],[6,.13,3],[4,.11,6]]},
+ {reg:'5084',g:'A1',nat:7.13,loc:7.52,mot:35.29,bt:37.50,st:0.13,F:0,exST:0.09,exF:null,exT:6.68,tilt:-0.5,wt:52.0,entry:6,rec:[[2,.11,3],[5,.24,2],[3,.16,5],[6,.18,5]]}]},
 // 唐津10R 予選: 9Rと同じ荒れ条件（風速6m・波高6cm）。枠なり進入。
 //   展示で2・3・6号艇がフライング（F.08 F.10 F.04）。本番は .19 .19 .18 でそろった。
 //   そのフライングした2号艇 峰が、本番 .19 からまくって1着。
@@ -1648,6 +1663,42 @@ if(require.main===module){
       console.log('       展示STは本番STそのものではなく、別の何か（気合い・');
       console.log('       仕上がり）を映している可能性がある。'); 
     }
+  }
+
+  /* 展示でフライングした艇は、本番で沈むのか。
+     唐津8R〜11Rで「展示Fした艇が本番は普通に走って1着」が4回続いたので、
+     印象ではなく数で見る。採点を通さず、生のデータだけで数える。
+     着順は3連単の正解から分かる上位3艇しか取れないので、
+     「3着以内に入ったか」だけを比べる。 */
+  console.log('\n=== 展示でフライングした艇は、本番で沈むのか ===');
+  {
+    const rows = [];
+    for(const r of RACES){
+      const top3 = String(r.result).split('-').map(Number);
+      r.B.forEach((b,i)=>{
+        const lane = i+1;
+        rows.push({ lane, f: !!b.exF, in3: top3.includes(lane) });
+      });
+    }
+    const show = (label, list) => {
+      if(!list.length){ console.log(`  ${label.padEnd(22)} 0件`); return; }
+      const f  = list.filter(x=>x.f), nf = list.filter(x=>!x.f);
+      const pct = a => a.length ? (a.filter(x=>x.in3).length/a.length*100).toFixed(1)+'%' : '—';
+      console.log(`  ${label.padEnd(22)}`
+        + `展示F ${String(f.length).padStart(3)}艇 → 3着以内 ${pct(f).padStart(6)}`
+        + `   /   F無し ${String(nf.length).padStart(3)}艇 → ${pct(nf).padStart(6)}`);
+    };
+    console.log('  3着以内に入った割合を、展示Fの有無で比べる。');
+    console.log('  （枠によってFの出やすさも3着以内の入りやすさも違うので、枠でも分けて見る）\n');
+    show('全体', rows);
+    show('1号艇', rows.filter(x=>x.lane===1));
+    show('2・3号艇', rows.filter(x=>x.lane===2||x.lane===3));
+    show('4〜6号艇', rows.filter(x=>x.lane>=4));
+    const f = rows.filter(x=>x.f), nf = rows.filter(x=>!x.f);
+    const d = (f.filter(x=>x.in3).length/f.length - nf.filter(x=>x.in3).length/nf.length)*100;
+    console.log(`\n  全体の差 ${d>=0?'+':''}${d.toFixed(1)}pt（プラスなら「展示Fした艇のほうがよく3着以内に入っている」）`);
+    console.log('  採点では展示Fに -3点 を入れている。上の差がマイナスでなければ、その根拠は弱い。');
+    console.log('  ただし枠ごとの件数が少ないうちは、ここから重みを動かさないこと。');
   }
 
   console.log('\n=== 「誰が絡むか」と「どの順番か」を分けて見る ===');
