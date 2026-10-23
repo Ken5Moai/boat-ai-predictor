@@ -27,6 +27,21 @@ const VENUE_IN_RATE = (()=>{
 //   夕方に開くと「16:40現在 風速5m 波高5cm」。実際のレース時は 風速4m 波高4cm）。
 //   展示タイム・チルト・体重・展示STは直前情報でよい。気象だけが別扱い。
 const RACES=[
+// 唐津12R 予選: 唐津3日目の最終レース。これで1R〜12Rが全部そろった。
+//   展示は枠なりで、1・2・4・5号艇の4艇がフライング（F.12 F.04 F.01 F.02）。
+//   本番は4号艇と5号艇が入れ替わって進入し、1号艇 西山が .12 で逃げ切り。
+//   entry には展示の進入（枠なり）を入れる。本番の進入は結果を見ないと分からない。
+// 6号艇 柳生の当地勝率は 5R と同じ 0.00。欠測ではなく「この場でまだ点が無い」。
+{name:'唐津12R 予選(10/20)',jcd:'23',rno:12,date:'2026-10-20',result:'1-2-5',pop:6,pay:1880,
+ actualST:{1:.12,2:.11,3:.14,4:.13,5:.16,6:.12},
+ wind:null,ws:5,wave:5,temp:27,wtemp:22,
+ B:[
+ {reg:'4371',g:'A1',nat:6.88,loc:7.67,mot:30.77,bt:36.57,st:0.13,F:0,exST:0.12,exF:'F', exT:6.70,tilt:-0.5,wt:52.2,entry:1,rec:[[3,.14,3],[4,.06,3],[6,.11,5]]},
+ {reg:'4362',g:'A1',nat:6.66,loc:6.32,mot:47.37,bt:28.15,st:0.15,F:0,exST:0.04,exF:'F', exT:6.65,tilt:-0.5,wt:52.4,entry:2,rec:[[1,.08,1],[5,.17,2],[4,.07,3]]},
+ {reg:'4686',g:'A1',nat:7.84,loc:9.00,mot:15.79,bt:29.41,st:0.14,F:0,exST:0.02,exF:null,exT:6.73,tilt: 0.0,wt:53.1,entry:3,rec:[[2,.08,2],[5,.12,4],[1,.09,1],[6,.03,5]]},
+ {reg:'4503',g:'A1',nat:7.91,loc:7.84,mot:29.41,bt:41.22,st:0.11,F:0,exST:0.01,exF:'F', exT:6.71,tilt: 0.0,wt:52.0,parts:'キャリボ',entry:4,rec:[[2,.16,3],[3,.15,1],[5,.14,6],[1,.15,5]]},
+ {reg:'4370',g:'A1',nat:6.66,loc:6.13,mot:57.89,bt:32.17,st:0.14,F:0,exST:0.02,exF:'F', exT:6.76,tilt:-0.5,wt:53.9,entry:5,rec:[[6,.11,6],[3,.15,3],[1,.07,1]]},
+ {reg:'4361',g:'A1',nat:7.28,loc:0.00,mot:42.11,bt:28.26,st:0.14,F:1,exST:0.01,exF:null,exT:6.65,tilt: 0.0,wt:52.1,entry:6,rec:[[4,.19,3],[5,.12,2],[1,.16,1],[2,.13,6]]}]},
 // 唐津11R 予選: 枠なり進入。展示で1号艇と5号艇がフライング（F.09 / F.03）。
 //   その1号艇 桐生が本番は .07 で逃げ切り、5号艇 水谷が .15 で2着。
 //   展示でフライングした2艇が、そのまま1着2着。8R〜10Rに続いて4件目で、
@@ -1670,6 +1685,74 @@ if(require.main===module){
      印象ではなく数で見る。採点を通さず、生のデータだけで数える。
      着順は3連単の正解から分かる上位3艇しか取れないので、
      「3着以内に入ったか」だけを比べる。 */
+  /* まるごと1日そろったレースだけで見る。
+     ここまでのレースは「買ったレース」「送ってもらったレース」の寄せ集めで、
+     選り好みが入っている。1日12レースが全部そろっていれば、その日については
+     選り好みが無い。モデルと市場の比べ方として、こちらのほうが素性が良い。 */
+  console.log('\n=== まるごと1日そろった日だけで見る（選り好みなし） ===');
+  {
+    const byDay = new Map();
+    for(const r of RACES){
+      if(!r.date || !r.jcd || !r.rno) continue;
+      const k = `${r.date}|${r.jcd}`;
+      if(!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(r);
+    }
+    const full = [...byDay].filter(([,list])=>{
+      const nos = new Set(list.map(r=>r.rno));
+      return [...Array(12)].every((_,i)=>nos.has(i+1));
+    });
+    if(!full.length){
+      console.log('  12レースそろった日はまだ無い。');
+    }else{
+      for(const [k,list] of full){
+        const [date,jcd] = k.split('|');
+        const names = new Set(list.map(r=>r.name));
+        const sub = base.filter(x=>names.has(x.name));
+        const lane1 = list.filter(r=>String(r.result).startsWith('1')).length;
+        console.log(`\n  ${date} 場コード${jcd}  12レース`);
+        const h1 = (map, boat) => Object.entries(map)
+          .filter(([c])=>c.startsWith(boat+'-')).reduce((a,[,v])=>a+v, 0);
+        const mdl1 = sub.length===12
+          ? sub.reduce((a,x)=>a+h1(x.probOf,'1'),0)/12*100 : null;
+        console.log(`    1号艇が1着      ${lane1}/12 = ${(lane1/12*100).toFixed(0)}%`
+                    + `  （この場の公表イン率 ${VENUE_IN_RATE[jcd] ?? '—'}%`
+                    + (mdl1!=null ? ` / モデルの平均 ${mdl1.toFixed(1)}%` : '') + '）');
+        if(sub.length===12){
+          const ranks = sub.map(x=>x.rank);
+          const avg = ranks.reduce((a,c)=>a+c,0)/12;
+          console.log(`    3連単の順位     平均${avg.toFixed(1)}  `
+            + `6点${ranks.filter(x=>x<=6).length}/12 `
+            + `12点${ranks.filter(x=>x<=12).length}/12 `
+            + `20点${ranks.filter(x=>x<=20).length}/12`);
+          console.log(`    1着を当てた     ${sub.filter(x=>x.head===String(x.result).split('-')[0]).length}/12`);
+        }
+        /* 1着の対数スコアを、この日のオッズがある分だけで比べる。
+           1着の確率は「その艇が頭の組」を足し合わせて出す。市場は 0.75÷オッズ。 */
+        const head1 = (map, boat) => Object.entries(map)
+          .filter(([c])=>c.startsWith(boat+'-'))
+          .reduce((a,[,v])=>a+v, 0);
+        {
+          let m=0, k2=0, n=0;
+          for(const r of list){
+            const o = ODDS[r.name]; if(!o) continue;
+            const row = base.find(x=>x.name===r.name); if(!row) continue;
+            const mk = Object.fromEntries(Object.entries(o).map(([c,v])=>[c, 0.75/v]));
+            const mkTotal = Object.values(mk).reduce((a,c)=>a+c,0);
+            const w = String(r.result).split('-')[0];
+            const pm = head1(row.probOf, w);
+            const pk = head1(mk, w) / mkTotal;     /* 合計1に直してから使う */
+            if(!(pm>0) || !(pk>0)) continue;
+            m += Math.log(pm); k2 += Math.log(pk); n++;
+          }
+          if(n) console.log(`    1着の対数スコア  モデル ${(m/n).toFixed(3)} / 市場 ${(k2/n).toFixed(3)}  （${n}レース）`);
+        }
+      }
+      console.log('\n  ※ 1日は12レースしかない。ここの数字だけで買い方を決めないこと。');
+      console.log('     選り好みの無い日が何日かたまって、はじめて意味を持つ。');
+    }
+  }
+
   console.log('\n=== 展示でフライングした艇は、本番で沈むのか ===');
   {
     const rows = [];
