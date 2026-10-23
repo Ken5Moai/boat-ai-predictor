@@ -1962,6 +1962,26 @@ if(require.main===module){
      展示（と進入変更）を入れ直したら12番目に下がり、本線10点から外れた。
      1件では何も言えないので、記録ぜんぶで測る。
      展示タイム・展示ST・展示Fの3つを落として、同じレースを採点し直す。 */
+  /* 1点100円で上位N点を買ったら、という素朴な表。
+     index.html の説明文がこの数字を引用しているので、ここを唯一の出どころにする。
+     （以前は29レース時点の数字が画面に焼き付いたままになっていた） */
+  console.log('\n=== 上位N点を1点100円で買ったら（全レース） ===');
+  {
+    const withPay = base.filter(r=>r.pay);
+    const rows = [1,6,8,10,12,15,18,19,20,30].map(n=>{
+      const hit = withPay.filter(r=>r.rank<=n);
+      const inv = 100*n*withPay.length;
+      const ret = hit.reduce((s,r)=>s+r.pay,0);
+      return {n, pct:Math.round(ret/inv*100), hit:hit.length};
+    });
+    console.log(`  対象 ${withPay.length}レース`);
+    for(const r of rows)
+      console.log(`  ${String(r.n).padStart(2)}点  回収率${String(r.pct).padStart(4)}%  的中${r.hit}/${withPay.length}`);
+    const best = rows.reduce((a,b)=>b.pct>a.pct?b:a);
+    console.log(`  いちばん高いのは ${best.n}点（${best.pct}%）。`);
+    console.log('  ※ 1レースの高配当で簡単に入れ替わる。山の位置を信じ込まないこと。');
+  }
+
   console.log('\n=== 展示の情報は、読みを良くしているのか ===');
   {
     const stripped = RACES.map(r=>({ ...r,
