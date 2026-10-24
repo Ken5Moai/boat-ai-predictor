@@ -1260,6 +1260,257 @@ if(require.main===module){
     }
   }
 
+  /* 穴（高配当）は獲りにいけるのか
+     ==================================================================
+     きっかけは 2026-10-24 若松12R。2-4-5 ¥95,310（93番人気）を取り逃がした。
+     「こういうのを穴予想で取りたい」という話になったので、まず測る。
+
+     既にある波乱ブロックは回収率50%で負けている。足せば取れるものではない。
+     なので順序を変える。「どう買うか」の前に「荒れるレースを事前に見分けられるか」。
+     見分けられないなら、穴は広く買うしかなく、広く買うと回収率は下がる（30点で65%）。
+
+     候補の指標は、すべて予想の時点で手に入るものだけで作る。
+     結果を見てから指標を足さないこと。足したくなったら、それは後知恵。 */
+  {
+    const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p})).sort((a,b)=>b.p-a.p);
+    const done = base.map((r,i)=>({r, R:RACES[i]})).filter(x=>x.R && x.R.pay!=null);
+    const BIG = 10000;   /* 高配当の線。ここを動かすと結論も動くので、先に決めて固定する。 */
+
+    console.log('\n=== 穴（高配当）は獲りにいけるのか ===');
+    console.log(`  高配当 = 払戻 ¥${BIG.toLocaleString()} 以上。対象 ${done.length}レース。`);
+
+    const big = done.filter(x=>x.R.pay>=BIG);
+    console.log(`\n  高配当は ${big.length}/${done.length} レース（${(big.length/done.length*100).toFixed(0)}%）。`);
+    console.log('  モデルがその正解を何番目に置いていたか（120通り中）');
+    big.sort((a,b)=>b.R.pay-a.R.pay).forEach(x=>{
+      console.log(`    ¥${String(x.R.pay).padStart(6)}  ${x.R.result}  ${String(x.r.rank).padStart(3)}番目  ${x.R.name}`);
+    });
+    const inN = n => big.filter(x=>x.r.rank<=n).length;
+    console.log(`  うち 10点以内 ${inN(10)}件 / 20点以内 ${inN(20)}件 / 30点以内 ${inN(30)}件 / 60点以内 ${inN(60)}件`);
+    console.log('  ※ 高配当を「広く買って」取るには何点必要か、がここで分かる。');
+
+    /* 指標。すべて「1号艇が弱い」の言い換えで、予想時点の値だけを使う。 */
+    const lowest = (B, key) => {
+      const v = B.map(b=>b[key]);
+      if(v.some(x=>x==null)) return null;          /* 欠測があれば判定しない。推測しない。 */
+      return v[0] === Math.min(...v);
+    };
+    const highest = (B, key) => {                   /* 展示タイムは小さいほど速い */
+      const v = B.map(b=>b[key]);
+      if(v.some(x=>x==null)) return null;
+      return v[0] === Math.max(...v);
+    };
+    const IND = {
+      'A 1号艇のモーターが最下位': x=>lowest(x.R.B,'mot'),
+      'B 1号艇がB級':             x=>/^B/.test(x.R.B[0].g),
+      'C 1号艇の展示タイムが最も遅い': x=>highest(x.R.B,'exT'),
+      'D 1号艇の全国勝率が最下位':   x=>lowest(x.R.B,'nat'),
+      'E モデルの1号艇1着確率<45%': x=>x.fav1 < 0.45,
+      'F 展示進入が枠なりでない':    x=>{
+        const e = x.R.B.map(b=>b.entry);
+        if(e.some(v=>v==null)) return null;
+        return e.filter((v,i)=>v!==i+1).length >= 2;
+      },
+    };
+    for(const x of done){
+      x.fav1 = Object.entries(x.r.probOf).filter(([k])=>k[0]==='1').reduce((t,[,p])=>t+p,0);
+      x.won1 = x.R.result[0]==='1';
+    }
+
+    const buy = (x, n, skipFav) => {
+      let c = toC(x.r).map(y=>String(y.combo));
+      if(skipFav) c = c.filter(k=>k[0]!=='1');
+      return c.slice(0,n);
+    };
+    const ret = (set, n, skipFav) => {
+      let inv=0, back=0, hit=0;
+      for(const x of set){ const ks=buy(x,n,skipFav); inv+=ks.length*100;
+        if(ks.includes(x.R.result)){ back+=x.R.pay; hit++; } }
+      return inv ? {pct:back/inv*100, hit, n:set.length, inv, back} : null;
+    };
+
+    console.log('\n  指標ごとの内訳（該当したレースだけを見る）');
+    console.log('  指標                        該当  1号艇1着  高配当   10点(最大1件除く)  30点(除く)  1抜き20点(除く)');
+    const base1 = ret(done,10), base3 = ret(done,30);
+    /* 回収率は1件の高配当で簡単に跳ねる。最大の1件を除いた値を必ず並べる。
+       これを見ずに「この指標は儲かる」と言わないこと。 */
+    const retCut = (set, n, skipFav) => {
+      const rows=[]; let inv=0;
+      for(const x of set){ const ks=buy(x,n,skipFav); inv+=ks.length*100;
+        if(ks.includes(x.R.result)) rows.push(x.R.pay); }
+      if(!inv) return null;
+      const back=rows.reduce((a,c)=>a+c,0);
+      const cut = rows.length ? back-Math.max(...rows) : 0;
+      return {pct:back/inv*100, cutPct:cut/inv*100, hit:rows.length};
+    };
+    const row = (label, set) => {
+      if(!set.length){ console.log(`  ${label.padEnd(26)}   0件`); return; }
+      const w1 = set.filter(x=>x.won1).length;
+      const bg = set.filter(x=>x.R.pay>=BIG).length;
+      const r1 = retCut(set,10), r3 = retCut(set,30), rx = retCut(set,20,true);
+      console.log(`  ${label.padEnd(26)} ${String(set.length).padStart(3)}件  `+
+        `${String(Math.round(w1/set.length*100)).padStart(5)}%  `+
+        `${String(Math.round(bg/set.length*100)).padStart(4)}%  `+
+        `${String(Math.round(r1.pct)).padStart(4)}%${String(Math.round(r1.cutPct)).padStart(5)}%  ${String(Math.round(r3.pct)).padStart(4)}%${String(Math.round(r3.cutPct)).padStart(5)}%  ${String(Math.round(rx.pct)).padStart(4)}%${String(Math.round(rx.cutPct)).padStart(5)}%`);
+    };
+    row('（全レース）', done);
+    for(const [label, f] of Object.entries(IND)){
+      const set = done.filter(x=>f(x)===true);
+      const na  = done.filter(x=>f(x)===null).length;
+      row(label + (na?` ※欠測${na}`:''), set);
+    }
+    console.log('');
+    console.log('  指標の裏返し（該当しなかった側）。片側だけ見ると差があるように錯覚する。');
+    for(const [label, f] of Object.entries(IND)){
+      row('　↑の該当外 ' + label.slice(0,1), done.filter(x=>f(x)===false));
+    }
+    console.log('');
+    console.log(`  ※ 全レースの基準は 10点${Math.round(base1.pct)}% / 30点${Math.round(base3.pct)}%。`);
+
+    /* ここまでで分かったことを、そのまま書く。
+       ・高配当そのものは予測できていない。どの指標でも高配当率は12%前後から動かない。
+       ・一方「1号艇が飛ぶレース」は指標Eで 43% 対 76% に割れている。件数も28対29で足りている。
+       つまり狙いどころは「高配当を当てにいく」ではなく「1号艇を外す場面を選ぶ」。 */
+    console.log('\n  高配当レースの1着艇（偏っているか）');
+    {
+      const cnt={}; for(const x of big) cnt[x.R.result[0]]=(cnt[x.R.result[0]]||0)+1;
+      console.log('    ' + [1,2,3,4,5,6].map(n=>`${n}号艇 ${cnt[n]||0}件`).join(' / '));
+      const all={}; for(const x of done) all[x.R.result[0]]=(all[x.R.result[0]]||0)+1;
+      console.log('    （全57レースの1着）' + [1,2,3,4,5,6].map(n=>`${n}号艇 ${all[n]||0}件`).join(' / '));
+    }
+
+    console.log('\n  E（モデルの1号艇1着確率<45%）に当たったレースで、1号艇を1着から外して買ったら');
+    {
+      const setE = done.filter(x=>x.fav1<0.45);
+      for(const n of [6,10,15,20,30,40]){
+        const r = retCut(setE,n,true);
+        console.log(`    ${String(n).padStart(2)}点  回収率${String(Math.round(r.pct)).padStart(4)}%  `+
+          `最大1件除くと${String(Math.round(r.cutPct)).padStart(4)}%  的中${r.hit}/${setE.length}`);
+      }
+      console.log('    ※ どの点数でも100%前後まで。最大1件を除くと全部100%を割る。');
+      console.log('      いまの段階では「買えば勝てる」とは言えない。');
+    }
+
+    console.log('\n  E と F を重ねたら（件数が落ちるので参考値）');
+    {
+      const f = IND['F 展示進入が枠なりでない'];
+      const both = done.filter(x=>x.fav1<0.45 && f(x)===true);
+      const w1 = both.filter(x=>x.won1).length;
+      console.log(`    該当 ${both.length}件  1号艇1着 ${both.length?Math.round(w1/both.length*100):0}%`);
+      if(both.length){
+        const r = retCut(both,20,true);
+        console.log(`    1号艇抜き20点  回収率${Math.round(r.pct)}%  最大1件除くと${Math.round(r.cutPct)}%  的中${r.hit}/${both.length}`);
+      }
+      console.log('    ※ 10件未満なので、ここの数字で方針を決めないこと。');
+    }
+
+
+    /* 【判定・2026-10-24に先に書いた】穴の狙い方を採るか
+       ==================================================================
+       上の表を見てから書いているので、いまある57レースでは判定しない。
+       PREREG_UPSET_NAMES に今日時点の57レース名を凍結し、
+       これから足すレースだけで判定する。条件はここで決めて、あとから緩めない。
+
+       判定⑤ E条件（モデルの1号艇1着確率<45%）のレースで、1号艇を1着から外した上位10点
+         これから足すレースのうちEに該当したものが20件たまった時点で、その20件だけを見る。
+           ・回収率が100%以上
+           ・いちばん大きい払戻の1件を除いても100%以上
+         両方満たせば採る。満たさなければ採らない。
+
+       判定⑥ F条件（展示進入が枠なりでない）のレースで、1号艇を1着から外した上位20点
+         同じく、これから足すFの該当レースが12件たまった時点で、同じ2条件で判定する。
+         いまの8件では 1号艇1着13%（全体66%）と差が大きいが、件数が足りない。 */
+    {
+      const PREREG_UPSET_NAMES = new Set([
+      '若松12R 一般特選(10/23)',
+      '若松11R 予選特選(10/23)',
+      '尼崎4R 予選(10/23)',
+      '尼崎2R 予選(10/23)',
+      '平和島4R 予選(10/23)',
+      '若松9R 予選(10/23)',
+      '唐津6R 予選(10/21)',
+      '唐津5R 予選(10/21)',
+      '唐津4R 予選(10/21)',
+      '唐津3R 予選(10/21)',
+      '唐津2R 予選(10/21)',
+      '唐津1R 予選(10/21)',
+      '唐津12R 予選(10/20)',
+      '唐津11R 予選(10/20)',
+      '唐津10R 予選(10/20)',
+      '唐津9R 予選(10/20)',
+      '唐津8R 予選(10/20)',
+      '唐津6R 予選(10/20)',
+      '唐津7R 予選(10/20)',
+      '唐津4R 予選(10/20)',
+      '唐津5R 予選(10/20)',
+      '唐津3R 予選(10/20)',
+      '唐津2R 予選(10/20)',
+      '唐津1R 予選(10/20)',
+      '大村12R 発祥地選抜',
+      '若松11R 準優勝戦',
+      '若松10R 準優勝戦',
+      '桐生8R 女子',
+      '桐生9R 男子',
+      '桐生12R 特選',
+      '徳山1R 一般',
+      '徳山2R 特選',
+      '徳山3R 特賞',
+      '徳山4R 予選',
+      '徳山5R 予選',
+      '徳山6R 予選',
+      '三国1R 一般',
+      '三国3R 一般',
+      '三国5R 一般',
+      '三国6R 一般',
+      '三国7R 一般',
+      '三国8R 一般',
+      '三国9R 一般',
+      '三国10R 準優勝戦',
+      '三国11R 準優勝戦',
+      '三国12R 準優勝戦',
+      '下関1R 予選',
+      '徳山1R 朝トク予選',
+      '下関2R 予選',
+      '徳山2R 狙いトク特選',
+      '徳山3R 決めトク特賞',
+      '徳山4R ガチトク予選',
+      '徳山5R 予選 4日目',
+      '下関10R 予選特賞',
+      '下関11R 予選特選',
+      '若松11R 準優勝戦(10/24)',
+      '若松12R 一般(10/24)',
+      ]);
+      const fwd = done.filter(x=>!PREREG_UPSET_NAMES.has(x.R.name));
+      const fIdx = IND['F 展示進入が枠なりでない'];
+      const judge = (label, set, need, n) => {
+        console.log(`\n  【判定・2026-10-24に先に書いた】${label}`);
+        if(set.length < need){
+          console.log(`    いま ${set.length}/${need} 件。たまったら判定する。`);
+          if(set.length){
+            const r = retCut(set,n,true);
+            console.log(`    （参考 回収率${Math.round(r.pct)}% / 最大1件除くと${Math.round(r.cutPct)}%`+
+                        ` / 的中${r.hit}件。件数が足りないので根拠にしない）`);
+          }
+          return;
+        }
+        const use = set.slice(0, need);           /* 先に20件そろった分だけで判定する */
+        const r = retCut(use, n, true);
+        const a = r.pct >= 100, b = r.cutPct >= 100;
+        console.log(`    ${a?'○':'×'} 回収率100%以上        ${Math.round(r.pct)}%`);
+        console.log(`    ${b?'○':'×'} 最大1件を除いても100%以上 ${Math.round(r.cutPct)}%`);
+        console.log(`    → ${a&&b ? 'この買い方を採る。' : '欠けたので捨てる。採らない。'}`);
+      };
+      judge('判定⑤ E条件のレースで1号艇抜き10点を買うか',
+            fwd.filter(x=>x.fav1<0.45), 20, 10);
+      judge('判定⑥ F条件（進入変更）のレースで1号艇抜き20点を買うか',
+            fwd.filter(x=>fIdx(x)===true), 12, 20);
+      console.log(`\n  （凍結したのは今日時点の ${PREREG_UPSET_NAMES.size} レース。`+
+                  `これ以降に足した ${fwd.length} レースだけで判定する）`);
+    }
+
+    console.log('  ※ 該当件数が10件を切る行は、偶然の幅のほうが大きい。数字を信じないこと。');
+  }
+
   /* 1着が決まったあと、2着は誰か（モデルは「どう勝ったか」を見ていない）
      ==================================================================
      きっかけは 2026-10-22 若松10R。本人が 4-全-5 で 4-3-5 を取ったときの説明。

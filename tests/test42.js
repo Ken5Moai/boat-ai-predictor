@@ -1,0 +1,68 @@
+/* 事前登録した判定の条件が、あとから緩められていないか
+   ------------------------------------------------------------------
+   事前登録の意味は「結果を見てから条件を動かさない」ことにある。
+   ところが条件はただのコードなので、翌日の自分が静かに書き換えられる。
+     ・凍結した名前の集合から数件外す（＝都合の良いレースを判定対象に入れる）
+     ・必要件数 20 を 10 に下げる（＝たまたま良い時点で打ち切る）
+     ・「最大1件を除いても100%以上」を落とす（＝1本の高配当で通す）
+     ・高配当の線 ¥10,000 を動かす（＝件数を好きに作る）
+   どれも悪意なしにやれてしまう。このテストはそれを落ちる形にする。
+
+   数字そのものが正しいかは測れない。測れるのは「書いた条件が残っているか」だけ。
+   条件を変えるときは、このテストも一緒に直すことになる。
+   そのとき「なぜ変えるのか」をコミットに書くことが、実質の歯止めになる。 */
+const fs=require('fs'),path=require('path');
+let pass=0,fail=0;
+const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.log('  ✗ FAIL: '+m);} };
+const BT=fs.readFileSync(path.join(__dirname,'..','backtest.js'),'utf8');
+const RACES=eval('['+BT.match(/const RACES=\[([\s\S]*?)\n\];\n/)[1]+']');
+
+console.log('=== 穴の判定（⑤⑥）の条件が残っているか ===');
+const upset=BT.match(/const PREREG_UPSET_NAMES = new Set\(\[([\s\S]*?)\]\);/);
+ok(!!upset, 'PREREG_UPSET_NAMES がある');
+const upNames=(upset?upset[1].match(/'[^']+'/g)||[]:[]).map(s=>s.slice(1,-1));
+ok(upNames.length===57, `凍結した名前は57件のまま（いま ${upNames.length}件）`);
+
+/* 凍結した名前は、実在するレースを指していなければ意味がない。
+   名前を1文字変えるだけで「凍結したのに判定対象に入る」状態が作れる。 */
+const have=new Set(RACES.map(r=>r.name));
+const missing=upNames.filter(n=>!have.has(n));
+ok(missing.length===0, `凍結した名前がすべて RACES に実在する${missing.length?'（欠け: '+missing.join(' / ')+'）':''}`);
+
+ok(/judge\('判定⑤[^']*',\s*\n?\s*fwd\.filter\(x=>x\.fav1<0\.45\), 20, 10\)/.test(BT)
+   || /fwd\.filter\(x=>x\.fav1<0\.45\), 20, 10\)/.test(BT),
+   '判定⑤ は「E条件・20件そろってから・1号艇抜き10点」のまま');
+ok(/fIdx\(x\)===true\), 12, 20\)/.test(BT),
+   '判定⑥ は「F条件・12件そろってから・1号艇抜き20点」のまま');
+ok(/const a = r\.pct >= 100, b = r\.cutPct >= 100;/.test(BT),
+   '採用条件は「回収率100%以上」かつ「最大1件を除いても100%以上」の2つのまま');
+ok(/const use = set\.slice\(0, need\)/.test(BT),
+   '判定は先にそろった件数ぶんだけで行う（良い時点まで待てない）');
+ok(/const BIG = 10000;/.test(BT), '高配当の線は ¥10,000 のまま');
+
+console.log('\n=== 等級の判定（④）の条件が残っているか ===');
+const cls=BT.match(/const PREREG_CLASS_NAMES = new Set\(\[([\s\S]*?)\]\);/);
+ok(!!cls, 'PREREG_CLASS_NAMES がある');
+const clsNames=(cls?cls[1].match(/'[^']+'/g)||[]:[]).map(s=>s.slice(1,-1));
+ok(clsNames.length===55, `凍結した名前は55件のまま（いま ${clsNames.length}件）`);
+const missing2=clsNames.filter(n=>!have.has(n));
+ok(missing2.length===0, `凍結した名前がすべて RACES に実在する${missing2.length?'（欠け: '+missing2.join(' / ')+'）':''}`);
+
+console.log('\n=== 「あとから緩めない」と書いた注意書きが残っているか ===');
+ok((BT.match(/あとから緩めない/g)||[]).length>=3,
+   `「あとから緩めない」が3箇所以上残っている（いま ${(BT.match(/あとから緩めない/g)||[]).length}箇所）`);
+ok(/結果を見てから指標を足さないこと/.test(BT),
+   '「結果を見てから指標を足さないこと」が残っている');
+ok(/いまある57レースでは判定しない/.test(BT),
+   '判定⑤⑥を「今日のデータでは判定しない」と書いた注意書きが残っている');
+
+console.log('\n=== 穴の節が、都合の良い数字だけを出していないか ===');
+ok(/最大1件除くと/.test(BT) || /最大1件を除く/.test(BT),
+   '回収率のとなりに必ず「最大1件を除いた値」を出している');
+ok(/指標の裏返し（該当しなかった側）/.test(BT),
+   '指標は裏返し（該当しなかった側）も並べている');
+ok(/該当件数が10件を切る行は/.test(BT),
+   '件数が少ない行への注意書きがある');
+
+console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
+process.exit(fail?1:0);
