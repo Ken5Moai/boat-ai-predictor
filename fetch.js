@@ -24,6 +24,11 @@
      ・公式が「.」や「-」と出している欄は、欠測として null にする */
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
+/* オッズについて（2026-10-24に分かったこと）
+   odds3t はレース前に取ると「その時点のライブ値」で、締切時オッズとは違う。
+   若松12R(10/24) は締切12分前が 2-4-5 = 521.9倍だったが、締切時は 953.1倍だった。
+   払戻(¥95,310)と一致するのは後者。記録用のオッズは必ずレース後に取り直すこと。
+   予想のときは締切前の値しか無いので、それで出すしかない（それは正しい）。 */
 const BASE = 'https://www.boatrace.jp/owpc/pc/race';
 const UA = 'boat-ai-predictor/1.0 (personal backtest; contact via github.com/Ken5Moai)';
 
