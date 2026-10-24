@@ -1255,8 +1255,20 @@ if(require.main===module){
         const n = cost/X;
         console.log(`    1回¥${String(X).padStart(6)} なら ${n.toFixed(1)}回／${done.length}レース必要`);
       }
-      console.log('  「当たれば大きい」は正しい考え方だが、このブロックの実測は');
-      console.log('  2回あたって平均¥1,275。安い組ばかりで、大きいのは1回も取れていない。');
+      /* ここは以前「2回あたって平均¥1,275」と固定文で書いていた。
+         レースを足しても書き換わらず、古い数字が残り続けた。計算に変えた。 */
+      {
+        const hits=[];
+        for(const r of done){ const info=payOf[r.name]; if(!info) continue;
+          const H=[...new Set(haran(toCombos(r),'model'))];
+          if(H.includes(info.result)) hits.push(info.pay); }
+        const avg = hits.length ? Math.round(hits.reduce((a,c)=>a+c,0)/hits.length) : 0;
+        console.log('  「当たれば大きい」は正しい考え方だが、このブロックの実測は');
+        console.log(`  ${hits.length}回あたって平均¥${avg.toLocaleString()}。`+
+          (hits.length&&Math.max(...hits)<10000
+            ? '安い組ばかりで、高配当は1回も取れていない。'
+            : `いちばん大きいのは¥${Math.max(...hits).toLocaleString()}。`));
+      }
     }
   }
 
