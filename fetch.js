@@ -123,7 +123,13 @@ function parseBefore(html){
     const exT  = num(c[i+1]);
     const tilt = num(c[i+2]);
     if(exT===null || exT < 6 || exT > 8) continue;      /* 展示タイムの形 */
-    out.boats.push({ wt, exT, tilt });
+    /* チルトのあと、"R" が来るまでが部品交換。そのあと
+       "R" "進入" <調整重量> "ST" "着順" と並ぶ。 */
+    let j = i+3, parts = null;
+    if(c[j] !== 'R'){ parts = c[j]; j++; }
+    let adj = null;
+    if(c[j]==='R' && c[j+1]==='進入') adj = num(c[j+2]);
+    out.boats.push({ wt, exT, tilt, parts, adj });
     if(out.boats.length===6) break;
   }
   /* スタート展示：「コース 並び ST」のあと コース番号とSTが交互 */
@@ -231,7 +237,7 @@ async function fetchRace(jcd, rno, hd){
     const bb = B.boats[i] || {};
     const ex = B.exSt[i+1] || {};
     return { ...b, exT: bb.exT ?? null, tilt: bb.tilt ?? null,
-             wt: bb.wt ?? b.wt,
+             wt: bb.wt ?? b.wt, parts: bb.parts ?? null, adj: bb.adj ?? null,
              exST: ex.st ?? null, exF: ex.f ?? null,
              entry: B.entry[i+1] ?? null };
   });
@@ -257,6 +263,8 @@ function emit(race, name){
       + `mot:${f(b.mot,2)},bt:${f(b.bt,2)},st:${b.st==null?'null':f(b.st,2)},F:${b.F},`
       + `exST:${b.exST==null?'null':String(b.exST).replace(/^0/,'')},`
       + `exF:${b.exF?"'F'":'null'},exT:${f(b.exT,2)},tilt:${f(b.tilt,1)},wt:${f(b.wt,1)},`
+      + (b.adj ? `adj:${f(b.adj,1)},` : '')
+      + (b.parts ? `parts:'${b.parts}',` : '')
       + `entry:${b.entry},rec:[${b.rec.map(r=>`[${r[0]},${String(r[1]).replace(/^0/,'')},`
       + `${typeof r[2]==='number'?r[2]:`'${r[2]}'`}]`).join(',')}]}${i<5?',':']},'}`);
   });

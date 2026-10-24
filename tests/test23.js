@@ -79,5 +79,30 @@ ok(names.length===Object.keys(require(path.join(DIR,'odds.js'))).length,
 ok(/odds\.js に同じレース名が2回書かれています/.test(src),
    'backtest.js にその検査が入っている');
 
+/* 名前と中身が食い違っていないか
+   ------------------------------------------------------------------
+   実際にあった間違い：「桐生8R 女子」なのに rno:1 が入っていた。
+   公式から取り直すまで気づかなかった。名前が「8R」なら rno も 8 のはず。
+   場コードも同じで、名前の頭が場の名前と合っているはず。 */
+console.log('\n名前と中身（場・レース番号）');
+{
+  const vm2=require('vm');
+  const bt=fs.readFileSync(BT,'utf8');
+  const a=bt.indexOf('const RACES=['), b2=bt.indexOf('\n];',a);
+  const RACES=vm2.runInNewContext(bt.slice(a+'const RACES='.length,b2+2));
+  const VEN={'01':'桐生','04':'平和島','10':'三国','13':'尼崎','18':'徳山',
+             '19':'下関','20':'若松','23':'唐津','24':'大村'};
+  let ng=0;
+  for(const r of RACES){
+    const m=String(r.name).match(/^(\D+?)(\d+)R/);
+    if(!m){ ng++; console.log('  ✗ FAIL: 名前からレース番号が読めない: '+r.name); continue; }
+    if(Number(m[2])!==r.rno){ ng++;
+      console.log(`  ✗ FAIL: ${r.name} のレース番号 名前${m[2]} / 記録${r.rno}`); }
+    else if(VEN[r.jcd] && VEN[r.jcd]!==m[1]){ ng++;
+      console.log(`  ✗ FAIL: ${r.name} の場 名前${m[1]} / 記録${VEN[r.jcd]}`); }
+  }
+  ok(ng===0, `${RACES.length}レースすべて、名前と場・レース番号が合っている`);
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
