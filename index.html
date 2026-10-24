@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0e17">
-<title>ボートAI予想ツール v17</title>
+<title>ボートAI予想ツール v18</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 /* ============================================================
-   v17 STRUCTURED  -  スマホ縦カード / ダークテーマ
+   v18 STRUCTURED  -  スマホ縦カード / ダークテーマ
    横スクロールを絶対に発生させない設計
    ============================================================ */
 :root{
@@ -169,7 +169,7 @@ hr{border:none;border-top:1px solid #1e2a42;margin:11px 0}
 <body>
 <div class="wrap">
 
-<h1>ボートAI予想ツール v17</h1>
+<h1>ボートAI予想ツール v18</h1>
 <div class="lead">
 手入力するのは<b style="color:#f0c040">6艇の登録番号だけ</b>。選手名・級別・勝率・モーター・展示は
 BOAT RACE公式から取得します。<br>
@@ -741,7 +741,7 @@ BOAT RACE公式から取得します。<br>
 <script>
 'use strict';
 /* ==================================================================
-   ボートAI予想ツール v17 STRUCTURED
+   ボートAI予想ツール v18 STRUCTURED
    --------------------------------------------------------------
    設計原則（過去バグの構造的封じ込め）
    1. 艇は必ず boats[0..5] の固定6要素。splice/sort/filterで詰めない。
@@ -4507,7 +4507,7 @@ function generateReport(){
 
   const html = `
 <div class="rhead">
-  <div class="eyebrow">BOAT RACE AI PREDICTION v17</div>
+  <div class="eyebrow">BOAT RACE AI PREDICTION v18</div>
   <div class="rtitle">${esc(venue?venue.name:'競艇場')} ${esc($('raceNo').value||'')}R ${esc($('raceType').value||'')}</div>
   <div class="mini" style="margin-top:7px">${esc($('raceDate').value||'')}</div>
   <div class="mini" style="margin-top:5px">${esc(condLine)}</div>
@@ -4817,8 +4817,50 @@ ${(()=>{
   if(U.restP < 0.08) return '';     /* 本命が堅すぎる場合は出さない */
   const top = U.lanes.filter(x=>x.cond >= 0.10).slice(0,3);
   if(!top.length) return '';
+  /* このレースが「1号艇の飛びやすい形」かどうかを先に出す。
+     57レースで測った結果、ここだけは件数が足りていて差もはっきりしている。
+       E モデルの1号艇1着確率 < 45%   該当28件 1号艇1着43% ／ 非該当29件 76%
+       F 展示進入が枠なりでない        該当 8件 1号艇1着13% ／ 非該当44件 66%
+     ただし「だから買えば勝てる」はまだ言えない。E該当レースで1号艇を外して
+     上位10点を買うと回収率156%だが、最大の1件を除くと93%に落ちる。
+     なので買い目としては出さず、形の判定と参考リストに留める。
+     採るかどうかは backtest.js の判定⑤⑥で、これから足すレースだけを見て決める。 */
+  const p1 = combos.filter(c=>String(c.combo)[0]==='1').reduce((t,c)=>t+c.p, 0);
+  const moved = (ctx.entryInfo && ctx.entryInfo.movedCount != null) ? ctx.entryInfo.movedCount : null;
+  const condE = p1 < 0.45;
+  const condF = moved != null && moved >= 2;
+  const noFav = combos.filter(c=>String(c.combo)[0]!=='1').slice(0,10);
+  const flag = `<div class="notice ${condE||condF ? 'warn' : 'ok'}" style="margin:0 0 10px">
+    <b>1号艇が飛びやすい形か</b>（57レースで測った2つの条件）<br>
+    ${condE ? '●' : '○'} モデルの1号艇1着確率が45%未満
+      <span class="mini">いま ${(p1*100).toFixed(0)}%。${condE
+        ? '該当。この形の28レースでは1号艇の1着率が43%でした（非該当は76%）。'
+        : '非該当。この形の29レースでは1号艇の1着率が76%でした（該当は43%）。'}</span><br>
+    ${moved==null ? '－ 進入はまだ入力されていません'
+      : (condF ? '●' : '○') + ' 展示進入が枠なりでない'}
+      <span class="mini">${moved==null ? '展示進入を入れると判定できます。'
+        : (condF
+          ? moved+'艇が動いています。この形の8レースでは1号艇の1着率が13%でした（枠なりは66%）。ただし8件しかありません。'
+          : '枠なりです。この形の44レースでは1号艇の1着率が66%でした。')}</span><br>
+    <b style="color:${condE||condF ? '#f0c040' : '#6fd08c'}">${
+      condE&&condF ? '2つとも該当。1号艇は飛びやすい形です。'
+      : condE||condF ? '1つ該当。1号艇はやや飛びやすい形です。'
+      : '2つとも非該当。1号艇は堅い形です。'}</b><br>
+    <span class="mini">この判定は「1号艇が飛ぶか」までです。<b>高配当が取れるかは別で、そちらは測っても予測できていません</b>
+      （高配当7件のモデル順位は88・40・57・67・7・58・39番目）。</span>
+  </div>
+  ${condE ? `<div style="margin-bottom:10px;padding:8px 10px;border:1px solid #2a3550;border-radius:6px">
+    <div><b>参考：1号艇を1着から外した上位10点</b></div>
+    <div style="font-size:15px;margin-top:4px">${noFav.map(c=>`<b>${c.combo}</b>`).join('　')}</div>
+    <div class="mini" style="margin-top:5px">
+      E該当の28レースでこれを買うと回収率156%でしたが、<b>いちばん大きい1件を除くと93%</b>に落ちます。
+      点数を増やすほど下がります（15点110%→69%／20点98%→67%／30点74%→53%）。
+      <b>まだ「買えば勝てる」とは言えないので、買い目には入れていません。</b>
+    </div>
+  </div>` : ''}`;
   return `<div class="card"><div class="chead">荒れ予想<span class="mini">
     ${U.favourite}号艇が飛んだ場合に限った見方</span></div><div class="cbody">
+  ${flag}
   <div class="mini" style="margin-bottom:8px">
     本命 <b>${U.favourite}号艇</b> の1着確率 <b>${(U.favP*100).toFixed(0)}%</b>
     ／ 飛ぶ確率 <b style="color:#f0c040">${(U.restP*100).toFixed(0)}%</b>。
@@ -4844,20 +4886,19 @@ ${(()=>{
     </div>`;
   }).join('')}
   <div class="notice warn" style="margin:0">
-    <b>この枠を本線に足すと、31レースで的中が1つも増えませんでした。</b><br>
+    <b>この枠を本線に足しても、57レースで的中は28→31しか増えません。</b><br>
     <table class="tbl" style="margin:6px 0"><tr><th>買い方</th><th>回収率</th><th>的中</th></tr>
-    <tr><td>本線10点のみ</td><td><b>96%</b></td><td>17/31</td></tr>
-    <tr><td>本線10＋この枠9点</td><td>61%</td><td><b>17/31</b></td></tr>
-    <tr><td>この枠だけ9点</td><td>10%</td><td>2/31</td></tr>
+    <tr><td>本線10点のみ</td><td><b>130%</b></td><td>28/57</td></tr>
+    <tr><td>本線10＋この枠9点</td><td>96%</td><td>31/57</td></tr>
+    <tr><td>この枠だけ9点</td><td>50%</td><td>8/57</td></tr>
     </table>
-    <b>的中数が17のまま変わっていません。</b>
-    この枠が当てた2回は、本線10点でも当てていた回でした。
-    つまり<b>投資だけが増えています</b>（¥31,000→¥48,500）。<br>
+    <b>投資は約1.5倍になり、回収率は130%から96%へ下がります。</b>
+    この枠だけを買うと50%です。<br>
     <b>「当たれば大きいから元が取れる」も、この枠では成立していません。</b>
-    本線が外した14レースのうち、この枠で拾えたのは<b>0レース</b>。
-    当てた2回の払戻は<b>平均¥1,275</b>で、安い組ばかりでした。<br>
-    本線が外した高配当（¥64,820／¥45,840／¥26,460）は、
-    モデルの<b>50番目・63番目・66番目</b>にあり、上位9点しか取らないこの枠では届きません。<br>
+    当てた8回の払戻は<b>平均¥3,123</b>で、<b>¥10,000超は1回もありません</b>。<br>
+    本線が外した高配当（¥95,310／¥64,820／¥45,840／¥26,460）は、
+    モデルの<b>88番目・40番目・57番目・67番目</b>にあり、
+    上位9点しか取らないこの枠では届きません。<br>
     ・下限オッズで穴を選ぶ方式も実測で回収率を下げました
     （本線6＋穴4で50倍以上77%／100倍以上53%。本線10のみは106%）。<br>
     ・払戻¥5,000超のレースで、正解はモデルの平均41.3番目にあります。<br>
@@ -5909,7 +5950,7 @@ function init(){
   renderBoats();
   validateAll();
   onBankChange();
-  log('v17 起動しました。STEP1から順に進めてください。');
+  log('v18 起動しました。STEP1から順に進めてください。');
   setStatus('待機中');
 }
 init();
