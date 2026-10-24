@@ -1466,6 +1466,63 @@ if(require.main===module){
     console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
 
+  /* 至極の一点だけ厚く賭けたら
+     ==================================================================
+     2026-10-24に本人から出た買い方。至極を500〜1000円、ほかは100円。
+
+     結論は算数で先に分かる。至極の一点だけを買ったときの回収率が100%を
+     下回っているなら、そこに金を寄せるほど全体の回収率はその値に引っ張られる。
+     ただし「どれくらい下がるか」は実際に計算しないと分からないので、出す。
+
+     金額ごとに投資も払戻も変わるので、点数ではなく円で並べる。 */
+  {
+    const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p}));
+    const done = base.map((r,i)=>({r, R:RACES[i]})).filter(x=>x.R && x.R.pay!=null);
+
+    console.log('\n=== 至極の一点だけ厚く賭けたら ===');
+    console.log(`  対象 ${done.length}レース。至極以外はすべて100円。`);
+
+    /* 払戻は「100円賭けたときの金額」なので、賭け金が X 円なら X/100 倍になる。 */
+    const run = (label, topYen, use) => {
+      let inv=0, back=0, hits=0, topHits=0;
+      for(const x of done){
+        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        const ks = [...new Set(use(pl))];
+        for(const k of ks) inv += (k===pl.best ? topYen : 100);
+        if(ks.includes(x.R.result)){
+          hits++;
+          const yen = (x.R.result===pl.best ? topYen : 100);
+          if(x.R.result===pl.best) topHits++;
+          back += x.R.pay * (yen/100);
+        }
+      }
+      console.log(`  ${label.padEnd(30)} 投資¥${String(inv).padStart(7)}  `+
+        `払戻¥${String(Math.round(back)).padStart(7)}  `+
+        `収支${(back-inv>=0?'+':'-')}¥${Math.abs(Math.round(back-inv)).toLocaleString().padStart(7)}  `+
+        `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits}（うち至極${topHits}）`);
+    };
+
+    console.log('  ── 本線10点だけ ──');
+    for(const y of [100,500,1000]) run(`至極¥${y} ＋ 残り9点¥100`, y, p=>p.main);
+    console.log('  ── 本線10点＋波乱8点（18点）──');
+    for(const y of [100,500,1000]) run(`至極¥${y} ＋ 残り17点¥100`, y, p=>p.all);
+
+    /* なぜ下がるのかを、数字で示しておく。 */
+    {
+      let n=0, back=0;
+      for(const x of done){
+        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        if(x.R.result===pl.best){ n++; back += x.R.pay; }
+      }
+      const pct = back/(done.length*100)*100;
+      console.log(`  至極の一点だけを100円で買ったときの回収率は ${Math.round(pct)}%`+
+                  `（${n}/${done.length}レース、払戻合計¥${back.toLocaleString()}）。`);
+      console.log('  100%を下回っているので、ここに金を寄せるほど全体はこの値に近づく。');
+      console.log('  至極を厚くするのが有利になるのは、至極だけの回収率が100%を超えてから。');
+      console.log(`  ※ 的中${n}件だけの数字なので、1件の高配当で簡単にひっくり返る。`);
+      console.log('    「いまは下がる」であって「ずっと下がる」ではない。');
+    }
+  }
   /* 穴（高配当）は獲りにいけるのか
      ==================================================================
      きっかけは 2026-10-24 若松12R。2-4-5 ¥95,310（93番人気）を取り逃がした。
@@ -1582,7 +1639,7 @@ if(require.main===module){
       const cnt={}; for(const x of big) cnt[x.R.result[0]]=(cnt[x.R.result[0]]||0)+1;
       console.log('    ' + [1,2,3,4,5,6].map(n=>`${n}号艇 ${cnt[n]||0}件`).join(' / '));
       const all={}; for(const x of done) all[x.R.result[0]]=(all[x.R.result[0]]||0)+1;
-      console.log('    （全57レースの1着）' + [1,2,3,4,5,6].map(n=>`${n}号艇 ${all[n]||0}件`).join(' / '));
+      console.log(`    （全${done.length}レースの1着）` + [1,2,3,4,5,6].map(n=>`${n}号艇 ${all[n]||0}件`).join(' / '));
     }
 
     console.log('\n  E（モデルの1号艇1着確率<45%）に当たったレースで、1号艇を1着から外して買ったら');
@@ -2501,6 +2558,29 @@ if(require.main===module){
           money('本線（10点）',      p=>p.main);
           money('波乱（8点）',       p=>p.ana);
           money('本線＋波乱（18点）', p=>p.all);
+          /* 至極を厚くした場合も同じ日で出す。払戻は100円あたりなので X/100 倍する。 */
+          const weighted = (label, topYen, use) => {
+            let inv=0, back=0, hits=0;
+            for(const x of sub){
+              const info = payOfDay[x.name]; if(!info || info.pay==null) continue;
+              const pl = WIN.buyPlan(toC(x), {main:10, ana:8});
+              const ks = [...new Set(use(pl))];
+              for(const k of ks) inv += (k===pl.best ? topYen : 100);
+              if(ks.includes(info.result)){
+                hits++;
+                back += info.pay * ((info.result===pl.best ? topYen : 100)/100);
+              }
+            }
+            console.log(`      ${label.padEnd(26)} 投資¥${String(inv).padStart(6)}  `+
+              `払戻¥${String(Math.round(back)).padStart(6)}  `+
+              `収支${(back-inv>=0?'+':'-')}¥${Math.abs(Math.round(back-inv)).toLocaleString()}  `+
+              `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits}/12`);
+          };
+          console.log('    至極を厚くしたら（ほかは100円のまま）');
+          for(const y of [500,1000]){
+            weighted(`本線10点・至極¥${y}`, y, p=>p.main);
+            weighted(`18点・至極¥${y}`,     y, p=>p.all);
+          }
         }
         /* 1着の対数スコアを、この日のオッズがある分だけで比べる。
            1着の確率は「その艇が頭の組」を足し合わせて出す。市場は 0.75÷オッズ。 */
@@ -3180,7 +3260,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点130% ／ 波乱8点だけ26% ／ 18点まとめて84%（57レース）。');
+        console.log('  実測 本線10点121% ／ 波乱8点だけ40% ／ 18点まとめて85%（67レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
