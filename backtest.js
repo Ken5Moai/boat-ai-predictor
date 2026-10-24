@@ -1204,7 +1204,7 @@ if(require.main===module){
       }
       return out;
     };
-    const run = (label, pick) => {
+    const run = (label, pick, mode) => {
       let inv=0, back=0, hit=0, pts=0;
       for(const r of done){
         const info = payOf[r.name]; if(!info) continue;
@@ -1270,6 +1270,60 @@ if(require.main===module){
             : `いちばん大きいのは¥${Math.max(...hits).toLocaleString()}。`));
       }
     }
+  }
+
+  /* 「至極の一点1点 / 本線10点 / 波乱8点」で買ったら
+     ==================================================================
+     2026-10-24に本人から出た買い方。index.html の buyPlan() がその形を決める。
+     ここは同じ関数を呼んで、57レースで実際にいくらになるかを測るだけ。
+
+     至極の一点は本線の中に入っている（1位の組だから）。別枠ではない。
+     なので買う組は 10+8=18点。至極に厚く賭けるかどうかは、点数とは別の話。 */
+  {
+    const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p}));
+    const done = base.map((r,i)=>({r, R:RACES[i]})).filter(x=>x.R && x.R.pay!=null);
+    const plan = (x, m) => WIN.buyPlan(toC(x.r), {main:10, ana:8, anaMode:m});
+
+    console.log('\n=== 「至極の一点 / 本線10点 / 波乱8点」で買ったら ===');
+    console.log(`  対象 ${done.length}レース。1点100円で統一。`);
+    const run = (label, pick, mode) => {
+      let inv=0, hits=[];
+      for(const x of done){
+        const ks=[...new Set(pick(plan(x, mode)))];
+        inv += ks.length*100;
+        if(ks.includes(x.R.result)) hits.push(x.R.pay);
+      }
+      const back = hits.reduce((a,c)=>a+c,0);
+      const cut  = hits.length ? back-Math.max(...hits) : 0;
+      console.log(`  ${label.padEnd(22)} 投資¥${String(inv).padStart(6)}  `+
+        `回収率${String(Math.round(back/inv*100)).padStart(4)}%  `+
+        `最大1件除くと${String(Math.round(cut/inv*100)).padStart(4)}%  `+
+        `的中${String(hits.length).padStart(2)}/${done.length}`);
+    };
+    run('至極の一点だけ（1点）', p=>[p.best]);
+    run('本線だけ（10点）',      p=>p.main);
+    console.log('  ─ 波乱の取り方① 荒れ予想と同じ（本命が飛んだ場合に限った確率）─');
+    run('  波乱だけ（8点）',       p=>p.ana, 'cond');
+    run('  本線10＋波乱8（18点）', p=>p.all, 'cond');
+    console.log('  ─ 波乱の取り方② 素の確率順で本命以外を取る ─');
+    run('  波乱だけ（8点）',       p=>p.ana, 'prob');
+    run('  本線10＋波乱8（18点）', p=>p.all, 'prob');
+    /* 2つの取り方が同じ数字になったので、本当に同じ買い目なのかを数えて確かめる。
+       同じに見えて実はモードが渡っていない、という間違いを防ぐため。 */
+    {
+      let diff=0, bothHit=0, onlyCond=0, onlyProb=0;
+      for(const x of done){
+        const a=plan(x,'cond').ana, b=plan(x,'prob').ana;
+        if(JSON.stringify(a)!==JSON.stringify(b)) diff++;
+        const ha=a.includes(x.R.result), hb=b.includes(x.R.result);
+        if(ha&&hb) bothHit++; else if(ha) onlyCond++; else if(hb) onlyProb++;
+      }
+      console.log(`  ※ 2つの取り方で買い目が違ったのは ${diff}/${done.length}レース。`);
+      console.log(`    的中の内訳 両方${bothHit}件 / ①だけ${onlyCond}件 / ②だけ${onlyProb}件。`);
+    }
+    console.log('  ※ 波乱8点は本線と重ならない組だけを取っている（重複買いはしない）。');
+    console.log('  ※ 波乱を足すと的中は増えるが、増えた分の払戻が投資に追いついていない。');
+    console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
 
   /* 穴（高配当）は獲りにいけるのか
@@ -2894,12 +2948,24 @@ if(require.main===module){
           .map(n=>`${n}号艇 ${((head[n]||0)*100).toFixed(1)}%`).join(' / '));
         console.log(`  至極の一点  ${sorted[0][0]}（${(sorted[0][1]*100).toFixed(2)}%）`);
         console.log('  確率順  ' + sorted.slice(0,19).map(([k,v],i)=>(i+1)+'.'+k+' '+(v*100).toFixed(1)+'%').join('  '));
-        for(const n of [10, 19]){
-          const list = sorted.slice(0, n).map(([k])=>k);
-          const c = WIN.compressCombos(list);
-          console.log(`  ${String(n).padStart(2)}点  ` +
-            (c && c.ok ? c.terms.map(t=>t.text).join(' / ') : list.join(' ')));
-        }
+        /* 2026-10-24に決めた買い方。至極の一点 / 本線10点 / 波乱8点 の3段で出す。
+           形を決めるのは index.html の buyPlan() 一箇所だけ。ここでは呼ぶだけにする。
+           57レースの実測は 本線10点130% / 波乱8点だけ26% / 合わせて18点84%。
+           波乱を足すと回収率は下がる。それを承知で買う形なので、毎回ここに書く。 */
+        const plan = WIN.buyPlan(Object.entries(r.probOf).map(([combo,p])=>({combo,p})),
+                                 {main:10, ana:8});
+        const fmt = list => { const c = WIN.compressCombos(list);
+          return (c && c.ok) ? c.terms.map(t=>t.text).join(' / ') : list.join(' '); };
+        const pc = k => ((r.probOf[k]||0)*100).toFixed(1) + '%';
+        console.log('  ── 買い目 ──');
+        console.log(`  至極の一点  ${plan.best}（${pc(plan.best)}）`);
+        console.log(`  本線10点    ${fmt(plan.main)}`);
+        console.log(`  波乱 8点    ${fmt(plan.ana)}`);
+        console.log(`              （${plan.favourite}号艇が飛んだ場合に限った確率の上位。`+
+                    `本線とは重ならない）`);
+        console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
+                    `至極の一点は本線10点の中に入っている（別枠ではない）。`);
+        console.log('  実測 本線10点130% ／ 波乱8点だけ26% ／ 18点まとめて84%（57レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

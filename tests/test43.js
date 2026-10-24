@@ -93,5 +93,51 @@ console.log('\n=== 今日の若松12R（この判定では拾えなかった実�
   }
 }
 
+console.log('\n=== 買い目カード（至極1点 / 本線10点 / 波乱8点）===');
+/* 買い目の形を決めるのは buyPlan() 一箇所だけ、という約束を守れているか。
+   backtest.js と index.html の両方に点数を書くと、片方だけ直したときに静かにずれる。 */
+{
+  const r = report(RACES[RACES.length-1]);
+  ok(/買い目 18点/.test(r.text), '18点の買い目カードが描画される');
+  ok(/至極の一点/.test(r.text) && /本線 10点/.test(r.text) && /波乱 8点/.test(r.text),
+     '3段（至極1点 / 本線10点 / 波乱8点）が出ている');
+  ok(/本線10点の中に入っています（別枠ではありません）/.test(r.text),
+     '至極の一点が本線に含まれることを明記している');
+  ok(/回収率は130%→84%に落ちます/.test(r.text),
+     '波乱を足すと回収率が落ちることを買う前に出している');
+  ok(/つまり「取り方が悪いから当たらない」のではありません/.test(r.text),
+     '波乱の取り方を変えても同じだったことを書いてある');
+
+  /* 本線と波乱が重ならないこと。重なると同じ組を二重に買うことになる。 */
+  const dom=new (require('jsdom').JSDOM)(HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
+    beforeParse(w){w.Tesseract={createWorker:async()=>({})};w.fetch=async()=>{throw new Error('x')};w.alert=()=>{}}});
+  const W=dom.window;
+  let overlap=0, wrongMain=0, wrongAna=0, favIn=0;
+  for(const R of RACES.slice(0,12)){
+    const combos=[]; let i=0;
+    for(let a=1;a<=6;a++)for(let b=1;b<=6;b++){if(b===a)continue;for(let c=1;c<=6;c++){
+      if(c===a||c===b)continue; combos.push({combo:`${a}-${b}-${c}`, p:Math.exp(-(i++)/30)});}}
+    const t=combos.reduce((s,c)=>s+c.p,0); combos.forEach(c=>c.p/=t);
+    for(const mode of ['cond','prob']){
+      const pl=W.buyPlan(combos,{main:10, ana:8, anaMode:mode});
+      if(pl.main.length!==10) wrongMain++;
+      if(pl.ana.length!==8) wrongAna++;
+      if(pl.main.some(k=>pl.ana.includes(k))) overlap++;
+      if(pl.ana.some(k=>Number(k[0])===pl.favourite)) favIn++;
+    }
+  }
+  ok(overlap===0, '本線と波乱が重ならない（同じ組を二重に買わない）');
+  ok(wrongMain===0, '本線はいつも10点ちょうど');
+  ok(wrongAna===0, '波乱はいつも8点ちょうど');
+  ok(favIn===0, '波乱に本命が1着の組は入らない');
+}
+
+console.log('\n=== 点数と実測が backtest.js と食い違っていないか ===');
+/* 画面に書いた実測値が、backtest.js の計算結果と別物になっていないか。
+   数字をベタ書きしている以上、ここがずれると画面が嘘をつく。 */
+ok(/本線10点130% ／ 波乱8点だけ26% ／ 18点まとめて84%/.test(BT),
+   'backtest.js の結果まち出力にも同じ実測値が入っている');
+ok(/main:10, ana:8/.test(BT) && /main:10, ana:8/.test(HTML),
+   '点数(10/8)は両方で同じ値を buyPlan に渡している');
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
