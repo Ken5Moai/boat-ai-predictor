@@ -1982,6 +1982,157 @@ if(require.main===module){
     console.log('  ※ 1レースの高配当で簡単に入れ替わる。山の位置を信じ込まないこと。');
   }
 
+  /* 級別でメンバーの強さが変わると、モデルの当たり方も変わるのか。
+     記録には A1だけ6人のレース（G1）と、A1が0〜1人のレース（一般）が
+     どちらもまとまった数ある。混ぜたまま平均を見ていると、
+     「どっちが得意か」が見えない。 */
+  console.log('\n=== メンバーの強さで分けて見る（A1が何人いるか） ===');
+  {
+    const groups = [
+      ['A1が6人（G1級）',   r=>r.B.filter(b=>b.g==='A1').length===6],
+      ['A1が2〜5人',        r=>{const n=r.B.filter(b=>b.g==='A1').length; return n>=2&&n<=5;}],
+      ['A1が0〜1人（一般級）', r=>r.B.filter(b=>b.g==='A1').length<=1],
+    ];
+    const idx = new Map(RACES.map((r,i)=>[r.name,i]));
+    console.log('  группа'.replace('группа','　　　　　　　　　') +
+      '件数  3連単の平均順位  10点的中  1着的中  1着の対数（モデル/市場）');
+    for(const [label, pick] of groups){
+      const sel = RACES.filter(pick);
+      if(!sel.length) continue;
+      const rows = sel.map(r=>base[idx.get(r.name)]).filter(Boolean);
+      const ranks = rows.map(x=>x.rank);
+      const avg = ranks.reduce((a,c)=>a+c,0)/ranks.length;
+      const in10 = ranks.filter(x=>x<=10).length;
+      const topHit = rows.filter(x=>x.head===String(x.result).split('-')[0]).length;
+      /* 1着の対数スコアは、オッズのあるレースだけで比べる */
+      const h1 = (map,b)=>Object.entries(map).filter(([k])=>k.startsWith(b+'-'))
+                           .reduce((a,[,v])=>a+v,0);
+      let m=0,k=0,n=0;
+      for(const r of sel){
+        const o=ODDS[r.name]; if(!o) continue;
+        const row=base[idx.get(r.name)]; if(!row) continue;
+        const mk=Object.fromEntries(Object.entries(o).map(([c,v])=>[c,0.75/v]));
+        const tot=Object.values(mk).reduce((a,c)=>a+c,0);
+        const w=String(r.result).split('-')[0];
+        const pm=h1(row.probOf,w), pk=h1(mk,w)/tot;
+        if(pm>0&&pk>0){ m+=Math.log(pm); k+=Math.log(pk); n++; }
+      }
+      console.log(`  ${label.padEnd(16)}${String(sel.length).padStart(3)}件  `
+        + `${avg.toFixed(1).padStart(10)}  ${String(in10+'/'+sel.length).padStart(8)}  `
+        + `${String(topHit+'/'+sel.length).padStart(7)}  `
+        + (n ? `${(m/n).toFixed(3)} / ${(k/n).toFixed(3)}（${n}件）` : '—'));
+    }
+    console.log('  ※ 件数が違うので、的中数は割合で見ること。');
+    /* 買ったらどうなるか。ここがいちばん知りたいところ。 */
+    console.log('\n  上位10点を1点100円で買ったら');
+    for(const [label, pick] of groups){
+      const sel = RACES.filter(r=>pick(r) && r.pay);
+      if(!sel.length) continue;
+      const rows = sel.map(r=>({r, x:base[idx.get(r.name)]})).filter(o=>o.x);
+      const inv = 100*10*rows.length;
+      const hit = rows.filter(o=>o.x.rank<=10);
+      const ret = hit.reduce((a,o)=>a+o.r.pay,0);
+      /* 大きい1件に引っぱられていないか、いちばん高い払戻を抜いて並べる */
+      const top = hit.length ? Math.max(...hit.map(o=>o.r.pay)) : 0;
+      const ret2 = ret - top;
+      console.log(`  ${label.padEnd(16)}${String(rows.length).padStart(3)}件  `
+        + `投資${String(inv.toLocaleString()).padStart(7)}円  払戻${String(ret.toLocaleString()).padStart(7)}円  `
+        + `回収率${String(Math.round(ret/inv*100)).padStart(4)}%  `
+        + `／ いちばん大きい1件(¥${top.toLocaleString()})を除くと ${Math.round(ret2/inv*100)}%`);
+    }
+    console.log('  ※ 件数が少ない。ここから「一般戦だけ買う」と決める前に、');
+    console.log('     先に条件を書いてから足すレースで確かめること。');
+
+    /* 2026-10-24に先に書いた判定。
+       当て方（的中率・市場との差）は一般級がはっきり上だが、
+       回収率はそうでもない。一般級の116%も、いちばん大きい1件を除くと93%。
+       当たりやすいレースは配当も安い、というだけかもしれない。
+       「一般戦だけ買う」を採るかどうかは、ここから足すレースで決める。
+       下の名前はその時点で持っていた55件。 */
+    const PREREG_CLASS_NAMES = new Set([
+      '若松12R 一般特選(10/23)',
+      '若松11R 予選特選(10/23)',
+      '尼崎4R 予選(10/23)',
+      '尼崎2R 予選(10/23)',
+      '平和島4R 予選(10/23)',
+      '若松9R 予選(10/23)',
+      '唐津6R 予選(10/21)',
+      '唐津5R 予選(10/21)',
+      '唐津4R 予選(10/21)',
+      '唐津3R 予選(10/21)',
+      '唐津2R 予選(10/21)',
+      '唐津1R 予選(10/21)',
+      '唐津12R 予選(10/20)',
+      '唐津11R 予選(10/20)',
+      '唐津10R 予選(10/20)',
+      '唐津9R 予選(10/20)',
+      '唐津8R 予選(10/20)',
+      '唐津6R 予選(10/20)',
+      '唐津7R 予選(10/20)',
+      '唐津4R 予選(10/20)',
+      '唐津5R 予選(10/20)',
+      '唐津3R 予選(10/20)',
+      '唐津2R 予選(10/20)',
+      '唐津1R 予選(10/20)',
+      '大村12R 発祥地選抜',
+      '若松11R 準優勝戦',
+      '若松10R 準優勝戦',
+      '桐生8R 女子',
+      '桐生9R 男子',
+      '桐生12R 特選',
+      '徳山1R 一般',
+      '徳山2R 特選',
+      '徳山3R 特賞',
+      '徳山4R 予選',
+      '徳山5R 予選',
+      '徳山6R 予選',
+      '三国1R 一般',
+      '三国3R 一般',
+      '三国5R 一般',
+      '三国6R 一般',
+      '三国7R 一般',
+      '三国8R 一般',
+      '三国9R 一般',
+      '三国10R 準優勝戦',
+      '三国11R 準優勝戦',
+      '三国12R 準優勝戦',
+      '下関1R 予選',
+      '徳山1R 朝トク予選',
+      '下関2R 予選',
+      '徳山2R 狙いトク特選',
+      '徳山3R 決めトク特賞',
+      '徳山4R ガチトク予選',
+      '徳山5R 予選 4日目',
+      '下関10R 予選特賞',
+      '下関11R 予選特選',
+    ]);
+    {
+      const fwd = RACES.filter(r=>!PREREG_CLASS_NAMES.has(r.name)
+                                && r.pay && r.B.filter(b=>b.g==='A1').length<=1);
+      console.log('\n  【判定・2026-10-24に先に書いた】一般級（A1が0〜1人）だけ買うか');
+      if(fwd.length < 20){
+        console.log(`    これから足す一般級のレースで判定する。いま ${fwd.length}/20 件。`);
+        console.log('    20件たまった時点で、その20件だけを見て');
+        console.log('      ・上位10点の回収率が100%以上');
+        console.log('      ・いちばん大きい払戻の1件を除いても100%以上');
+        console.log('    の両方を満たしたら「一般級だけ買う」を採る。満たさなければ採らない。');
+        console.log('    条件はこれだけ。あとから緩めない。');
+      }else{
+        const sel = fwd.slice(0,20).map(r=>({r, x:base[idx.get(r.name)]})).filter(o=>o.x);
+        const inv = 100*10*sel.length;
+        const hit = sel.filter(o=>o.x.rank<=10);
+        const ret = hit.reduce((a,o)=>a+o.r.pay,0);
+        const top = hit.length ? Math.max(...hit.map(o=>o.r.pay)) : 0;
+        const c1 = ret/inv >= 1, c2 = (ret-top)/inv >= 1;
+        console.log('    判定に使う20レース（この判定を書いたあと最初に足した20件）で測った。');
+        console.log(`    ${c1?'○':'×'} 回収率100%以上              ${Math.round(ret/inv*100)}%`);
+        console.log(`    ${c2?'○':'×'} 最大の1件を除いても100%以上  ${Math.round((ret-top)/inv*100)}%`);
+        console.log(c1&&c2 ? '    → 2つとも満たした。一般級だけ買う。'
+                           : '    → 欠けたので捨てる。レースの選び方は変えない。');
+      }
+    }
+  }
+
   console.log('\n=== 展示の情報は、読みを良くしているのか ===');
   {
     const stripped = RACES.map(r=>({ ...r,
