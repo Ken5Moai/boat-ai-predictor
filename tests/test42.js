@@ -21,7 +21,13 @@ console.log('=== 穴の判定（⑤⑥）の条件が残っているか ===');
 const upset=BT.match(/const PREREG_UPSET_NAMES = new Set\(\[([\s\S]*?)\]\);/);
 ok(!!upset, 'PREREG_UPSET_NAMES がある');
 const upNames=(upset?upset[1].match(/'[^']+'/g)||[]:[]).map(s=>s.slice(1,-1));
-ok(upNames.length===57, `凍結した名前は57件のまま（いま ${upNames.length}件）`);
+/* 2026-10-24に「ちょうど○件」から「○件以上」に変えた。
+   凍結リストに名前を足すのは判定を厳しくする方向（判定に使えるレースが減る）。
+   減らすのは緩める方向なので、そちらだけを落とす。
+   実際に足した例：若松1R〜10R(10/24)。同じ日の11R・12Rを先に見て判定⑤⑥を
+   書いたため、同じ日の残りは独立した前向きの材料ではないと判断して凍結した。
+   この数字は上がることはあっても、下がってはいけない。 */
+ok(upNames.length>=67, `凍結した名前が67件以上ある（いま ${upNames.length}件。減らしてはいけない）`);
 
 /* 凍結した名前は、実在するレースを指していなければ意味がない。
    名前を1文字変えるだけで「凍結したのに判定対象に入る」状態が作れる。 */
@@ -44,7 +50,7 @@ console.log('\n=== 等級の判定（④）の条件が残っているか ===');
 const cls=BT.match(/const PREREG_CLASS_NAMES = new Set\(\[([\s\S]*?)\]\);/);
 ok(!!cls, 'PREREG_CLASS_NAMES がある');
 const clsNames=(cls?cls[1].match(/'[^']+'/g)||[]:[]).map(s=>s.slice(1,-1));
-ok(clsNames.length===55, `凍結した名前は55件のまま（いま ${clsNames.length}件）`);
+ok(clsNames.length>=65, `凍結した名前が65件以上ある（いま ${clsNames.length}件。減らしてはいけない）`);
 const missing2=clsNames.filter(n=>!have.has(n));
 ok(missing2.length===0, `凍結した名前がすべて RACES に実在する${missing2.length?'（欠け: '+missing2.join(' / ')+'）':''}`);
 
