@@ -127,8 +127,13 @@ function parseBefore(html){
        "R" "進入" <調整重量> "ST" "着順" と並ぶ。 */
     let j = i+3, parts = null;
     if(c[j] !== 'R'){ parts = c[j]; j++; }
+    /* 調整重量は「ST」の見出しの直前にある。前走成績が埋まっているかどうかで
+       並びが変わる（空なら R|進入|調整|ST、埋まっていれば R|値|進入|値|調整|ST）。
+       見出し "ST" を探して、その1つ前を取るのがいちばん確実。 */
     let adj = null;
-    if(c[j]==='R' && c[j+1]==='進入') adj = num(c[j+2]);
+    for(let z=j; z<j+10 && z<c.length; z++){
+      if(c[z]==='ST'){ const v = num(c[z-1]); if(v!==null && v>=0 && v<=5) adj = v; break; }
+    }
     out.boats.push({ wt, exT, tilt, parts, adj });
     if(out.boats.length===6) break;
   }

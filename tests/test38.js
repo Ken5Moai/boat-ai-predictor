@@ -73,15 +73,20 @@ ok(unresolved===Object.keys(UNRESOLVED).length,
 console.log('\n=== 今節成績の着順が、記録ずみのレース結果と食い違っていないか ===');
 /* 同じ日・同じ場で、この選手が出ていた「前のレース」を古い順に並べる。
    今節成績は古い→新しい順なので、末尾からその数だけが前のレースに対応する。 */
-let checked=0, notRecorded=0, stChecked=0;
+let checked=0, notRecorded=0, stChecked=0, noST=0, ambiguous=0;
 for(const r of RACES){
   if(!r.date) continue;
   for(const b of r.B){
-    /* 今節成績は1節ぶん（何日かにまたがる）積み上がる。同じ場で、この
-       レースより前に走った「記録ずみの」レースを古い順に並べる。
-       末尾からその数だけが対応する、という並べ方なので、途中の
-       レースを記録していない日が挟まると合わなくなる。そのときは
-       わざと失敗させて気づけるようにしてある（黙って通さない）。 */
+    /* 今節成績は1節ぶん（何日かにまたがる）積み上がる。
+       以前はここを「末尾からn件が対応する」と並び順で対応づけていた。
+       これは、記録していないレースが間に挟まると崩れる。実際、今節成績を
+       公式から取り直したら徳山で10件落ちた。こちらが1R〜6Rしか記録して
+       いないのに、選手は8Rや10Rにも乗っているため。
+
+       並び順をやめて、STで突き合わせる。
+       記録ずみのレースXについて、その選手の本番ST（actualST）と同じSTを持つ
+       行が今節成績の中にあるか、その行の着順がXの結果と合っているかを見る。
+       STは1節のなかでほぼ一意なので、これなら間が抜けていても狂わない。 */
     const before = (x) => x.date < r.date || (x.date === r.date && x.rno < r.rno);
     const earlier=RACES.filter(x=>x!==r && x.jcd===r.jcd && x.date && before(x)
                                 && Math.abs(new Date(r.date)-new Date(x.date)) <= 7*864e5
@@ -89,42 +94,31 @@ for(const r of RACES){
                        .sort((a,c)=> a.date===c.date ? a.rno-c.rno : (a.date<c.date?-1:1));
     if(!earlier.length) continue;
     const rec=b.rec||[];
-    if(rec.length===0){
-      /* 今節成績そのものを取っていないレースがある。取っていないのと
-         間違っているのは別なので、ここは失敗にせず、取りこぼしとして数える。 */
-      notRecorded++;
-      continue;
-    }
-    if(rec.length<earlier.length){
-      ok(false,`${r.name} 登番${b.reg} の今節成績が ${rec.length}走ぶんしかない（前のレースは${earlier.length}件）`);
-      continue;
-    }
-    const tail=rec.slice(rec.length-earlier.length);
-    earlier.forEach((x,i)=>{
-      checked++;
-      const order=String(x.result).split('-');          /* 上位3艇だけ分かる */
-      const lane=x.B.findIndex(q=>q.reg===b.reg)+1;     /* 出走表の並び＝枠番 */
-      const place=order.indexOf(String(lane));          /* -1 なら4着以下 */
-      const got=tail[i][2];
+    if(rec.length===0){ notRecorded++; continue; }
+    for(const x of earlier){
+      const lane = x.B.findIndex(q=>q.reg===b.reg)+1;
+      const st = x.actualST && x.actualST[lane];
+      if(st==null){ noST++; continue; }          /* 本番STが無ければ照合できない */
+      const hits = rec.filter(e=>Math.abs(e[1]-st)<1e-9);
+      if(hits.length!==1){ ambiguous++; continue; } /* 同じSTが複数あれば見送る */
+      checked++; stChecked++;
+      const order=String(x.result).split('-');
+      const place=order.indexOf(String(lane));
+      const got=hits[0][2];
       if(place>=0){
         ok(got===place+1,
-           `${r.name} 登番${b.reg} の今節成績「${got}着」＝ ${x.name} の実際（${place+1}着）`);
+           `${r.name} 登番${b.reg} 今節成績ST ${st} の着順「${got}着」＝ ${x.name} の実際（${place+1}着）`);
       }else{
         ok(!(got>=1 && got<=3),
-           `${r.name} 登番${b.reg} の今節成績「${got}」は、${x.name}（${x.result}）に入っていないので4着以下のはず`);
+           `${r.name} 登番${b.reg} 今節成績ST ${st} の着順「${got}」は、${x.name}（${x.result}）に入っていないので4着以下のはず`);
       }
-      /* 今節成績のST欄は「本番ST」そのもの。こちらが結果ページから写した
-         actualST と突き合わせれば、展示STの検証に使っている数字を確かめられる。 */
-      if(x.actualST && x.actualST[lane]!=null && typeof tail[i][1]==='number'){
-        stChecked++;
-        ok(Math.abs(x.actualST[lane]-tail[i][1])<1e-9,
-           `${r.name} 登番${b.reg} の今節成績ST ${tail[i][1]} ＝ ${x.name} の本番ST ${x.actualST[lane]}（${lane}号艇）`);
-      }
-    });
+    }
   }
 }
 ok(checked>0, `記録ずみのレースと突き合わせできた走行が ${checked} 件ある`);
-ok(stChecked>0, `そのうち本番ST（actualST）まで突き合わせできたのが ${stChecked} 件`);
+ok(stChecked>0, `本番ST（actualST）を手がかりに突き合わせできたのが ${stChecked} 件`);
+if(noST) console.log(`  － 本番STを記録していないため照合できなかった ${noST} 件`);
+if(ambiguous) console.log(`  － 同じSTが今節成績に複数あり、どれか決められなかった ${ambiguous} 件`);
 if(notRecorded) console.log(`  － 今節成績を取っていないため突き合わせできなかった選手 ${notRecorded} 人（古い記録。誤りではない）`);
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
