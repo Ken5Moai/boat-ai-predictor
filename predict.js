@@ -166,11 +166,18 @@ const show = (label, provisional) => {
   }
 };
 
-const grab = () => {
+/* 展示を待つあいだは beforeinfo だけを見る。
+   以前はオッズも毎回取っていて、30秒おきに2本ずつ投げていた。
+   公式に無駄な負荷をかけるうえ、使うのは最後の1回だけなので意味が無い。 */
+const peek = () => {
   const bf = F.parseBefore(get('beforeinfo'));
+  return {bf, min: minsLeft(), ready: bf.boats.filter(x=>x.exT!=null).length===6};
+};
+const grab = () => {
+  const g = peek();
   const od = F.parseOdds(get('odds3t'));
   if(Object.keys(od).length!==120) throw new Error(`オッズが${Object.keys(od).length}通りしかない`);
-  return {bf, od, min: minsLeft(), ready: bf.boats.filter(x=>x.exT!=null).length===6};
+  return {...g, od};
 };
 
 let g = grab();
@@ -188,8 +195,10 @@ if(!g.ready && !NOW_ONLY){
       break;
     }
     sleep(30);
-    g = grab();
-    log(`  ${hhmm(jst())} 展示=${g.ready?'出た':'まだ'}（残り${g.min??'?'}分）`);
+    const q = peek();
+    log(`  ${hhmm(jst())} 展示=${q.ready?'出た':'まだ'}（残り${q.min??'?'}分）`);
+    if(q.ready) g = grab();   /* 出たときだけオッズも取る */
+    else g = {...g, ready:false, min:q.min};
   }
   if(g.ready){
     write(g.bf, g.od, g.min);
