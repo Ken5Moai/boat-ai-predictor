@@ -93,5 +93,15 @@ for(const n of ['31レース','55レース','57レース']){
   ok(!HTML.includes(n), `「${n}」という古い表記が残っていない`);
 }
 
+console.log('\n=== 直し方が用意されているか ===');
+/* このテストが落ちたとき、何をすればいいのかが分からないと意味がない。
+   sync-figures.js を走らせれば直る、という道が消えていないかを見る。 */
+ok(fs.existsSync(path.join(ROOT,'sync-figures.js')), 'sync-figures.js がある（落ちたらこれを走らせる）');
+{
+  const src=fs.readFileSync(path.join(ROOT,'sync-figures.js'),'utf8');
+  ok(/--check/.test(src), 'sync-figures.js に --check（書き換えずに差分だけ見る）がある');
+  ok(/backtest\.js/.test(src), 'sync-figures.js は backtest.js を実際に走らせて値を取っている');
+}
+if(fail) console.log('\n  ※ 直し方: node sync-figures.js を走らせてから、もう一度テストする。');
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
