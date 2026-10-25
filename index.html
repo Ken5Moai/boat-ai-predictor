@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0e17">
-<title>ボートAI予想ツール v21</title>
+<title>ボートAI予想ツール v22</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 /* ============================================================
-   v21 STRUCTURED  -  スマホ縦カード / ダークテーマ
+   v22 STRUCTURED  -  スマホ縦カード / ダークテーマ
    横スクロールを絶対に発生させない設計
    ============================================================ */
 :root{
@@ -169,7 +169,7 @@ hr{border:none;border-top:1px solid #1e2a42;margin:11px 0}
 <body>
 <div class="wrap">
 
-<h1>ボートAI予想ツール v21</h1>
+<h1>ボートAI予想ツール v22</h1>
 <div class="lead">
 手入力するのは<b style="color:#f0c040">6艇の登録番号だけ</b>。選手名・級別・勝率・モーター・展示は
 BOAT RACE公式から取得します。<br>
@@ -740,7 +740,7 @@ BOAT RACE公式から取得します。<br>
 <script>
 'use strict';
 /* ==================================================================
-   ボートAI予想ツール v21 STRUCTURED
+   ボートAI予想ツール v22 STRUCTURED
    --------------------------------------------------------------
    設計原則（過去バグの構造的封じ込め）
    1. 艇は必ず boats[0..5] の固定6要素。splice/sort/filterで詰めない。
@@ -4570,7 +4570,7 @@ function generateReport(){
 
   const html = `
 <div class="rhead">
-  <div class="eyebrow">BOAT RACE AI PREDICTION v21</div>
+  <div class="eyebrow">BOAT RACE AI PREDICTION v22</div>
   <div class="rtitle">${esc(venue?venue.name:'競艇場')} ${esc($('raceNo').value||'')}R ${esc($('raceType').value||'')}</div>
   <div class="mini" style="margin-top:7px">${esc($('raceDate').value||'')}</div>
   <div class="mini" style="margin-top:5px">${esc(condLine)}</div>
@@ -6089,7 +6089,7 @@ function init(){
   renderBoats();
   validateAll();
   onBankChange();
-  log('v21 起動しました。STEP1から順に進めてください。');
+  log('v22 起動しました。STEP1から順に進めてください。');
   setStatus('待機中');
 }
 init();
