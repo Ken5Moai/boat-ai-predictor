@@ -104,5 +104,30 @@ console.log('\n名前と中身（場・レース番号）');
   ok(ng===0, `${RACES.length}レースすべて、名前と場・レース番号が合っている`);
 }
 
+console.log('\n=== 配列に穴（undefined）が開いていないか ===');
+/* 2回やらかしている。どちらもレコードを足したり移したりしたときのカンマ。
+     backtest.js … 末尾が「]},」で終わっているところへ「,」を足して ]},, になった
+     pending.js  … レースを RACES へ移したあと、カンマだけが行として残った
+   どちらも JavaScript としては正しい文法で、読み込みも通る。
+   できるのは要素が undefined の「穴」で、使う側で初めて落ちる。
+   文字列で ,, を探すのでは見つからない（空行をはさむ形があるため）。
+   実際に読み込んで中身を見るのが確実。 */
+{
+  const look = (label, arr) => {
+    let holes=0, badB=0;
+    arr.forEach((r,i)=>{
+      if(!r){ holes++; console.log(`    ${label}[${i}] が穴`); return; }
+      if(!Array.isArray(r.B) || r.B.length!==6){ badB++; console.log(`    ${r.name} の B が6艇でない`); return; }
+      r.B.forEach((b,j)=>{ if(!b){ holes++; console.log(`    ${r.name} の B[${j}] が穴`); } });
+    });
+    ok(holes===0, `${label} に穴が無い（${arr.length}件）`);
+    ok(badB===0,  `${label} はすべて6艇ぶん持っている`);
+  };
+  const BT = fs.readFileSync(path.join(__dirname,'..','backtest.js'),'utf8');
+  const RACES_ = eval('['+BT.match(/const RACES=\[([\s\S]*?)\n\];\n/)[1]+']');
+  look('RACES', RACES_);
+  const PENDING = require(path.join(__dirname,'..','pending.js'));
+  look('PENDING', PENDING);
+}
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
