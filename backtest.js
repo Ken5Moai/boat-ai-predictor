@@ -1598,6 +1598,46 @@ if(require.main===module){
     console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
 
+  /* 優勝戦・準優勝戦・特選は、ふつうのレースと違うのか
+     ==================================================================
+     2026-10-25、若松11Rが優勝戦なので調べた。
+     番組名で分けるのは乱暴だが、名前はそのまま記録に入っているので使える。
+     「優勝戦・準優・特選・選抜」をひとまとめにして、残りと比べる。
+
+     上位メンバーが揃うぶん力が接近し、1号艇が絶対ではなくなる——という
+     よく言われる話が、手元の記録でも出るかどうか。 */
+  {
+    console.log('\n=== 優勝戦・準優・特選は、ふつうのレースと違うのか ===');
+    const isBig = n => /優勝戦|準優|特選|選抜/.test(n);
+    const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p}));
+    const all = base.map((r,i)=>({r, R:RACES[i]})).filter(x=>x.R && x.R.pay!=null);
+    const row = (label, set) => {
+      if(!set.length){ console.log(`  ${label.padEnd(20)} 0件`); return; }
+      const lane1 = set.filter(x=>String(x.R.result)[0]==='1').length;
+      const big   = set.filter(x=>x.R.pay>=10000).length;
+      const ranks = set.map(x=>x.r.rank);
+      const avg   = ranks.reduce((a,c)=>a+c,0)/ranks.length;
+      let inv=0, pays=[];
+      for(const x of set){
+        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        inv += pl.main.length*100;
+        if(pl.main.includes(x.R.result)) pays.push(x.R.pay);
+      }
+      const back = pays.reduce((a,c)=>a+c,0);
+      const cut  = pays.length ? back-Math.max(...pays) : 0;
+      console.log(`  ${label.padEnd(20)} ${String(set.length).padStart(3)}件  `+
+        `1号艇1着 ${String(Math.round(lane1/set.length*100)).padStart(3)}%  `+
+        `高配当 ${String(Math.round(big/set.length*100)).padStart(3)}%  `+
+        `正解の順位 平均${avg.toFixed(1).padStart(5)}  `+
+        `本線10点 ${String(Math.round(back/inv*100)).padStart(4)}%`+
+        `（最大1件除くと${String(Math.round(cut/inv*100)).padStart(4)}%）  `+
+        `的中${pays.length}/${set.length}`);
+    };
+    row('ふつうのレース',      all.filter(x=>!isBig(x.R.name)));
+    row('優勝戦・準優・特選', all.filter(x=>isBig(x.R.name)));
+    console.log('  ※ 件数が少ないので、ここの数字で買い方を決めないこと。');
+    console.log('    言えるのは「1号艇が絶対ではなくなる傾向が、手元でも同じ向きに出ている」まで。');
+  }
   /* 当たっても負けるレース（ガチガチのとき10点買いは成立しない）
      ==================================================================
      2026-10-25 若松8R を見て本人が「ガチガチだね」と言った。そのとおりで、
