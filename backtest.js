@@ -1183,7 +1183,32 @@ const RACES=[
  {reg:'5234',g:'A1',nat:6.6,loc:6.56,mot:31.19,bt:32.23,st:0.15,F:0,exST:0.21,exF:null,exT:6.73,tilt:0,wt:52,entry:3,rec:[[5,.21,3],[1,.19,1],[6,.04,4],[2,.16,4],[1,.21,1]]},
  {reg:'5135',g:'B1',nat:5.75,loc:5.9,mot:19.79,bt:33.33,st:0.19,F:1,exST:0.01,exF:null,exT:6.76,tilt:-0.5,wt:52.5,entry:4,rec:[[3,.28,5],[5,.25,1],[2,.09,2],[1,.07,2],[3,.12,1]]},
  {reg:'5271',g:'B1',nat:3.99,loc:3.42,mot:22.12,bt:32,st:0.19,F:0,exST:0.13,exF:null,exT:6.77,tilt:0,wt:52.6,entry:5,rec:[[1,.23,5],[6,.35,6],[3,.13,3],[4,.11,4],[2,.22,6]]},
- {reg:'5424',g:'B2',nat:1.95,loc:1.58,mot:37.82,bt:34.13,st:0.22,F:0,exST:0.05,exF:null,exT:6.68,tilt:0,wt:54.3,entry:6,rec:[[5,.13,6],[6,.11,6],[4,.09,5],[5,.19,5],[4,.26,2]]}]}
+ {reg:'5424',g:'B2',nat:1.95,loc:1.58,mot:37.82,bt:34.13,st:0.22,F:0,exST:0.05,exF:null,exT:6.68,tilt:0,wt:54.3,entry:6,rec:[[5,.13,6],[6,.11,6],[4,.09,5],[5,.19,5],[4,.26,2]]}]},
+{name:'若松5R 進入固定戦隊(10/25)',jcd:'20',rno:5,date:'2026-10-25',result:'1-2-4',pop:1,pay:390,wind:null,ws:5,wave:5,temp:19,wtemp:22,
+ actualST:{1:.18,2:.21,3:.24,4:.21,5:.33,6:.26},
+ /* 正解 1-2-4 ¥390（1番人気）。本線10点で当たったが、10点¥1,000に対して
+    払戻¥390なので -¥610。至極の一点(2-1-4)は外れで、1着と2着が逆だった。
+
+    このレースはモデルが2号艇を1着本命にした（42.7%）。市場は1号艇55.3%で逆。
+    オッズは締切3分前に取ったものなので、取得時刻が作った差ではない。
+    結果は市場が正しかった。モデルが1号艇を低く見るクセがそのまま出た形。
+    2号艇 北村征嗣はA1で当地7.35（レース最高）、1号艇 榎幸司はA2で6.14。
+    当地勝率の差を重く見すぎている可能性があるが、1件では何も言えない。
+
+    進入固定戦なので進入は枠なり。展示で6艇中5艇がフライングしていた
+    （1=F.01 2=F.01 3=F.07 4=F.12 5=F.03）。本番STは下に記録のとおり。
+    オッズはレース後に取り直した締切時オッズ。払戻¥390と一致する。 */
+ /* 2026-10-25 19:43 JST 取得（締切19:56の13分前）。展示は19:42に出た。
+    進入固定戦なので進入は枠なり確定。
+    水面気象は直前情報ページの「水面気象情報 3R時点」の値。結果ページが出たら差し替える。
+    オッズは別途、締切の直前に取って odds-live.js へ入れる（15分前の値は使えない）。 */
+ B:[
+ {reg:'4171',g:'A2',nat:6.35,loc:6.14,mot:30.1,bt:40.45,st:0.19,F:0,exST:0.01,exF:'F',exT:7.02,tilt:0,wt:52,entry:1,rec:[[4,.21,3],[1,.19,1],[2,.09,2],[3,.25,4],[5,.18,4],[3,.16,2],[6,.25,4]]},
+ {reg:'3997',g:'A1',nat:6.16,loc:7.35,mot:34.15,bt:40.48,st:0.16,F:0,exST:0.01,exF:'F',exT:6.9,tilt:0,wt:52,entry:2,rec:[[1,.24,3],[2,.13,2],[5,.2,4],[3,.16,3],[4,.16,3],[1,.12,1],[4,.21,3]]},
+ {reg:'5177',g:'B1',nat:4.68,loc:4.96,mot:38.5,bt:31.76,st:0.2,F:0,exST:0.07,exF:'F',exT:6.85,tilt:-0.5,wt:51.5,entry:3,rec:[[2,.21,6],[4,.33,3],[3,.15,3],[5,.24,4],[4,.15,5],[6,.32,6],[1,.18,2]]},
+ {reg:'3853',g:'A2',nat:5.89,loc:5.91,mot:39.42,bt:35.56,st:0.2,F:0,exST:0.12,exF:'F',exT:6.89,tilt:-0.5,wt:52.4,entry:4,rec:[[5,.27,3],[2,.11,2],[1,.06,3],[3,.31,3],[4,.15,3],[1,.16,1],[4,.14,4]]},
+ {reg:'4145',g:'B1',nat:4.02,loc:3.09,mot:38.54,bt:27.59,st:0.26,F:0,exST:0.03,exF:'F',exT:7.06,tilt:-0.5,wt:52,entry:5,rec:[[5,.26,6],[6,.29,6],[3,.18,2],[1,.36,6],[2,.28,2],[4,.26,4],[6,.39,5]]},
+ {reg:'4527',g:'B1',nat:4.63,loc:4.27,mot:30.73,bt:21.35,st:0.17,F:0,exST:0.05,exF:null,exT:6.91,tilt:0,wt:52,entry:6,rec:[[3,.31,6],[5,.13,6],[4,.17,5],[1,.17,2],[5,.15,3],[2,.17,5]]}]}
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -1521,6 +1546,63 @@ if(require.main===module){
     console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
 
+  /* 展示を待たずに出した買い目は、どれだけ違うか
+     ==================================================================
+     2026-10-25 に「買い目は締切10分前までに欲しい」と言われた。
+     展示は実測で締切12〜17分前に出るので間に合うが、出が遅い日もある。
+     そこで predict.js は、展示の前にも「暫定の買い目」を出すようにした。
+
+     では暫定はどれだけ当てになるのか。ここで測る。
+     やり方は単純で、記録済みのレースから展示の項目だけを消して採点し直し、
+     買い目と回収率がどう変わるかを見る。消すのは
+       展示タイム / 展示ST / 展示F / チルト / 進入
+     の5つ。欠測は0点にせず、残りの項目で重みを割り直す作りなので止まらない。 */
+  {
+    console.log('\n=== 展示を待たずに出した買い目は、どれだけ違うか ===');
+    const strip = RACES.map(R => ({...R, B: R.B.map(b => ({...b,
+      exT:null, exST:null, exF:null, tilt:null, entry:null}))}));
+    const noEx = runWith({}, null, {races: strip, detail:true});
+    const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p}));
+    const done = base.map((r,i)=>({r, R:RACES[i], n:noEx[i]})).filter(x=>x.R && x.R.pay!=null);
+
+    const money = (label, pick, which) => {
+      let inv=0, hits=[];
+      for(const x of done){
+        const pl = WIN.buyPlan(toC(which==='ex' ? x.r : x.n), {main:10, ana:8});
+        const ks = [...new Set(pick(pl))];
+        inv += ks.length*100;
+        if(ks.includes(x.R.result)) hits.push(x.R.pay);
+      }
+      const back = hits.reduce((a,c)=>a+c,0);
+      const cut  = hits.length ? back-Math.max(...hits) : 0;
+      console.log(`  ${label.padEnd(24)} 回収率${String(Math.round(back/inv*100)).padStart(4)}%  `+
+        `最大1件除くと${String(Math.round(cut/inv*100)).padStart(4)}%  的中${String(hits.length).padStart(2)}/${done.length}`);
+    };
+    console.log(`  対象 ${done.length}レース。展示ありが確定版、展示なしが暫定版。`);
+    money('確定（展示あり）本線10点', p=>p.main, 'ex');
+    money('暫定（展示なし）本線10点', p=>p.main, 'no');
+    money('確定（展示あり）18点',     p=>p.all,  'ex');
+    money('暫定（展示なし）18点',     p=>p.all,  'no');
+
+    /* 買い目そのものがどれだけ入れ替わるか。回収率だけだと、
+       たまたま同じ回数当たっただけなのか中身が同じなのか分からない。 */
+    let same=0, overlap=0, headSame=0, rankDiff=[];
+    for(const x of done){
+      const A = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+      const B = WIN.buyPlan(toC(x.n), {main:10, ana:8});
+      if(A.best===B.best) same++;
+      overlap += A.main.filter(k=>B.main.includes(k)).length;
+      if(String(A.best)[0]===String(B.best)[0]) headSame++;
+      rankDiff.push(Math.abs(x.r.rank - x.n.rank));
+    }
+    console.log(`  至極の一点が同じ      ${same}/${done.length}レース`);
+    console.log(`  1着に選ぶ艇が同じ     ${headSame}/${done.length}レース`);
+    console.log(`  本線10点の重なり      平均${(overlap/done.length).toFixed(1)}/10点`);
+    const rd = rankDiff.reduce((a,c)=>a+c,0)/rankDiff.length;
+    console.log(`  正解の順位の動き      平均${rd.toFixed(1)}番（120通り中）`);
+    console.log('  ※ 暫定でも1着に選ぶ艇はあまり変わらない。変わるのは2着3着の並び。');
+    console.log('    展示を待てるなら待つ。待てないなら暫定で買う根拠はここにある。');
+  }
   /* 締切前のオッズは、締切時とどれだけ違うか
      ==================================================================
      2026-10-25 多摩川8R で間違えた。締切15分前のオッズで
@@ -3364,7 +3446,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点121% ／ 波乱8点だけ39% ／ 18点まとめて85%（69レース）。');
+        console.log('  実測 本線10点120% ／ 波乱8点だけ38% ／ 18点まとめて84%（70レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
@@ -3390,7 +3472,24 @@ if(require.main===module){
         console.log('  ※ このオッズは締切前のライブ値です' +
           (min!=null ? `（締切${min}分前）` : '（何分前かは odds-live.js に未記録）') + '。');
         console.log('    実測では、締切2分前で最大1.1pt、12〜15分前で最大15.9ptずれました。');
-        console.log('    ずれは1号艇が上がる向きに偏ります（4/4レース、平均+6.3pt）。');
+        /* ここは『4/4レース、平均+6.3pt』と固定で書いていた。レースを足しても
+           書き換わらないので計算に変える。これまで同じ失敗を何度もしている。 */
+        {
+          const sh = (o,a)=>{ const t=Object.keys(o).reduce((s2,k)=>s2+0.75/o[k],0);
+            return Object.keys(o).filter(k=>k[0]===String(a)).reduce((s2,k)=>s2+0.75/o[k],0)/t; };
+          const ds=[];
+          for(const nm of Object.keys(ODDS_LIVE)){
+            const L=ODDS_LIVE[nm], fin=ODDS[nm]; if(!fin) continue;
+            if(Object.keys(L.odds).length!==120 || Object.keys(fin).length!==120) continue;
+            ds.push((sh(fin,1)-sh(L.odds,1))*100);
+          }
+          if(ds.length){
+            const up=ds.filter(d=>d>0).length;
+            const avg=ds.reduce((a,c)=>a+c,0)/ds.length;
+            console.log(`    ずれは1号艇が上がる向きに偏ります（${up}/${ds.length}レース、`+
+              `平均${avg>=0?'+':''}${avg.toFixed(1)}pt）。`);
+          }
+        }
         if(gap >= 8 && (min==null || min >= 5)){
           console.log(`    いまの食い違い ${gap.toFixed(1)}pt は、締切までの値動きで消える大きさです。`);
           console.log('    この差を読みの根拠にしないこと。');

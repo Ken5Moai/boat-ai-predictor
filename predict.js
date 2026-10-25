@@ -12,8 +12,10 @@
    なので展示が出た時点で出せる。実測では展示は締切12〜16分前に出るので、
    買い目は締切11〜15分前に渡せる。これが「10分前までに欲しい」の答え。
 
-   オッズは市場との比較にしか使わない。そこは締切に近いほど正確なので、
-   何分前に取ったかを必ず添えて、近くないなら比較を参考扱いにする。
+   オッズは市場との比較にしか使わない。そしてその比較は、買う判断には使えない。
+   締切3分前に取ったオッズでも、締切時までに1号艇が +5.6pt 動いた（若松5R 10/25）。
+   市場が落ち着くころにはもう買えない。だから比較は「あとで答え合わせをするための
+   記録」であって、買い目を決める材料ではない。買い目はオッズを一切見ていない。
 
    モデルは backtest.js 経由でしか呼ばない（使い捨てのスクリプトで呼ばない）。
    ここがやるのは、取得と pending.js への書き込みと、出力の抜き出しだけ。 */
@@ -74,106 +76,133 @@ const NAME = `${venueName}${RNO}R ${title}(${Number(HD.slice(4,6))}/${Number(HD.
 log(`${NAME}`);
 log(`  締切 ${closeAt||'(読めず)'}　いま ${hhmm(jst())}　残り ${minsLeft()??'?'}分`);
 
-/* ---- 直前情報（展示が出るまで待つ） ------------------------------ */
+/* ---- ここから：暫定 → 確定 の2段で出す ------------------------- */
 /* while で回すとCPUを食い続けるので、外の sleep を使う。 */
 const sleep = sec => { try{ execFileSync('sleep',[String(sec)]); }catch(e){} };
-let before = F.parseBefore(get('beforeinfo'));
-let ready = before.boats.filter(b=>b.exT!=null).length===6;
-if(!ready && !NOW_ONLY){
-  log('  展示はまだ出ていません。出るまで待ちます（10分前になったら打ち切ります）。');
-  while(!ready){
-    const left = minsLeft();
-    if(left!=null && left <= 10){
-      log(`  ${left}分前になったので、展示を待たずに出します（展示は欠測のまま）。`);
-      break;
-    }
-    sleep(30);
-    before = F.parseBefore(get('beforeinfo'));
-    ready = before.boats.filter(b=>b.exT!=null).length===6;
-    log(`  ${hhmm(jst())} 展示=${ready?'出た':'まだ'}（残り${minsLeft()??'?'}分）`);
-  }
-}
-log(`  展示 ${ready?'あり':'欠測'}　進入 ${Object.keys(before.entry).length?JSON.stringify(before.entry):'欠測'}`);
 
-/* ---- オッズ ------------------------------------------------------ */
-const odds = F.parseOdds(get('odds3t'));
-const oddsMin = minsLeft();
-if(Object.keys(odds).length!==120) throw new Error(`オッズが${Object.keys(odds).length}通りしかない`);
-log(`  オッズ 120通り（締切${oddsMin}分前に取得）`);
-
-/* ---- pending.js / odds.js / odds-live.js へ書く ------------------- */
 const boats = F.parseRacelist(listHtml);
 if(boats.length!==6) throw new Error(`出走表から6艇ぶん取れなかった（${boats.length}艇）`);
 const n = x => x==null ? 'null' : String(x);
 const cell = v => (typeof v==='number' && isFinite(v)) ? String(v) : JSON.stringify(String(v));
-const lines = boats.map((b,i)=>{
-  const L=i+1, bb=before.boats[i]||{}, e=before.exSt[L]||{};
-  const rec='['+(b.rec||[]).map(r=>'['+cell(r[0])+','+String(r[1]).replace(/^0/,'')+','+cell(r[2])+']').join(',')+']';
-  return ` {reg:'${b.reg}',g:'${b.g}',nat:${b.nat},loc:${b.loc},mot:${b.mot},bt:${b.bt},`+
-    `st:${b.st},F:${b.F},exST:${n(e.st)},exF:${e.f?"'F'":'null'},exT:${n(bb.exT)},`+
-    `tilt:${n(bb.tilt)},wt:${n(bb.wt)},entry:${n(before.entry[L])},rec:${rec}}`;
-});
-const block =
+
+/* pending.js / odds.js / odds-live.js へ書く。同じ名前があれば置き換える
+   （二重登録と配列の穴を避ける）。暫定で一度書き、展示が出たら上書きする。 */
+const write = (before, odds, oddsMin) => {
+  const lines = boats.map((bt,i)=>{
+    const L=i+1, bb=before.boats[i]||{}, e=before.exSt[L]||{};
+    const rec='['+(bt.rec||[]).map(r=>'['+cell(r[0])+','+String(r[1]).replace(/^0/,'')+','+cell(r[2])+']').join(',')+']';
+    return ` {reg:'${bt.reg}',g:'${bt.g}',nat:${bt.nat},loc:${bt.loc},mot:${bt.mot},bt:${bt.bt},`+
+      `st:${bt.st},F:${bt.F},exST:${n(e.st)},exF:${e.f?"'F'":'null'},exT:${n(bb.exT)},`+
+      `tilt:${n(bb.tilt)},wt:${n(bb.wt)},entry:${n(before.entry[L])},rec:${rec}}`;
+  });
+  const ex = before.boats.filter(x=>x.exT!=null).length;
+  const block =
 `{name:'${NAME}',jcd:'${JCD}',rno:${RNO},date:'${HD.slice(0,4)}-${HD.slice(4,6)}-${HD.slice(6,8)}',`+
 `result:null,pop:null,pay:null,wind:null,ws:${n(before.ws)},wave:${n(before.wave)},temp:null,wtemp:null,
  /* ${HD.slice(0,4)}-${HD.slice(4,6)}-${HD.slice(6,8)} ${hhmm(jst())} JST、predict.js で取得（締切${closeAt}の${oddsMin}分前）。
-    進入は展示進入。本番進入は使わない（先読みになる）。
+    展示は${ex===6?'6艇ぶんそろっている':`${ex}艇ぶんしか出ていない（残りは欠測）`}。進入は展示進入。
+    本番進入は使わない（先読みになる）。
     水面気象は直前情報ページの「${before.weatherLabel||'?'}」の値。結果ページが出たら差し替える。
     オッズは締切${oddsMin}分前のライブ値。レース後に締切時オッズへ取り直すこと。 */
  B:[
 ${lines.join(',\n')}]}`;
-
-/* 同じ名前が既にあれば置き換える（二重登録と配列の穴を避ける） */
-const upsertPending = () => {
   let p=fs.readFileSync(path.join(ROOT,'pending.js'),'utf8');
   const at=p.indexOf(`{name:'${NAME}'`);
   if(at>=0){
     let end=p.indexOf("\n{name:'", at); if(end<0) end=p.lastIndexOf('\n];');
     p = p.slice(0,at) + block + p.slice(end);
-    log('  pending.js の同じレースを置き換えました');
   } else {
     p = p.replace(/\n\];\s*$/, ',\n'+block+'\n];\n');
   }
   fs.writeFileSync(path.join(ROOT,'pending.js'), p);
+  delete require.cache[require.resolve(path.join(ROOT,'pending.js'))];
   const P=require(path.join(ROOT,'pending.js'));
-  if(P.some(r=>!r)) throw new Error('pending.js に穴ができた。書き戻して確認すること。');
+  if(P.some(r=>!r)) throw new Error('pending.js に穴ができた');
+
+  const upsertOdds = (file, wrap) => {
+    let t=fs.readFileSync(path.join(ROOT,file),'utf8');
+    const ks=Object.keys(odds);
+    let body='';
+    for(let a2=1;a2<=6;a2++) body += ' '+ks.filter(k=>k[0]===String(a2)).sort().map(k=>`'${k}':${odds[k]}`).join(',')+',\n';
+    const blk = wrap(body);
+    const at2 = t.indexOf(`  '${NAME}':`);
+    if(at2>=0){
+      const end2 = t.indexOf('},\n', t.indexOf("'6-", at2))+3;
+      t = t.slice(0,at2) + blk + t.slice(end2);
+    } else {
+      t = t.replace(/module\.exports = \{\n/, 'module.exports = {\n'+blk);
+    }
+    fs.writeFileSync(path.join(ROOT,file), t);
+  };
+  upsertOdds('odds.js',      bd => `  '${NAME}': {\n`+bd.replace(/,\n$/,'},\n'));
+  upsertOdds('odds-live.js', bd => `  '${NAME}': { minutes: ${oddsMin}, odds: {\n`+
+                                  bd.split('\n').map(x=>x?' '+x:x).join('\n').replace(/,\n$/,'}},\n'));
 };
-const upsertOdds = (file, wrap) => {
-  let s=fs.readFileSync(path.join(ROOT,file),'utf8');
-  const ks=Object.keys(odds);
-  let body='';
-  for(let a=1;a<=6;a++) body += ' '+ks.filter(k=>k[0]===String(a)).sort().map(k=>`'${k}':${odds[k]}`).join(',')+',\n';
-  const blk = wrap(body);
-  const at = s.indexOf(`  '${NAME}':`);
-  if(at>=0){
-    const end = s.indexOf('},\n', s.indexOf("'6-", at))+3;
-    s = s.slice(0,at) + blk + s.slice(end);
-  } else {
-    s = s.replace(/module\.exports = \{\n/, 'module.exports = {\n'+blk);
+
+/* モデルは backtest.js 経由でしか呼ばない。ここは出力を抜き出すだけ。 */
+const show = (label, provisional) => {
+  const out = execFileSync(process.execPath,[path.join(ROOT,'backtest.js')],
+    {encoding:'utf8', maxBuffer:64*1024*1024});
+  const i = out.indexOf(`  ${NAME}\n`);
+  if(i<0){ log('※ backtest.js の出力にこのレースが見つかりません。'); return; }
+  let j = out.indexOf('\n\n  ', i+1); if(j<0) j = out.length;
+  log('');
+  log(`──────── ${label} ────────`);
+  console.log(out.slice(i, j));
+  if(!provisional) return;
+  /* 暫定がどれだけ悪いかは、backtest.js の節から読む（固定値で書かない）。 */
+  const g = re => (out.match(re)||[])[1];
+  const exPct = g(/確定（展示あり）本線10点\s+回収率\s*(\d+)%/);
+  const noPct = g(/暫定（展示なし）本線10点\s+回収率\s*(\d+)%/);
+  const headSame = (out.match(/1着に選ぶ艇が同じ\s+(\d+\/\d+)レース/)||[])[1];
+  const topSame  = (out.match(/至極の一点が同じ\s+(\d+\/\d+)レース/)||[])[1];
+  const lap      = (out.match(/本線10点の重なり\s+平均([\d.]+)\/10点/)||[])[1];
+  if(exPct && noPct){
+    log('  ※ これは展示の前に出した暫定です。実測では確定版よりはっきり悪くなります。');
+    log(`     本線10点の回収率  確定${exPct}%  →  暫定${noPct}%`);
+    if(headSame) log(`     1着に選ぶ艇は ${headSame} レースで同じ。至極の一点が同じなのは ${topSame}。`);
+    if(lap)      log(`     本線10点の重なりは平均 ${lap}/10点。変わるのは2着3着の並びです。`);
+    log('     買うなら展示を待ってください。暫定は下見用です。');
   }
-  fs.writeFileSync(path.join(ROOT,file), s);
 };
-upsertPending();
-upsertOdds('odds.js',      b => `  '${NAME}': {\n`+b.replace(/,\n$/,'},\n'));
-upsertOdds('odds-live.js', b => `  '${NAME}': { minutes: ${oddsMin}, odds: {\n`+
-                                b.split('\n').map(x=>x?' '+x:x).join('\n').replace(/,\n$/,'}},\n'));
 
-/* ---- モデルを呼ぶ（backtest.js 経由だけ） ------------------------- */
-log('');
-const out = execFileSync(process.execPath,[path.join(ROOT,'backtest.js')],
-  {encoding:'utf8', maxBuffer:64*1024*1024});
-const i = out.indexOf(`  ${NAME}\n`);
-if(i<0){ log('※ backtest.js の出力にこのレースが見つかりません。pending.js を確認してください。'); process.exit(1); }
-let j = out.indexOf('\n\n  ', i+1); if(j<0) j = out.length;
-console.log(out.slice(i, j));
+const grab = () => {
+  const bf = F.parseBefore(get('beforeinfo'));
+  const od = F.parseOdds(get('odds3t'));
+  if(Object.keys(od).length!==120) throw new Error(`オッズが${Object.keys(od).length}通りしかない`);
+  return {bf, od, min: minsLeft(), ready: bf.boats.filter(x=>x.exT!=null).length===6};
+};
 
-/* ---- オッズの信頼度をひとこと ------------------------------------ */
-log('');
-if(oddsMin!=null && oddsMin > 8){
-  log(`※ オッズは締切${oddsMin}分前の値です。実測では10分以上前だと市場の1着確率が`);
-  log('   最大15.9ptずれました（しかも1号艇が上がる向きに偏ります）。');
-  log('   上の「市場」との差は根拠にしないでください。買い目はオッズを使っていないので影響しません。');
-}else if(oddsMin!=null){
-  log(`※ オッズは締切${oddsMin}分前の値です。この距離なら実測のずれは小さめ（2分前で最大1.1pt）。`);
+let g = grab();
+log(`  展示 ${g.ready?'あり':'まだ（欠測のまま出します）'}　オッズ120通り（締切${g.min}分前）`);
+write(g.bf, g.od, g.min);
+show(g.ready ? `確定の買い目（締切${g.min}分前）` : `暫定の買い目（展示前・締切${g.min}分前）`, !g.ready);
+
+if(!g.ready && !NOW_ONLY){
+  log('');
+  log('  展示が出たら確定版を出します（10分前になったら打ち切ります）。');
+  while(!g.ready){
+    const left = minsLeft();
+    if(left!=null && left <= 10){
+      log(`  ${left}分前になりました。展示は出ていないので、上の暫定が最終です。`);
+      break;
+    }
+    sleep(30);
+    g = grab();
+    log(`  ${hhmm(jst())} 展示=${g.ready?'出た':'まだ'}（残り${g.min??'?'}分）`);
+  }
+  if(g.ready){
+    write(g.bf, g.od, g.min);
+    show(`確定の買い目（展示あり・締切${g.min}分前）`, false);
+  }
 }
+const oddsMin = g.min;
+
+/* ---- 最後にひとこと ---------------------------------------------- */
+log('');
+log('※ 上の「市場」との比較は、買う判断には使えません。');
+log(`   このオッズは締切${oddsMin}分前の値です。締切3分前に取った回でも、`);
+log('   締切までに市場の1号艇が +5.6pt 動きました（若松5R 10/25）。');
+log('   市場が落ち着くころにはもう買えないので、比較はあとの答え合わせ用です。');
+log('   買い目はオッズを一切見ていないので、この点は買い目に影響しません。');
 log(`※ レース後に  node fetch.js ${Number(JCD)} ${RNO} ${HD}  で締切時オッズと結果を取り直してください。`);
