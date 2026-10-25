@@ -3,6 +3,8 @@
 //   使い方: node backtest.js        （index.html と同じ場所で実行）
 const fs=require('fs'),path=require('path'),{JSDOM}=require('jsdom');
 const ODDS=require('./odds.js');   /* 実オッズ120通り（あるレースだけ） */
+/* 予想のときに見ていた締切前のオッズ。締切時オッズとのずれを測るのに使う。 */
+const ODDS_LIVE = require('./odds-live.js');
 const PENDING=require('./pending.js'); /* まだ結果の出ていないレース */
 
 const HTML_PATH=path.join(__dirname,'index.html');
@@ -1153,7 +1155,35 @@ const RACES=[
  {reg:'4643',g:'A2',nat:6.64,loc:6.33,mot:32.24,bt:32.43,st:0.13,F:0,exST:0.05,exF:null,exT:6.88,tilt:-0.5,wt:52,entry:3,rec:[[6,.19,1]]},
  {reg:'5348',g:'B1',nat:5.95,loc:2.83,mot:32.03,bt:33.77,st:0.16,F:1,exST:0.1,exF:null,exT:6.89,tilt:0,wt:53.2,entry:4,rec:[[3,.27,2],[6,.2,5]]},
  {reg:'4872',g:'B1',nat:4.44,loc:3.91,mot:31.76,bt:23.29,st:0.18,F:1,exST:0.04,exF:'F',exT:7.02,tilt:-0.5,wt:52.5,entry:5,rec:[[3,.27,3]]},
- {reg:'3718',g:'B1',nat:4.45,loc:4.3,mot:35.76,bt:39.86,st:0.17,F:0,exST:0.02,exF:null,exT:7.1,tilt:0,wt:54.5,entry:6,rec:[[4,.13,6],[1,.15,5]]}]}
+ {reg:'3718',g:'B1',nat:4.45,loc:4.3,mot:35.76,bt:39.86,st:0.17,F:0,exST:0.02,exF:null,exT:7.1,tilt:0,wt:54.5,entry:6,rec:[[4,.13,6],[1,.15,5]]}]},
+{name:'多摩川8R 予選(10/25)',jcd:'05',rno:8,date:'2026-10-25',result:'1-3-4',pop:1,pay:730,wind:null,ws:3,wave:2,temp:21,wtemp:21,
+ actualST:{1:.14,2:.09,3:.07,4:.11,5:.19,6:.21},
+ /* 正解 1-3-4 ¥730（1番人気）。本線10点で当たった（モデル3番目 7.9%）。
+    ただし10点で¥1,000使って払戻¥730なので、このレース単体では -¥270。
+    至極の一点(1-3-2)は外れ。2号艇と4号艇の入れ替わり。
+
+    予想のときに書いたことが間違っていた。そのまま残す。
+    締切15分前のオッズで「市場は1号艇を35.5%と見ている。モデルは52.9%だから
+    +17.3pt 食い違う。1号艇はF持ちで、市場はそれを嫌って4号艇の展示ST.01に
+    賭けている」と書いた。締切時の市場は51.4%で、モデルとほぼ同じだった。
+    食い違いは最初から無く、F がどうという話も作り話だった。
+    早い時間のオッズは金額が薄く、締切直前の金で本命に寄る。それだけのこと。
+    この件から odds-live.js と「締切前のオッズは…」の節を足した。
+
+    オッズはレース後に取り直した締切時オッズ。払戻¥730と一致する。
+    気象は結果ページの値（風速3m・波高2cm）。直前情報「6R時点」は5m・3cmだった。 */
+ /* 2026-10-25 13:38 JST 取得（締切13:53の15分前）。展示は13:37に出た。
+    進入は展示進入。本番進入は使わない（先読みになる）。
+    水面気象は直前情報ページの「水面気象情報 6R時点」の値。結果ページが出たら差し替える。
+    気温・水温はこのページに無いので欠測。オッズは締切前のライブ値なので、
+    レース後に締切時オッズへ取り直すこと（締切前と締切時でかなり動く）。 */
+ B:[
+ {reg:'5212',g:'A2',nat:6.08,loc:6.25,mot:29.41,bt:31.75,st:0.13,F:1,exST:0.11,exF:null,exT:6.77,tilt:0,wt:53.1,entry:1,rec:[[2,.12,5],[3,.18,4],[5,.13,3],[1,.03,1],[4,.18,3],[6,.11,5]]},
+ {reg:'5197',g:'B2',nat:5.86,loc:5.71,mot:33.33,bt:40.83,st:0.14,F:1,exST:0.22,exF:null,exT:6.68,tilt:0,wt:52.1,entry:2,rec:[[3,.26,2],[2,.22,4],[5,.07,3],[6,.06,3],[1,.11,1],[4,.09,3]]},
+ {reg:'5234',g:'A1',nat:6.6,loc:6.56,mot:31.19,bt:32.23,st:0.15,F:0,exST:0.21,exF:null,exT:6.73,tilt:0,wt:52,entry:3,rec:[[5,.21,3],[1,.19,1],[6,.04,4],[2,.16,4],[1,.21,1]]},
+ {reg:'5135',g:'B1',nat:5.75,loc:5.9,mot:19.79,bt:33.33,st:0.19,F:1,exST:0.01,exF:null,exT:6.76,tilt:-0.5,wt:52.5,entry:4,rec:[[3,.28,5],[5,.25,1],[2,.09,2],[1,.07,2],[3,.12,1]]},
+ {reg:'5271',g:'B1',nat:3.99,loc:3.42,mot:22.12,bt:32,st:0.19,F:0,exST:0.13,exF:null,exT:6.77,tilt:0,wt:52.6,entry:5,rec:[[1,.23,5],[6,.35,6],[3,.13,3],[4,.11,4],[2,.22,6]]},
+ {reg:'5424',g:'B2',nat:1.95,loc:1.58,mot:37.82,bt:34.13,st:0.22,F:0,exST:0.05,exF:null,exT:6.68,tilt:0,wt:54.3,entry:6,rec:[[5,.13,6],[6,.11,6],[4,.09,5],[5,.19,5],[4,.26,2]]}]}
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -1491,6 +1521,55 @@ if(require.main===module){
     console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
 
+  /* 締切前のオッズは、締切時とどれだけ違うか
+     ==================================================================
+     2026-10-25 多摩川8R で間違えた。締切15分前のオッズで
+       「市場は1号艇を35.5%と見ている。モデルは52.9%。+17.3pt 食い違う」
+     と書いたが、締切時の市場は51.4%だった。食い違っていない。
+     1号艇はF持ちで、市場がそれを嫌っている——という説明まで付けたが、
+     そんな事実は無かった。早い時間のオッズは金額が薄いだけだった。
+
+     予想のときは締切前の値しか無いので、それで出すしかない。
+     まずいのは、それを「市場の見方」として読みに使ったこと。
+     どれだけ当てにならないかを測って、毎回そこに書く。 */
+  {
+    console.log('\n=== 締切前のオッズは、締切時とどれだけ違うか ===');
+    const share = (o, a) => {
+      const t = Object.keys(o).reduce((s,k)=>s+0.75/o[k], 0);
+      return Object.keys(o).filter(k=>k[0]===String(a)).reduce((s,k)=>s+0.75/o[k], 0) / t;
+    };
+    const names = Object.keys(ODDS_LIVE).filter(n=>ODDS[n]);
+    if(!names.length){ console.log('  締切前と締切時の両方があるレースがまだ無い。'); }
+    else {
+      console.log('  レース                        締切何分前  1号艇の市場確率（前→締切時）  いちばん動いた艇');
+      const all=[]; const lane1=[];
+      for(const n of names){
+        const L=ODDS_LIVE[n], a=L.odds, b=ODDS[n];
+        if(Object.keys(a).length!==120 || Object.keys(b).length!==120) continue;
+        let big=null;
+        for(let l=1;l<=6;l++){
+          const d=(share(b,l)-share(a,l))*100;
+          all.push(Math.abs(d));
+          if(l===1) lane1.push(d);
+          if(!big || Math.abs(d)>Math.abs(big.d)) big={l, d};
+        }
+        const d1=(share(b,1)-share(a,1))*100;
+        console.log(`  ${n.padEnd(26)} ${String(L.minutes).padStart(6)}分  `+
+          `${(share(a,1)*100).toFixed(1)}% → ${(share(b,1)*100).toFixed(1)}%`+
+          `（${d1>=0?'+':''}${d1.toFixed(1)}pt）  `+
+          `${big.l}号艇 ${big.d>=0?'+':''}${big.d.toFixed(1)}pt`);
+      }
+      const avg = all.reduce((a,c)=>a+c,0)/all.length;
+      console.log(`  ずれの平均 ${avg.toFixed(1)}pt / 最大 ${Math.max(...all).toFixed(1)}pt（${all.length}件の艇×レース）`);
+      const up = lane1.filter(d=>d>0).length;
+      console.log(`  1号艇は ${up}/${lane1.length} レースで締切に向けて上がっている`+
+        `（平均 ${(lane1.reduce((a,c)=>a+c,0)/lane1.length>=0?'+':'')}`+
+        `${(lane1.reduce((a,c)=>a+c,0)/lane1.length).toFixed(1)}pt）。`);
+      console.log('  締切間際の金は本命に寄る。早い時間のオッズは1号艇を低く見せる。');
+      console.log('  つまり「モデルのほうが1号艇を高く見ている」は、早く取っただけで作れてしまう。');
+      console.log('  ※ まだ件数が少ない。何分前なら使えるかの線は引けていない。');
+    }
+  }
   /* 至極の一点だけ厚く賭けたら
      ==================================================================
      2026-10-24に本人から出た買い方。至極を500〜1000円、ほかは100円。
@@ -3285,7 +3364,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点122% ／ 波乱8点だけ39% ／ 18点まとめて85%（68レース）。');
+        console.log('  実測 本線10点121% ／ 波乱8点だけ39% ／ 18点まとめて85%（69レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
@@ -3300,6 +3379,23 @@ if(require.main===module){
       let gap = 0, gl = 0;
       for(let n=1;n<=6;n++){ const d=Math.abs(md[n]-mk[n]); if(d>gap){ gap=d; gl=n; } }
       console.log(`  一番食い違う艇  ${gl}号艇（${((md[gl]-mk[gl])*100>0?'+':'')}${((md[gl]-mk[gl])*100).toFixed(1)}pt）`);
+      /* 2026-10-25 多摩川8R の失敗を繰り返さないための注意書き。
+         締切15分前のオッズで「市場と+17.3pt 食い違う」と書いたが、
+         締切時の市場はモデルとほぼ同じだった。食い違いはオッズの取得時刻が
+         作っていただけ。予想時には締切前の値しか無いので、毎回ここに出す。 */
+      {
+        const L = ODDS_LIVE[R.name];
+        const min = L ? L.minutes : null;
+        const gap = Math.abs((md[gl]-mk[gl])*100);
+        console.log('  ※ このオッズは締切前のライブ値です' +
+          (min!=null ? `（締切${min}分前）` : '（何分前かは odds-live.js に未記録）') + '。');
+        console.log('    実測では、締切2分前で最大1.1pt、12〜15分前で最大15.9ptずれました。');
+        console.log('    ずれは1号艇が上がる向きに偏ります（4/4レース、平均+6.3pt）。');
+        if(gap >= 8 && (min==null || min >= 5)){
+          console.log(`    いまの食い違い ${gap.toFixed(1)}pt は、締切までの値動きで消える大きさです。`);
+          console.log('    この差を読みの根拠にしないこと。');
+        }
+      }
       const best = ks.map(k=>({k, ev:(r.probOf[k]||0)*map[k], p:r.probOf[k]||0, o:map[k]}))
                      .filter(x=>x.p >= 0.02).sort((a,b)=>b.ev-a.ev).slice(0,3);
       console.log('  期待値の上位  ' + (best.length
