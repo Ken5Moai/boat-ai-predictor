@@ -201,6 +201,15 @@ function parseResult(html){
   const c = cells(html);
   const out = { actualST:{}, refund:[] };
   const joined = c.join('|');
+  /* 不成立（レースが成立せず全額返還）のとき、着順も払戻も出ない。
+     そのままだと「結果ページがまだ埋まっていない」と区別がつかず、
+     いつまでも結果待ちのまま残ってしまう。
+     2026-10-25 若松12R で実際に起きた。 */
+  if(/不成立/.test(joined)){
+    out.void = true;
+    out.voidReason = '不成立';
+    return out;
+  }
   const m3 = joined.match(/3連単\|(\d)\|-\|(\d)\|-\|(\d)\|&yen;([\d,]+)\|(\d+)/)
           || joined.match(/3連単\|(\d)\|-\|(\d)\|-\|(\d)\|¥?([\d,]+)\|(\d+)/);
   if(m3){

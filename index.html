@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0e17">
-<title>ボートAI予想ツール v23</title>
+<title>ボートAI予想ツール v24</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 /* ============================================================
-   v23 STRUCTURED  -  スマホ縦カード / ダークテーマ
+   v24 STRUCTURED  -  スマホ縦カード / ダークテーマ
    横スクロールを絶対に発生させない設計
    ============================================================ */
 :root{
@@ -169,7 +169,7 @@ hr{border:none;border-top:1px solid #1e2a42;margin:11px 0}
 <body>
 <div class="wrap">
 
-<h1>ボートAI予想ツール v23</h1>
+<h1>ボートAI予想ツール v24</h1>
 <div class="lead">
 手入力するのは<b style="color:#f0c040">6艇の登録番号だけ</b>。選手名・級別・勝率・モーター・展示は
 BOAT RACE公式から取得します。<br>
@@ -216,7 +216,7 @@ BOAT RACE公式から取得します。<br>
       候補の一覧は確認用です。「ついでにこれも」で点数が増えると、
       1点あたりが薄まって当たっても負けます。</li>
   <li><b>負けたあとに上限を上げない。</b>取り返せる根拠がありません。</li>
-  <li><b>期待値方式を使わない。</b>62レースで10/62・回収率95%。
+  <li><b>期待値方式を使わない。</b>67レースで10/67・回収率87%。
       19レース時点の59%からは上がりましたが、
       <b>いちばん大きい1レース（¥16,820）を除くと72%</b>に戻ります。
       1レースで入れ替わる数字なので、まだ薦めません。</li>
@@ -233,16 +233,16 @@ BOAT RACE公式から取得します。<br>
 </ul>
 
 <div class="notice info" style="margin-top:12px">
-<b>やめどきの目安。</b>72レース時点で、本線10点の回収率は119%です。
-ただし<b>点検は通っていません</b>。いちばん効いた2レースを除くと85%、
-引き直してプラスになる割合は73%（95%を超えて初めて「差」と呼べます）。
+<b>やめどきの目安。</b>77レース時点で、本線10点の回収率は116%です。
+ただし<b>点検は通っていません</b>。いちばん効いた2レースを除くと84%、
+引き直してプラスになる割合は70%（95%を超えて初めて「差」と呼べます）。
 つまり<b>まだ「勝てる」と言える段階ではありません</b>。
 ここから回収率が100%を割り込んで戻らないなら、
 そのときは、遊ぶ金額を決めて遊ぶか、やめるかの2択になります。
 </div>
 
 <details style="margin-top:12px">
-<summary class="mini" style="color:#f0c040">測って決めたこと／まだ決まっていないこと（72レース時点）</summary>
+<summary class="mini" style="color:#f0c040">測って決めたこと／まだ決まっていないこと（77レース時点）</summary>
 <div class="dbody">
 <div class="mini" style="line-height:1.9">
 <b>■ 先に条件を書いてから測り、決着したもの</b><br>
@@ -345,17 +345,17 @@ BOAT RACE公式から取得します。<br>
     <option value="200">200倍以上</option></select></div>
 </div>
 <details style="margin-top:6px">
-<summary class="mini" style="color:#f0c040">穴を足すと、実測では回収率が下がります（72レース）</summary>
+<summary class="mini" style="color:#f0c040">穴を足すと、実測では回収率が下がります（77レース）</summary>
 <div class="dbody">
 <table class="tbl"><tr><th>構成</th><th>回収率</th><th>的中</th></tr>
-<tr><td><b>本線10点のみ</b></td><td><b>119%</b></td><td><b>39/72</b></td></tr>
-<tr><td>本線10＋波乱9（モデル順）</td><td>87%</td><td>42/72</td></tr>
+<tr><td><b>本線10点のみ</b></td><td><b>116%</b></td><td><b>43/77</b></td></tr>
+<tr><td>本線10＋波乱9（モデル順）</td><td>85%</td><td>46/77</td></tr>
 <tr><td>本線10＋波乱9（外に限る）</td><td>88%</td><td>28/55</td></tr>
 <tr><td>波乱9だけ（モデル順）</td><td>49%</td><td>7/55</td></tr>
 <tr><td>波乱9だけ（外に限る）</td><td>34%</td><td>4/55</td></tr>
 </table>
 <div class="mini" style="margin-top:6px;color:#f0c040">
-<b>波乱を9点足しても、的中は39→42と3レースしか増えません。</b>
+<b>波乱を9点足しても、的中は43→46と3レースしか増えません。</b>
 投資は倍近くになります。下の表は28レース時点の古い測定で、結論は変わっていません。
 </div>
 <table class="tbl" style="margin-top:6px"><tr><th>（28レース時点）</th><th>本線</th><th>穴</th><th>合計</th></tr>
@@ -369,7 +369,7 @@ BOAT RACE公式から取得します。<br>
 払戻¥5,000超のレースで、正解がモデルの何番目にあったかの平均は<b>41.3番目</b>。
 三国6Rの¥27,110は<b>74番目</b>でした。120通り中74番目なので、
 4口どころか74口買わないと届きません。<br><br>
-<b>同じお金を使うなら、本線を10点に増やすほうが実測では上です（72レースで119%）。</b>
+<b>同じお金を使うなら、本線を10点に増やすほうが実測では上です（77レースで116%）。</b>
 それでも穴枠を使うなら、「当てるため」ではなく
 「たまに大きいのを取れたら面白い」という遊びとして、
 下がるぶんを承知のうえで使ってください。既定は0口です。<br><br>
@@ -379,18 +379,18 @@ BOAT RACE公式から取得します。<br>
 </div>
 </details>
 <details style="margin-top:6px">
-<summary class="mini">点数ごとの実測（72レース・1点100円）</summary>
+<summary class="mini">点数ごとの実測（77レース・1点100円）</summary>
 <div class="dbody">
 <table class="tbl"><tr><th>点数</th><th>回収率</th><th>的中</th></tr>
-<tr><td>1点</td><td>63%</td><td>6/72</td></tr>
-<tr><td>6点</td><td>83%</td><td>26/72</td></tr>
-<tr><td>8点</td><td>114%</td><td>32/72</td></tr>
-<tr><td><b>10点</b></td><td><b>119%</b></td><td>39/72</td></tr>
-<tr><td>12点</td><td>111%</td><td>44/72</td></tr>
-<tr><td>15点</td><td>92%</td><td>46/72</td></tr>
-<tr><td>18点</td><td>91%</td><td>50/72</td></tr>
-<tr><td>20点</td><td>82%</td><td>50/72</td></tr>
-<tr><td>30点</td><td>66%</td><td>56/72</td></tr>
+<tr><td>1点</td><td>74%</td><td>8/77</td></tr>
+<tr><td>6点</td><td>83%</td><td>29/77</td></tr>
+<tr><td>8点</td><td>113%</td><td>36/77</td></tr>
+<tr><td><b>10点</b></td><td><b>116%</b></td><td>43/77</td></tr>
+<tr><td>12点</td><td>108%</td><td>48/77</td></tr>
+<tr><td>15点</td><td>91%</td><td>51/77</td></tr>
+<tr><td>18点</td><td>89%</td><td>55/77</td></tr>
+<tr><td>20点</td><td>81%</td><td>55/77</td></tr>
+<tr><td>30点</td><td>64%</td><td>61/77</td></tr>
 </table>
 <div class="mini" style="margin-top:8px">
 <b>10点あたりが山で、そこから増やすと落ちます。</b>
@@ -740,7 +740,7 @@ BOAT RACE公式から取得します。<br>
 <script>
 'use strict';
 /* ==================================================================
-   ボートAI予想ツール v23 STRUCTURED
+   ボートAI予想ツール v24 STRUCTURED
    --------------------------------------------------------------
    設計原則（過去バグの構造的封じ込め）
    1. 艇は必ず boats[0..5] の固定6要素。splice/sort/filterで詰めない。
@@ -3750,7 +3750,7 @@ function upsetView(combos, favourite){
 
    新しい仮定は足していない。並べ替えと重複除きだけ。
    波乱は確率の低い組を買う行為なので、足すほど回収率は下がる。
-   72レースの実測では本線10点119%、波乱を足すと87%だった。
+   77レースの実測では本線10点116%、波乱を足すと85%だった。
    それでも出すのは、買う人が自分で決められるようにするため。 */
 function buyPlan(combos, opt){
   opt = opt || {};
@@ -3762,11 +3762,11 @@ function buyPlan(combos, opt){
   if(!best) return {best:null, main:[], ana:[], all:[], favourite:null};
   const fav = Number(best[0]);
   const inMain = new Set(mainList);
-  /* 波乱の取り方は2通りある。どちらが良いかは72レースでは決着していないので、
+  /* 波乱の取り方は2通りある。どちらが良いかは77レースでは決着していないので、
      両方を残して呼ぶ側に選ばせる。既定は 'cond'（画面の荒れ予想と同じ取り方）。
        'prob' … 本命以外が1着の組を、素の確率順にそのまま取る
        'cond' … 本命が飛んだ場合に限って足し直した確率で、艇ごとにまとめて取る
-     実測（72レース・8点）は prob 37% / cond 37%。どちらも本線10点(119%)より低い。 */
+     実測（77レース・8点）は prob 35% / cond 35%。どちらも本線10点(116%)より低い。 */
   const mode = opt.anaMode || 'cond';
   let anaList;
   if(mode === 'prob'){
@@ -4570,7 +4570,7 @@ function generateReport(){
 
   const html = `
 <div class="rhead">
-  <div class="eyebrow">BOAT RACE AI PREDICTION v23</div>
+  <div class="eyebrow">BOAT RACE AI PREDICTION v24</div>
   <div class="rtitle">${esc(venue?venue.name:'競艇場')} ${esc($('raceNo').value||'')}R ${esc($('raceType').value||'')}</div>
   <div class="mini" style="margin-top:7px">${esc($('raceDate').value||'')}</div>
   <div class="mini" style="margin-top:5px">${esc(condLine)}</div>
@@ -4730,7 +4730,7 @@ ${(()=>{
          ${wins.map(x=>`${x.lane}号艇 ${esc(x.name||'')}：モデル${(x.p*100).toFixed(1)}% / 市場${(x.market*100).toFixed(1)}% / ${x.odds}倍 → <b>期待値 ${x.ev.toFixed(2)}</b>`).join('<br>')}
        </div>
        <div class="mini" style="margin-top:8px">
-         3連単は買いません。実測72レースで<b>1着の的中は43/72（60%）</b>ですが、
+         3連単は買いません。実測77レースで<b>1着の的中は48/77（62%）</b>ですが、
          3連単は12点買っても7/11で、しかも利益は2レースが持っているだけでした。
          毎回「1着は当たるが2着3着の並びで外す」という同じ負け方をしています。
          強いところだけを買います。
@@ -4840,7 +4840,7 @@ ${(()=>{
     <div class="mini" style="margin-top:4px">モデルの確率 ${(T.top.p*100).toFixed(1)}%
       ／ ${(1/T.top.p).toFixed(0)}倍以上で買い</div>
     <div class="mini" style="margin-top:4px;color:#ef6262">
-      <b>この1点だけで買うと実測63%（72レース・6/72）。</b>
+      <b>この1点だけで買うと実測74%（77レース・8/77）。</b>
       頭に立てる印であって、1点勝負する券ではありません。</div>
   </div>
   ${T.osae.length ? `<div style="margin-top:10px;padding:10px;border:1px solid #2a3550;border-radius:6px">
@@ -4853,21 +4853,21 @@ ${(()=>{
     波乱はこの下の「荒れ予想」に出ます。<b>別枠なので、買うと点数が増えます。</b>
   </div>
   <details style="margin-top:8px">
-  <summary class="mini" style="color:#f0c040">点数を増やすといくら落ちるか（実測72レース）</summary>
+  <summary class="mini" style="color:#f0c040">点数を増やすといくら落ちるか（実測77レース）</summary>
   <div class="dbody"><table class="tbl"><tr><th>点数</th><th>回収率</th><th>的中</th></tr>
-  <tr><td>1点</td><td>63%</td><td>6/72</td></tr>
-  <tr><td>6点</td><td>83%</td><td>26/72</td></tr>
-  <tr><td>8点</td><td>114%</td><td>32/72</td></tr>
-  <tr><td><b>10点</b></td><td><b>119%</b></td><td>39/72</td></tr>
-  <tr><td>12点</td><td>111%</td><td>44/72</td></tr>
-  <tr><td>15点</td><td>92%</td><td>46/72</td></tr>
-  <tr><td>18点</td><td>91%</td><td>50/72</td></tr>
-  <tr><td>19点</td><td>87%</td><td>50/72</td></tr>
-  <tr><td>20点</td><td>82%</td><td>50/72</td></tr>
-  <tr><td>30点</td><td>66%</td><td>56/72</td></tr>
+  <tr><td>1点</td><td>74%</td><td>8/77</td></tr>
+  <tr><td>6点</td><td>83%</td><td>29/77</td></tr>
+  <tr><td>8点</td><td>113%</td><td>36/77</td></tr>
+  <tr><td><b>10点</b></td><td><b>116%</b></td><td>43/77</td></tr>
+  <tr><td>12点</td><td>108%</td><td>48/77</td></tr>
+  <tr><td>15点</td><td>91%</td><td>51/77</td></tr>
+  <tr><td>18点</td><td>89%</td><td>55/77</td></tr>
+  <tr><td>19点</td><td>85%</td><td>55/77</td></tr>
+  <tr><td>20点</td><td>81%</td><td>55/77</td></tr>
+  <tr><td>30点</td><td>64%</td><td>61/77</td></tr>
   </table>
   <div class="mini" style="margin-top:8px">
-  有料noteでよく見る19点前後は<b>87%の帯</b>です。10点の119%とは32ポイント違います。
+  有料noteでよく見る19点前後は<b>85%の帯</b>です。10点の116%とは31ポイント違います。
   見せ方を3段に分けることと、点数を増やすことは別の話なので、
   <b>ここでは見せ方だけ借りて、点数は実測どおり10点に据え置いています。</b>
   </div></div></details>
@@ -4879,11 +4879,11 @@ ${(()=>{
      形を決めるのは buyPlan() 一箇所だけ。backtest.js も同じ関数を呼ぶ。
      ここはそれを画面に並べるだけで、選び方の仮定は足さない。
 
-     72レースの実測はこう。買う前に必ず目に入る場所に置く。
-       本線10点だけ   119%（39/72）
-       波乱 8点だけ    37%（ 5/72）
-       18点まとめて    83%（44/72）
-     波乱を足すと当たる回数は39→44に増えるが、回収率は119%→83%に落ちる。
+     77レースの実測はこう。買う前に必ず目に入る場所に置く。
+       本線10点だけ   116%（43/77）
+       波乱 8点だけ    35%（ 5/77）
+       18点まとめて    80%（48/77）
+     波乱を足すと当たる回数は43→48に増えるが、回収率は116%→80%に落ちる。
      これは「増やすと下がる」という、ここまで何度も出ている形と同じ。 */
   if(!points.length) return '';
   const plan = buyPlan(combos, {main:10, ana:8});
@@ -4902,13 +4902,13 @@ ${(()=>{
   </div>
   <div style="margin-top:10px;padding:10px;border:1px solid #2a3550;border-radius:6px">
     <div class="mini" style="margin-bottom:4px">本線 ${plan.main.length}点
-      <span style="color:#6fd08c">実測119%（39/72）</span></div>
+      <span style="color:#6fd08c">実測116%（43/77）</span></div>
     <div style="font-size:17px;letter-spacing:.5px">${fc(plan.main)}</div>
     <div class="mini" style="margin-top:4px">合計的中確率 ${(sum(plan.main)*100).toFixed(1)}%</div>
   </div>
   <div style="margin-top:10px;padding:10px;border:1px solid #5a3030;border-radius:6px">
     <div class="mini" style="margin-bottom:4px">波乱 ${plan.ana.length}点
-      <span style="color:#ef6262">実測37%（5/72）</span></div>
+      <span style="color:#ef6262">実測35%（5/77）</span></div>
     <div style="font-size:17px;letter-spacing:.5px">${fc(plan.ana)}</div>
     <div class="mini" style="margin-top:4px">
       本命 ${plan.favourite}号艇が飛んだ場合に限った確率の上位。本線とは重なりません。
@@ -4918,15 +4918,15 @@ ${(()=>{
     <b>合計 ${plan.all.length}点 ＝ 1点100円で ¥${(plan.all.length*100).toLocaleString()}。</b><br>
     <table class="tbl" style="margin:6px 0">
     <tr><th>賭け方</th><th>1レース</th><th>実測(67R)</th></tr>
-    <tr><td>18点ぜんぶ100円</td><td>¥${(plan.all.length*100).toLocaleString()}</td><td>83%</td></tr>
+    <tr><td>18点ぜんぶ100円</td><td>¥${(plan.all.length*100).toLocaleString()}</td><td>80%</td></tr>
     <tr><td>至極¥500／他100円</td><td>¥${(500 + (plan.all.length-1)*100).toLocaleString()}</td><td>79%</td></tr>
-    <tr><td>至極¥1000／他100円</td><td>¥${(1000 + (plan.all.length-1)*100).toLocaleString()}</td><td>76%</td></tr>
-    <tr><td>本線10点ぜんぶ100円</td><td>¥${(plan.main.length*100).toLocaleString()}</td><td><b>119%</b></td></tr>
-    <tr><td>本線・至極¥500／他100円</td><td>¥${(500 + (plan.main.length-1)*100).toLocaleString()}</td><td>103%</td></tr>
-    <tr><td>本線・至極¥1000／他100円</td><td>¥${(1000 + (plan.main.length-1)*100).toLocaleString()}</td><td>92%</td></tr>
+    <tr><td>至極¥1000／他100円</td><td>¥${(1000 + (plan.all.length-1)*100).toLocaleString()}</td><td>78%</td></tr>
+    <tr><td>本線10点ぜんぶ100円</td><td>¥${(plan.main.length*100).toLocaleString()}</td><td><b>116%</b></td></tr>
+    <tr><td>本線・至極¥500／他100円</td><td>¥${(500 + (plan.main.length-1)*100).toLocaleString()}</td><td>104%</td></tr>
+    <tr><td>本線・至極¥1000／他100円</td><td>¥${(1000 + (plan.main.length-1)*100).toLocaleString()}</td><td>96%</td></tr>
     </table>
     <b>至極を厚くすると、いまの実測では回収率が下がります。</b>
-    至極の一点だけを100円で買ったときの回収率が<b>63%（6/72）</b>しかないためです。
+    至極の一点だけを100円で買ったときの回収率が<b>74%（8/77）</b>しかないためです。
     金を寄せるほど、全体はその60%に引っ張られます。
     <b>厚くするのが有利になるのは、至極だけの回収率が100%を超えてからです。</b><br>
     ただしこれは的中5件だけの数字で、1件の高配当でひっくり返ります。
@@ -4934,16 +4934,16 @@ ${(()=>{
     <b>厚くしたほうが良く（18点100円83% → 至極¥1000で99%）なっています。</b>
     1日ぶんの数字で決めないでください。<br>
     <table class="tbl" style="margin:6px 0"><tr><th>買い方</th><th>回収率</th><th>的中</th></tr>
-    <tr><td>本線10点だけ</td><td><b>119%</b></td><td>39/72</td></tr>
-    <tr><td>波乱8点だけ</td><td>37%</td><td>5/72</td></tr>
-    <tr><td>18点まとめて</td><td>83%</td><td>44/72</td></tr>
+    <tr><td>本線10点だけ</td><td><b>116%</b></td><td>43/77</td></tr>
+    <tr><td>波乱8点だけ</td><td>35%</td><td>5/77</td></tr>
+    <tr><td>18点まとめて</td><td>80%</td><td>48/77</td></tr>
     </table>
-    <b>波乱を足すと、当たる回数は39→44に増えますが、回収率は119%→83%に落ちます。</b>
+    <b>波乱を足すと、当たる回数は43→48に増えますが、回収率は116%→80%に落ちます。</b>
     投資が¥67,000から¥120,600へ1.8倍になるのに対し、増えた払戻が追いついていません。<br>
-    波乱8点の取り方を変えても（素の確率順にしても）結果は同じ37%でした。
-    72レースで買い目は毎回違ったのに、当たったのは同じ5レースだけです。
+    波乱8点の取り方を変えても（素の確率順にしても）結果は同じ35%でした。
+    77レースで買い目は毎回違ったのに、当たったのは同じ5レースだけです。
     <b>つまり「取り方が悪いから当たらない」のではありません。</b><br>
-    至極の一点だけで買うと<b>63%（6/72）</b>です。頭に立てる印であって、1点勝負する券ではありません。
+    至極の一点だけで買うと<b>74%（8/77）</b>です。頭に立てる印であって、1点勝負する券ではありません。
   </div>
   </div></div>`;
 })()}
@@ -4957,11 +4957,11 @@ ${(()=>{
   const top = U.lanes.filter(x=>x.cond >= 0.10).slice(0,3);
   if(!top.length) return '';
   /* このレースが「1号艇の飛びやすい形」かどうかを先に出す。
-     72レースで測った結果、ここだけは件数が足りていて差もはっきりしている。
-       E モデルの1号艇1着確率 < 45%   該当34件 1号艇1着44% ／ 非該当38件 76%
-       F 展示進入が枠なりでない        該当 9件 1号艇1着22% ／ 非該当58件 66%
+     77レースで測った結果、ここだけは件数が足りていて差もはっきりしている。
+       E モデルの1号艇1着確率 < 45%   該当35件 1号艇1着43% ／ 非該当42件 79%
+       F 展示進入が枠なりでない        該当 9件 1号艇1着22% ／ 非該当62件 66%
      ただし「だから買えば勝てる」はまだ言えない。E該当レースで1号艇を外して
-     上位10点を買うと回収率132%だが、最大の1件を除くと80%に落ちる。
+     上位10点を買うと回収率134%だが、最大の1件を除くと84%に落ちる。
      なので買い目としては出さず、形の判定と参考リストに留める。
      採るかどうかは backtest.js の判定⑤⑥で、これから足すレースだけを見て決める。 */
   const p1 = combos.filter(c=>String(c.combo)[0]==='1').reduce((t,c)=>t+c.p, 0);
@@ -4970,17 +4970,17 @@ ${(()=>{
   const condF = moved != null && moved >= 2;
   const noFav = combos.filter(c=>String(c.combo)[0]!=='1').slice(0,10);
   const flag = `<div class="notice ${condE||condF ? 'warn' : 'ok'}" style="margin:0 0 10px">
-    <b>1号艇が飛びやすい形か</b>（72レースで測った2つの条件）<br>
+    <b>1号艇が飛びやすい形か</b>（77レースで測った2つの条件）<br>
     ${condE ? '●' : '○'} モデルの1号艇1着確率が45%未満
       <span class="mini">いま ${(p1*100).toFixed(0)}%。${condE
-        ? '該当。この形の34レースでは1号艇の1着率が44%でした（非該当は76%）。'
-        : '非該当。この形の38レースでは1号艇の1着率が76%でした（該当は44%）。'}</span><br>
+        ? '該当。この形の35レースでは1号艇の1着率が43%でした（非該当は79%）。'
+        : '非該当。この形の42レースでは1号艇の1着率が79%でした（該当は43%）。'}</span><br>
     ${moved==null ? '－ 進入はまだ入力されていません'
       : (condF ? '●' : '○') + ' 展示進入が枠なりでない'}
       <span class="mini">${moved==null ? '展示進入を入れると判定できます。'
         : (condF
           ? moved+'艇が動いています。この形の9レースでは1号艇の1着率が22%でした（枠なりは66%）。ただし9件しかありません。'
-          : '枠なりです。この形の58レースでは1号艇の1着率が66%でした。')}</span><br>
+          : '枠なりです。この形の62レースでは1号艇の1着率が66%でした。')}</span><br>
     <b style="color:${condE||condF ? '#f0c040' : '#6fd08c'}">${
       condE&&condF ? '2つとも該当。1号艇は飛びやすい形です。'
       : condE||condF ? '1つ該当。1号艇はやや飛びやすい形です。'
@@ -4992,8 +4992,8 @@ ${(()=>{
     <div><b>参考：1号艇を1着から外した上位10点</b></div>
     <div style="font-size:15px;margin-top:4px">${noFav.map(c=>`<b>${c.combo}</b>`).join('　')}</div>
     <div class="mini" style="margin-top:5px">
-      E該当の34レースでこれを買うと回収率132%でしたが、<b>いちばん大きい1件を除くと80%</b>に落ちます。
-      点数を増やすほど下がります（6点219%→133%／20点102%→76%／30点75%→58%）。
+      E該当の35レースでこれを買うと回収率134%でしたが、<b>いちばん大きい1件を除くと84%</b>に落ちます。
+      点数を増やすほど下がります（6点213%→130%／20点102%→77%／30点75%→58%）。
       <b>まだ「買えば勝てる」とは言えないので、買い目には入れていません。</b>
     </div>
   </div>` : ''}`;
@@ -5025,14 +5025,14 @@ ${(()=>{
     </div>`;
   }).join('')}
   <div class="notice warn" style="margin:0">
-    <b>この枠を本線に足しても、72レースで的中は39→42しか増えません。</b><br>
+    <b>この枠を本線に足しても、77レースで的中は43→46しか増えません。</b><br>
     <table class="tbl" style="margin:6px 0"><tr><th>買い方</th><th>回収率</th><th>的中</th></tr>
-    <tr><td>本線10点のみ</td><td><b>119%</b></td><td>39/72</td></tr>
-    <tr><td>本線10＋この枠9点</td><td>87%</td><td>42/72</td></tr>
-    <tr><td>この枠だけ9点</td><td>48%</td><td>12/72</td></tr>
+    <tr><td>本線10点のみ</td><td><b>116%</b></td><td>43/77</td></tr>
+    <tr><td>本線10＋この枠9点</td><td>85%</td><td>46/77</td></tr>
+    <tr><td>この枠だけ9点</td><td>45%</td><td>12/77</td></tr>
     </table>
-    <b>投資は約1.5倍になり、回収率は119%から87%へ下がります。</b>
-    この枠だけを買うと48%です。<br>
+    <b>投資は約1.5倍になり、回収率は116%から85%へ下がります。</b>
+    この枠だけを買うと45%です。<br>
     <b>「当たれば大きいから元が取れる」も、この枠では成立していません。</b>
     当てた12回の払戻は<b>平均¥2,504</b>で、<b>¥10,000超は1回もありません</b>。<br>
     本線が外した高配当（¥95,310／¥64,820／¥45,840／¥26,460）は、
@@ -5958,9 +5958,9 @@ function anaMinOddsValue(){ return Number(($('anaMinOdds')||{}).value) || 50; }
    ------------------------------------------------------------------
    ▲この券種を「おすすめ」にしてはいけない▲
 
-   実測72レースで、モデルが1位に評価した艇が1着になったのは 43/72（60%）。
+   実測77レースで、モデルが1位に評価した艇が1着になったのは 48/77（62%）。
    これを根拠に一度は単勝を優先する作りにしたが、間違いだった。
-   「常に1号艇を買う」も同じ 43/72（60%）。モデルは1着について
+   「常に1号艇を買う」も同じ 48/77（62%）。モデルは1着について
    何も足していない。1号艇以外を選んだ3回のうち当たったのは1回だけ。
 
    さらに、払戻を記録した8レースで実際の回収率を測ると
@@ -6089,7 +6089,7 @@ function init(){
   renderBoats();
   validateAll();
   onBankChange();
-  log('v23 起動しました。STEP1から順に進めてください。');
+  log('v24 起動しました。STEP1から順に進めてください。');
   setStatus('待機中');
 }
 init();
