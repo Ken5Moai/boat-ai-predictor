@@ -48,7 +48,7 @@ const listHtml = get('racelist');
 const cells = F.cells(listHtml).filter(x=>x&&x!=='|');
 const ti = cells.findIndex(x=>/締切予定時刻/.test(x));
 const times = ti<0 ? [] : cells.slice(ti+1, ti+13).filter(x=>/^\d{1,2}:\d{2}$/.test(x));
-const closeAt = times[RNO-1] || null;
+let closeAt = times[RNO-1] || null;
 const titleCell = cells.find(x=>/\d+m$/.test(x) && /戦|選/.test(x));
 const title = titleCell ? titleCell.replace(/\s*\d+m$/,'') : '';
 
@@ -58,6 +58,24 @@ const minsLeft = () => {
   const n = jst();
   const close = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), h, m);
   return Math.round((close - n.getTime())/60000);
+};
+
+/* 締切時刻を読み直す。
+   出走表の「締切予定時刻」は固定ではなく、レースが遅れると後ろにずれる。
+   2026-10-25 若松8R で実際に起きた。20:55に読んだ一覧は21:17だったが、
+   本当の締切は21:22。古い時刻のまま数えて10分前の打ち切りを5分早く発動させ、
+   21:13に出ていた展示を取り逃がして暫定のまま出してしまった。
+   ずれたら黙って使わず、必ず画面に出す。 */
+const refreshClose = (html) => {
+  const cs = F.cells(html).filter(x=>x&&x!=='|');
+  const k = cs.findIndex(x=>/締切予定時刻/.test(x));
+  if(k<0) return;
+  const ts = cs.slice(k+1, k+13).filter(x=>/^\d{1,2}:\d{2}$/.test(x));
+  const t = ts[RNO-1];
+  if(t && t !== closeAt){
+    log(`  ※ 締切が ${closeAt} → ${t} にずれました（レースの進行が遅れています）。`);
+    closeAt = t;
+  }
 };
 
 /* 場名は index.html の VENUES から取る（二重に持たない） */
@@ -170,7 +188,9 @@ const show = (label, provisional) => {
    以前はオッズも毎回取っていて、30秒おきに2本ずつ投げていた。
    公式に無駄な負荷をかけるうえ、使うのは最後の1回だけなので意味が無い。 */
 const peek = () => {
-  const bf = F.parseBefore(get('beforeinfo'));
+  const html = get('beforeinfo');
+  refreshClose(html);          /* 直前情報ページにも同じ締切一覧が載っている */
+  const bf = F.parseBefore(html);
   return {bf, min: minsLeft(), ready: bf.boats.filter(x=>x.exT!=null).length===6};
 };
 const grab = () => {
