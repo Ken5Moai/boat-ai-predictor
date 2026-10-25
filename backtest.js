@@ -1230,7 +1230,31 @@ const RACES=[
  {reg:'4809',g:'A1',nat:5.61,loc:6.76,mot:37.56,bt:35.16,st:0.16,F:0,exST:0.09,exF:null,exT:6.89,tilt:0,wt:52,entry:3,rec:[[2,.13,1],[1,.21,4],[4,.25,3],[5,.18,1],[3,.14,1],[6,.14,4],[2,.07,3]]},
  {reg:'4511',g:'B1',nat:4.49,loc:3.43,mot:35.68,bt:41.25,st:0.18,F:0,exST:0.01,exF:null,exT:6.99,tilt:0,wt:56.1,entry:4,rec:[[4,.16,4],[3,.19,5],[6,.13,5],[1,.11,1],[2,.08,3],[5,.22,3],[3,.29,6]]},
  {reg:'4177',g:'B1',nat:4.02,loc:4.87,mot:37.33,bt:28.95,st:0.17,F:0,exST:0.11,exF:null,exT:7.08,tilt:-0.5,wt:56.5,entry:5,rec:[[2,.11,6],[6,.14,5],[1,.12,1],[5,.13,6],[4,.16,5],[4,.02,6],[2,.14,6]]},
- {reg:'5381',g:'B1',nat:3.51,loc:0,mot:29.6,bt:23.29,st:0.17,F:2,exST:0.03,exF:null,exT:6.91,tilt:-0.5,wt:50.5,entry:6,rec:[[3,.12,6],[3,.18,4],[3,.04,"Ｆ"],[6,.27,5],[6,.23,6]]}]}
+ {reg:'5381',g:'B1',nat:3.51,loc:0,mot:29.6,bt:23.29,st:0.17,F:2,exST:0.03,exF:null,exT:6.91,tilt:-0.5,wt:50.5,entry:6,rec:[[3,.12,6],[3,.18,4],[3,.04,"Ｆ"],[6,.27,5],[6,.23,6]]}]},
+{name:'若松7R 一般戦(10/25)',jcd:'20',rno:7,date:'2026-10-25',result:'1-3-2',pop:2,pay:490,wind:null,ws:6,wave:6,temp:20,wtemp:22,
+ actualST:{1:.23,2:.27,3:.21,4:.25,5:.26,6:.25},
+ /* 正解 1-3-2 ¥490（2番人気）。至極の一点がそのまま当たった。
+    ただし本線10点で¥1,000使って払戻¥490なので -¥510。
+    「当たったのに負ける」形。ガチガチのレースでは10点買いは当たっても赤字になる。
+
+    このレースの買い目は締切13分前に出せていたが、配信が間に合わず本人には
+    届かなかった（私がテストの不具合を追っていて報告が遅れた）。
+    記録としては残すが、実際には買えていない。
+
+    気象は結果ページの値（風速6m・波高6cm）。直前情報は5m・5cmだった。
+    オッズはレース後に取り直した締切時オッズ。払戻¥490と一致する。 */
+ /* 2026-10-25 20:39 JST、predict.js で取得（締切20:53の13分前）。
+    展示は6艇ぶんそろっている。進入は展示進入。
+    本番進入は使わない（先読みになる）。
+    水面気象は直前情報ページの「水面気象情報 5R時点」の値。結果ページが出たら差し替える。
+    オッズは締切13分前のライブ値。レース後に締切時オッズへ取り直すこと。 */
+ B:[
+ {reg:'4394',g:'A2',nat:6.13,loc:5.49,mot:30.77,bt:22.89,st:0.15,F:0,exST:0.07,exF:'F',exT:7.04,tilt:0,wt:53.5,entry:1,rec:[[4,.25,2],[1,.11,2],[3,.24,4],[2,.09,5],[5,.15,4],[1,.23,2],[6,.19,5]]},
+ {reg:'3643',g:'B1',nat:5.13,loc:6.33,mot:32.14,bt:32.22,st:0.18,F:0,exST:0.14,exF:'F',exT:7.01,tilt:0,wt:53.3,entry:2,rec:[[1,.21,4],[5,.19,6],[2,.05,1],[6,.22,3],[3,.11,3],[5,.18,5]]},
+ {reg:'4303',g:'B1',nat:5.06,loc:5.8,mot:51.52,bt:36.11,st:0.18,F:0,exST:0.16,exF:'F',exT:6.98,tilt:0,wt:52,entry:3,rec:[[1,.12,3],[4,.16,3],[5,.25,5],[6,.23,3],[2,.32,4],[3,.24,3],[4,.22,2]]},
+ {reg:'5384',g:'B2',nat:1.89,loc:2.67,mot:27.36,bt:25.68,st:0.22,F:0,exST:0.15,exF:'F',exT:7.09,tilt:-0.5,wt:52.7,entry:4,rec:[[6,.31,6],[6,.12,6],[3,.17,6],[6,.37,4],[6,.21,6],[6,.46,6]]},
+ {reg:'4491',g:'B1',nat:4.58,loc:4.16,mot:35.78,bt:40.96,st:0.2,F:0,exST:0.13,exF:'F',exT:7.16,tilt:0,wt:52.1,entry:5,rec:[[6,.11,5],[1,.41,6],[4,.27,2],[3,.29,5],[5,.19,3],[2,.27,1],[2,.28,3]]},
+ {reg:'5409',g:'B2',nat:2.73,loc:1.13,mot:33.33,bt:23.81,st:0.16,F:0,exST:0.04,exF:null,exT:7.08,tilt:0,wt:55.7,entry:6,rec:[[6,.19,5],[6,.11,2],[6,.14,"転"],[5,.11,5],[6,.06,4],[5,.22,5]]}]}
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -1574,6 +1598,207 @@ if(require.main===module){
     console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
 
+  /* 当たっても負けるレース（ガチガチのとき10点買いは成立しない）
+     ==================================================================
+     2026-10-25 若松8R を見て本人が「ガチガチだね」と言った。そのとおりで、
+     至極の一点 1-2-3 がそのまま当たったのに払戻は ¥320。
+     本線10点は1点100円＝¥1,000なので、当たっても -¥680 になる。
+     7R も同じで、至極の一点 1-3-2 が当たって ¥490（-¥510）。
+
+     つまり買う前に分かることがある。
+     本線10点の中に、オッズ10倍未満の組がどれだけあるか。
+     正解がそこに入ると、当たっても投資¥1,000を下回る。
+     これは予想の当たり外れとは別の、買い方の問題。
+
+     ここでは、それが実際にどれだけ起きているかを数える。 */
+  {
+    console.log('\n=== 当たっても負けたレース（ガチガチ） ===');
+    const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p}));
+    const done = base.map((r,i)=>({r, R:RACES[i]})).filter(x=>x.R && x.R.pay!=null && ODDS[x.R.name]);
+    let hit=0, lost=0, lostYen=0, wonYen=0;
+    const rows=[];
+    for(const x of done){
+      const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+      if(!pl.main.includes(x.R.result)) continue;
+      hit++;
+      const cost = pl.main.length*100;
+      if(x.R.pay < cost){ lost++; lostYen += cost - x.R.pay;
+        rows.push({name:x.R.name, res:x.R.result, pay:x.R.pay, diff:cost-x.R.pay}); }
+      else wonYen += x.R.pay - cost;
+    }
+    console.log(`  本線10点が当たったのは ${hit}/${done.length}レース。`);
+    console.log(`  そのうち、当たったのに赤字だったのは ${lost}レース（${Math.round(lost/hit*100)}%）。`);
+    console.log(`  当たって負けた分の合計 -¥${lostYen.toLocaleString()} ／ 当たって勝った分 +¥${wonYen.toLocaleString()}`);
+    rows.sort((a,b)=>b.diff-a.diff);
+    console.log('  当たったのに負けた額の大きい順');
+    for(const r of rows.slice(0,8))
+      console.log(`    -¥${String(r.diff).padStart(4)}  ${r.res}  払戻¥${String(r.pay).padStart(5)}  ${r.name}`);
+
+    /* 買う前に分かるか。本線10点のオッズを見れば分かる。 */
+    console.log('');
+    console.log('  本線10点のうち「当たっても¥1,000に届かない組」が何点あるか');
+    const buckets = {};
+    for(const x of done){
+      const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+      const o = ODDS[x.R.name];
+      const cheap = pl.main.filter(k=>o[k]!=null && o[k]*100 < pl.main.length*100).length;
+      buckets[cheap] = (buckets[cheap]||0) + 1;
+    }
+    for(const k of Object.keys(buckets).map(Number).sort((a,b)=>a-b))
+      console.log(`    ${String(k).padStart(2)}点が10倍未満  ${buckets[k]}レース`);
+    /* では「安い組が多いレースは買わない」としたら、通算は良くなるのか。
+       当たって負けた合計は -¥4,270、当たって勝った合計は +¥44,650 なので、
+       見送りが勝ちも一緒に切ってしまうなら意味が無い。実際に数える。 */
+    console.log('');
+    console.log('  「10倍未満がN点以上なら買わない」としたら');
+    for(const cut of [1,2,3,4]){
+      let inv=0, back=0, hits=0, skipped=0;
+      for(const x of done){
+        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        const o = ODDS[x.R.name];
+        const cheap = pl.main.filter(k=>o[k]!=null && o[k]*100 < pl.main.length*100).length;
+        if(cheap >= cut){ skipped++; continue; }
+        inv += pl.main.length*100;
+        if(pl.main.includes(x.R.result)){ back += x.R.pay; hits++; }
+      }
+      const n = done.length - skipped;
+      console.log(`    ${cut}点以上で見送り  買うのは${String(n).padStart(2)}/${done.length}レース  `+
+        `回収率${String(inv?Math.round(back/inv*100):0).padStart(4)}%  的中${hits}/${n}`);
+    }
+    {
+      let inv=0, back=0, hits=0;
+      for(const x of done){
+        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        inv += pl.main.length*100;
+        if(pl.main.includes(x.R.result)){ back += x.R.pay; hits++; }
+      }
+      console.log(`    （見送らない）      買うのは${done.length}/${done.length}レース  `+
+        `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits}/${done.length}`);
+    }
+    console.log('    ※ 見送ると当たりも一緒に減る。回収率が上がるかどうかで判断すること。');
+
+    /* 【判定・2026-10-25に先に書いた】ガチガチのレースを見送るか
+       ==============================================================
+       上の表を見てから書いているので、いまあるレースでは判定しない。
+       「2点以上で見送り」が160%といちばん高いが、買うのは27レースで的中8件。
+       数レースの高配当が作った数字の可能性が高い。
+
+       判定⑦ 本線10点のうちオッズ10倍未満が2点以上なら、そのレースは買わない
+         これから足すレースが30件たまった時点で、その30件だけを見る。
+           ・見送った場合の回収率が、見送らない場合より高い
+           ・いちばん大きい払戻の1件を除いても、やはり高い
+         両方を満たしたら採る。満たさなければ採らない。あとから緩めない。
+
+       オッズは締切時オッズで判定する。予想の時点では締切前の値しか無いので、
+       実際に使うときは「見送るかどうかの判断も当てにならない」ことに注意する。 */
+    {
+      const PREREG_CHALK_NAMES = new Set([
+        '若松12R 一般特選(10/23)',
+        '若松11R 予選特選(10/23)',
+        '尼崎4R 予選(10/23)',
+        '尼崎2R 予選(10/23)',
+        '平和島4R 予選(10/23)',
+        '若松9R 予選(10/23)',
+        '唐津6R 予選(10/21)',
+        '唐津5R 予選(10/21)',
+        '唐津4R 予選(10/21)',
+        '唐津3R 予選(10/21)',
+        '唐津2R 予選(10/21)',
+        '唐津1R 予選(10/21)',
+        '唐津12R 予選(10/20)',
+        '唐津11R 予選(10/20)',
+        '唐津10R 予選(10/20)',
+        '唐津9R 予選(10/20)',
+        '唐津8R 予選(10/20)',
+        '唐津6R 予選(10/20)',
+        '唐津7R 予選(10/20)',
+        '唐津4R 予選(10/20)',
+        '唐津5R 予選(10/20)',
+        '唐津3R 予選(10/20)',
+        '唐津2R 予選(10/20)',
+        '唐津1R 予選(10/20)',
+        '大村12R 発祥地選抜',
+        '若松11R 準優勝戦',
+        '若松10R 準優勝戦',
+        '桐生8R 女子',
+        '桐生9R 男子',
+        '桐生12R 特選',
+        '徳山1R 一般',
+        '徳山2R 特選',
+        '徳山3R 特賞',
+        '徳山4R 予選',
+        '徳山5R 予選',
+        '徳山6R 予選',
+        '三国1R 一般',
+        '三国3R 一般',
+        '三国5R 一般',
+        '三国6R 一般',
+        '三国7R 一般',
+        '三国8R 一般',
+        '三国9R 一般',
+        '三国10R 準優勝戦',
+        '三国11R 準優勝戦',
+        '三国12R 準優勝戦',
+        '下関1R 予選',
+        '徳山1R 朝トク予選',
+        '下関2R 予選',
+        '徳山2R 狙いトク特選',
+        '徳山3R 決めトク特賞',
+        '徳山4R ガチトク予選',
+        '徳山5R 予選 4日目',
+        '下関10R 予選特賞',
+        '下関11R 予選特選',
+        '若松11R 準優勝戦(10/24)',
+        '若松12R 一般(10/24)',
+        '若松1R 一般戦(10/24)',
+        '若松2R 一般戦(10/24)',
+        '若松3R 一般戦(10/24)',
+        '若松4R 一般戦(10/24)',
+        '若松5R 進入固定戦隊(10/24)',
+        '若松6R 一般戦(10/24)',
+        '若松7R 一般戦(10/24)',
+        '若松8R エイトビート(10/24)',
+        '若松9R 準優勝戦(10/24)',
+        '若松10R 準優勝戦(10/24)',
+        '三国3R (10/25)',
+        '多摩川8R 予選(10/25)',
+        '若松5R 進入固定戦隊(10/25)',
+        '若松6R 一般戦(10/25)',
+        '若松7R 一般戦(10/25)',
+      ]);
+      const fwd = done.filter(x=>!PREREG_CHALK_NAMES.has(x.R.name));
+      console.log('');
+      console.log('  【判定・2026-10-25に先に書いた】判定⑦ ガチガチのレースを見送るか');
+      const need = 30;
+      if(fwd.length < need){
+        console.log(`    いま ${fwd.length}/${need} 件。たまったら判定する。`);
+      } else {
+        const use = fwd.slice(0, need);
+        const run = skip => {
+          const pays=[]; let inv=0;
+          for(const x of use){
+            const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+            const o = ODDS[x.R.name];
+            const cheap = pl.main.filter(k=>o[k]!=null && o[k]*100 < pl.main.length*100).length;
+            if(skip && cheap >= 2) continue;
+            inv += pl.main.length*100;
+            if(pl.main.includes(x.R.result)) pays.push(x.R.pay);
+          }
+          const back = pays.reduce((a,c)=>a+c,0);
+          const cut  = pays.length ? back-Math.max(...pays) : 0;
+          return {pct: inv?back/inv*100:0, cutPct: inv?cut/inv*100:0};
+        };
+        const A = run(true), B = run(false);
+        const a = A.pct > B.pct, b2 = A.cutPct > B.cutPct;
+        console.log(`    ${a?'○':'×'} 見送るほうが回収率が高い        ${Math.round(A.pct)}% / ${Math.round(B.pct)}%`);
+        console.log(`    ${b2?'○':'×'} 最大1件を除いてもなお高い      ${Math.round(A.cutPct)}% / ${Math.round(B.cutPct)}%`);
+        console.log(`    → ${a&&b2 ? '見送りを採る。' : '欠けたので捨てる。見送らない。'}`);
+      }
+      console.log(`    （凍結したのは今日時点の ${PREREG_CHALK_NAMES.size} レース）`);
+    }
+    console.log('  ※ ここが多いレースは、当たっても取り返せない。');
+    console.log('    予想の良し悪しではなく、そのレースを買うかどうかの判断材料。');
+  }
   /* 展示を待たずに出した買い目は、どれだけ違うか
      ==================================================================
      2026-10-25 に「買い目は締切10分前までに欲しい」と言われた。
@@ -3474,7 +3699,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点120% ／ 波乱8点だけ38% ／ 18点まとめて83%（71レース）。');
+        console.log('  実測 本線10点119% ／ 波乱8点だけ37% ／ 18点まとめて83%（72レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
