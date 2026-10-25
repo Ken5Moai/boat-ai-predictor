@@ -1209,8 +1209,8 @@ const RACES=[
  {reg:'3853',g:'A2',nat:5.89,loc:5.91,mot:39.42,bt:35.56,st:0.2,F:0,exST:0.12,exF:'F',exT:6.89,tilt:-0.5,wt:52.4,entry:4,rec:[[5,.27,3],[2,.11,2],[1,.06,3],[3,.31,3],[4,.15,3],[1,.16,1],[4,.14,4]]},
  {reg:'4145',g:'B1',nat:4.02,loc:3.09,mot:38.54,bt:27.59,st:0.26,F:0,exST:0.03,exF:'F',exT:7.06,tilt:-0.5,wt:52,entry:5,rec:[[5,.26,6],[6,.29,6],[3,.18,2],[1,.36,6],[2,.28,2],[4,.26,4],[6,.39,5]]},
  {reg:'4527',g:'B1',nat:4.63,loc:4.27,mot:30.73,bt:21.35,st:0.17,F:0,exST:0.05,exF:null,exT:6.91,tilt:0,wt:52,entry:6,rec:[[3,.31,6],[5,.13,6],[4,.17,5],[1,.17,2],[5,.15,3],[2,.17,5]]}]},
-{name:'若松6R 一般戦(10/25)',jcd:'20',rno:6,date:'2026-10-25',result:'3-1-2',pop:5,pay:1170,wind:null,ws:null,wave:null,temp:null,wtemp:null,
- actualST:{1:null,2:null,3:null,4:null,5:null,6:null},
+{name:'若松6R 一般戦(10/25)',jcd:'20',rno:6,date:'2026-10-25',result:'3-1-2',pop:5,pay:1170,wind:null,ws:5,wave:5,temp:19,wtemp:22,
+ actualST:{1:.11,2:.24,3:.13,4:.14,5:.13,6:.11},
  /* 正解 3-1-2 ¥1,170（5番人気）。本線10点で当たった（モデル3番目 9.6%）。
     10点¥1,000に対して払戻¥1,170なので +¥170。
     至極の一点(1-3-2)は外れで、1着と3着が入れ替わっただけ。
@@ -1251,7 +1251,13 @@ function runWith(weightPatch, bandPatch, opt){
       const b=w.boatOf(i+1);
       setField(b,'name','選手'+(i+1),'official'); setField(b,'grade',x.g,'official');
       setField(b,'nationalWinRate',x.nat,'official');
-      if(x.loc!=null) setField(b,'localWinRate',x.loc,'official');
+      /* 当地勝率 0.00 は「まだこの場で走っていない」の意味で、欠測ではない。
+         index.html の取り込み経路（b.localNone）と同じ扱いにそろえる。
+         ここをそろえていなかったため、画面では出せるレースがテストでは出せず、
+         原因を「アプリのバグ」と取り違えた（2026-10-25）。
+         採点結果はどちらも欠測扱いで同じなので、測定値は変わらない。 */
+      if(x.loc === 0) b.localNone = true;
+      else if(x.loc != null) setField(b,'localWinRate',x.loc,'official');
       setField(b,'motor2Rate',x.mot,'official'); setField(b,'boat2Rate',x.bt,'official');
       if(x.st!=null) setField(b,'averageST',x.st,'official');
       setField(b,'exhibitionTime',x.exT,'official');
@@ -3468,7 +3474,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点120% ／ 波乱8点だけ38% ／ 18点まとめて84%（70レース）。');
+        console.log('  実測 本線10点120% ／ 波乱8点だけ38% ／ 18点まとめて83%（71レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

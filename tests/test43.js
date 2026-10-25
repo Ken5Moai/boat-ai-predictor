@@ -28,7 +28,9 @@ function report(R){
   R.B.forEach((x,i)=>{ const b=w.boatOf(i+1);
     setField(b,'name','選手'+(i+1),'official'); setField(b,'grade',x.g,'official');
     setField(b,'nationalWinRate',x.nat,'official');
-    if(x.loc!=null) setField(b,'localWinRate',x.loc,'official');
+    /* 当地勝率0.00は「当地で走っていない」。アプリ本体と同じく localNone で表す。 */
+    if(x.loc === 0) b.localNone = true;
+    else if(x.loc != null) setField(b,'localWinRate',x.loc,'official');
     setField(b,'motor2Rate',x.mot,'official'); setField(b,'boat2Rate',x.bt,'official');
     if(x.st!=null) setField(b,'averageST',x.st,'official');
     setField(b,'exhibitionTime',x.exT,'official');
@@ -139,5 +141,24 @@ ok(/本線10点\d+% ／ 波乱8点だけ\d+% ／ 18点まとめて\d+%/.test(BT)
    'backtest.js の結果まち出力にも同じ実測値が入っている');
 ok(/main:10, ana:8/.test(BT) && /main:10, ana:8/.test(HTML),
    '点数(10/8)は両方で同じ値を buyPlan に渡している');
+console.log('\n=== 当地勝率0.00の艇がいるレースでも描けるか ===');
+/* 当地勝率0.00は「当地で走っていない」であって「当地で勝てない」ではない。
+   値として入れると勝率0の選手になってしまうので、localNone で欠測として扱う。
+   ところが localNone を立てずに 0 を setField に渡すと、許容範囲[1.00,9.99]に
+   弾かれて欠測になり、validateAll が『当地勝率がありません』と言ってレポートを
+   丸ごと止める。71レース中20レースがこの形を含む。
+   アプリ本体は正しく扱えているので、テスト側がそれを再現できるかを見る。 */
+{
+  const z = RACES.find(r=>r.B.some(b=>b.loc===0));
+  ok(!!z, '当地勝率0.00の艇がいるレースが記録にある');
+  if(z){
+    const r = report(z);
+    console.log(`  （${z.name}）`);
+    ok(r.text.length > 500, 'レポートが空にならない');
+    ok(/買い目 18点/.test(r.text), '買い目カードが出る');
+  }
+  const n = RACES.filter(r=>r.B.some(b=>b.loc===0)).length;
+  console.log(`  当地勝率0.00を含むレースは ${n}/${RACES.length} 件あります。`);
+}
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
