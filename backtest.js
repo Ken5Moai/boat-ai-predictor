@@ -1668,6 +1668,65 @@ if(require.main===module){
     console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
 
+  /* 1着を当てたのに外すとき、正解は何番目にあるのか
+     ==================================================================
+     2026-10-26 福岡1R。モデルは1号艇を89.4%と見て、実際に1号艇が勝った。
+     なのに本線10点は外れ。正解 1-6-5 はモデルの14番目だった。
+     19点まで買っていれば ¥3,610（17番人気）が取れていた。
+
+     これは今までずっと出ている形で、本人も「1着は当たるが並びで外す」と
+     言っている。では『1着が当たった回だけ』に限ると、正解はどこにあるのか。
+     そこが11〜19番に集中しているなら、点数の増やし方に意味が出てくる。
+     散らばっているだけなら、増やしても投資が増えるだけ。 */
+  {
+    console.log('\n=== 1着を当てた回、正解は何番目にあったか ===');
+    const done = base.map((r,i)=>({r, R:RACES[i]})).filter(x=>x.R && x.R.pay!=null);
+    const headHit = done.filter(x=>x.r.head === String(x.R.result).split('-')[0]);
+    const headMiss = done.filter(x=>x.r.head !== String(x.R.result).split('-')[0]);
+    const dist = set => {
+      const b = {'1-10':0, '11-19':0, '20-30':0, '31以降':0};
+      for(const x of set){ const k=x.r.rank;
+        if(k<=10) b['1-10']++; else if(k<=19) b['11-19']++; else if(k<=30) b['20-30']++; else b['31以降']++; }
+      return b;
+    };
+    const row = (label, set) => {
+      if(!set.length){ console.log(`  ${label.padEnd(26)} 0件`); return; }
+      const b = dist(set);
+      console.log(`  ${label.padEnd(26)} ${String(set.length).padStart(3)}件  `+
+        Object.entries(b).map(([k,v])=>`${k} ${String(v).padStart(2)}件(${String(Math.round(v/set.length*100)).padStart(2)}%)`).join('  '));
+    };
+    row('1着を当てた回', headHit);
+    row('1着を外した回', headMiss);
+
+    /* 1着が当たった回だけに限って、点数ごとの回収率を見る。
+       「1着が当たるレースでは点数を増やす価値があるか」の答えになる。
+       ただし1着が当たるかどうかは、買ったあとにしか分からない。
+       なので『1着の確率が高いレースだけ』でも同じことを見る。 */
+    const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p}));
+    const curve = (label, set) => {
+      if(set.length < 5){ console.log(`  ${label}: ${set.length}件しかないので出さない`); return; }
+      console.log(`  ${label}（${set.length}レース）`);
+      for(const n of [10, 12, 15, 19, 24]){
+        let inv=0, pays=[];
+        for(const x of set){
+          const list = toC(x.r).sort((a,b)=>b.p-a.p).slice(0,n).map(c=>String(c.combo));
+          inv += n*100;
+          if(list.includes(x.R.result)) pays.push(x.R.pay);
+        }
+        const back=pays.reduce((a,c)=>a+c,0);
+        const cut = pays.length ? back-Math.max(...pays) : 0;
+        console.log(`    ${String(n).padStart(2)}点  回収率${String(Math.round(back/inv*100)).padStart(4)}%  `+
+          `最大1件除くと${String(Math.round(cut/inv*100)).padStart(4)}%  的中${pays.length}/${set.length}`);
+      }
+    };
+    curve('1着を当てた回だけ（買ったあとにしか分からない）', headHit);
+    const favHigh = done.filter(x=>{
+      const p1 = Object.entries(x.r.probOf).filter(([k])=>k[0]===x.r.head).reduce((t,[,v])=>t+v,0);
+      return p1 >= 0.60;
+    });
+    curve('モデルの1着確率が60%以上のレース（買う前に分かる）', favHigh);
+    console.log('  ※ 上は後知恵なので参考。下が実際に使える条件。');
+  }
   /* 優勝戦・準優勝戦・特選は、ふつうのレースと違うのか
      ==================================================================
      2026-10-25、若松11Rが優勝戦なので調べた。

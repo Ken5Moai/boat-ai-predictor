@@ -173,6 +173,45 @@ const show = (label, provisional) => {
   log('');
   log(`──────── ${label} ────────`);
   console.log(out.slice(i, j));
+  /* 買い目のオッズを見て「当たっても元が取れない点」を数える。
+     2026-10-26 福岡1R で、モデルの1号艇が89.4%だったのを見て
+     『ガチガチだから当たっても赤字』と口で言ったが、実際のオッズは
+     10点中9点が10倍超で、結果は 1-6-5 ¥3,610（17番人気）だった。
+     1着の堅さと3連単の配当は別物で、そこを混同していた。
+     口で判断せず、昨日測った指標（10倍未満が何点か）をここで出す。
+
+     実測（77レース・締切時オッズ）
+       本線10点が当たったうち、当たっても赤字だったのは13/33（39%）
+       10倍未満が0点  15レース ／ 1点 12 ／ 2点 19 ／ 3点 11 ／ 4点 6 */
+  {
+    const m = out.slice(i, j).match(/本線10点\s+(.+)/);
+    if(m){
+      const expand = t => { const o=[];
+        for(const term of t.trim().split(' / ')){ const [A,B,C]=term.split('-');
+          for(const a of A) for(const b of B) for(const c of C)
+            if(a!==b && b!==c && a!==c) o.push(`${a}-${b}-${c}`); }
+        return [...new Set(o)]; };
+      const list = expand(m[1]);
+      const cost = list.length*100;
+      const cheap = list.filter(k=>odds[k]!=null && odds[k]*100 < cost);
+      log('');
+      log(`  ── 当たっても元が取れるか（本線${list.length}点＝¥${cost.toLocaleString()}）──`);
+      if(!cheap.length){
+        log(`     10倍未満は0点。どれが来ても投資は回収できます。`);
+      } else {
+        log(`     当たっても¥${cost.toLocaleString()}に届かない組が ${cheap.length}点あります:`);
+        log(`       ${cheap.map(k=>`${k} ${odds[k]}倍（¥${Math.round(odds[k]*100).toLocaleString()}）`).join(' / ')}`);
+        if(cheap.length>=2)
+          log('     ※ 昨日の集計では、10倍未満が2点以上のレースを見送ると回収率が上がりました');
+        log('       （116%→160%。ただし的中が8/27に減る数字なので、判定⑦として検証中です）');
+      }
+      const best = (out.slice(i,j).match(/至極の一点\s+(\S+)/)||[])[1];
+      if(best && odds[best]!=null)
+        log(`     至極の一点 ${best} は ${odds[best]}倍（¥${Math.round(odds[best]*100).toLocaleString()}）`);
+      log('     ※ このオッズは締切前の値なので、締切までに動きます。');
+    }
+  }
+
   if(!provisional) return;
   /* 暫定がどれだけ悪いかは、backtest.js の節から読む（固定値で書かない）。 */
   const g = re => (out.match(re)||[])[1];
