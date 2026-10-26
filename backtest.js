@@ -3525,8 +3525,13 @@ if(require.main===module){
         if(!sub.length) continue;
         const rowOf = new Map(sub.map(x=>[x.name, x]));
         console.log(`\n  ${date} ${VENUE_NAME[jcd] ?? '場コード'+jcd}  ${list.length}レース`);
-        console.log('      R   正解      払戻  人気  モデル順位  至極  本線  波乱');
+        /* 10倍未満 = 本線10点のうち「当たっても¥1,000に届かない組」の数。
+           配信時に警告として出している数字そのもの。ここに並べておけば、
+           警告が当たっていたかを毎回手で数えなくてよい。
+           オッズを記録していないレースは — にする（0と区別する）。 */
+        console.log('      R   正解      払戻  人気  モデル順位  至極  本線  波乱  10倍未満');
         let invM=0, backM=0, hitM=0, invA=0, backA=0, hitA=0, invB=0, backB=0, hitB=0;
+        const warnD=[], okD=[];   /* 警告ありのレースと、そうでないレース */
         for(const r of list){
           const x = rowOf.get(r.name); if(!x) continue;
           const pl = WIN.buyPlan(toC(x), {main:10, ana:8});
@@ -3535,10 +3540,16 @@ if(require.main===module){
           invB += 100; if(inB){ backB += r.pay; hitB++; }
           invM += pl.main.length*100; if(inM){ backM += r.pay; hitM++; }
           invA += pl.ana.length*100;  if(inA){ backA += r.pay; hitA++; }
+          const o = ODDS[r.name];
+          const cheap = o ? pl.main.filter(c=>o[c]!=null && o[c]<10).length : null;
+          if(cheap!=null){ if(cheap>=2) warnD.push({r,inM,pay:r.pay,n:pl.main.length});
+                           else okD.push({r,inM,pay:r.pay,n:pl.main.length}); }
           console.log(`      ${String(r.rno).padStart(2)}  ${res.padEnd(8)}`+
             `¥${String(r.pay).padStart(6)}  ${String(r.pop ?? '—').padStart(3)}  `+
             `${String(x.rank).padStart(8)}番目  `+
-            `${inB?'○ ':'× '}  ${inM?'○ ':'× '}  ${inA?'○':'×'}`);
+            `${inB?'○ ':'× '}  ${inM?'○ ':'× '}  ${inA?'○':'×'}  `+
+            `${cheap==null ? '    —' : String(cheap).padStart(5)}`+
+            `${cheap!=null && cheap>=2 ? ' ←警告' : ''}`);
         }
         const line = (label, inv, back, hit, n) => {
           const d = back - inv;
@@ -3552,7 +3563,23 @@ if(require.main===module){
         line('本線（10点）',      invM, backM, hitM, n);
         line('波乱（8点）',       invA, backA, hitA, n);
         line('本線＋波乱（18点）', invM+invA, backM+backA, hitM+hitA, n);
-        totals.push({date, jcd, n, invM, backM, hitM, invA, backA, hitA});
+        /* 警告あり／なしで、その日の本線10点がどうだったか。
+           手で分けていた作業をここに寄せる。件数が少ないので回収率は参考値。 */
+        const split = (label, arr) => {
+          if(!arr.length) return;
+          const inv = arr.reduce((a,c)=>a+c.n*100,0);
+          const back = arr.filter(c=>c.inM).reduce((a,c)=>a+c.pay,0);
+          console.log(`      ${label.padEnd(18)} ${arr.length}レース  `+
+            `収支${back-inv>=0?'+':'-'}¥${Math.abs(back-inv).toLocaleString()}  `+
+            `回収率${String(Math.round(back/inv*100)).padStart(4)}%  `+
+            `的中${arr.filter(c=>c.inM).length}/${arr.length}`);
+        };
+        if(warnD.length || okD.length){
+          console.log('    警告（10倍未満が2点以上）で分けた本線10点');
+          split('警告あり', warnD);
+          split('警告なし', okD);
+        }
+        totals.push({date, jcd, n, invM, backM, hitM, invA, backA, hitA, warnD, okD});
       }
       /* 日をまたいだ合計。同じ日に2場まわった日はまとめて1行にする */
       const byDate = new Map();
@@ -3574,6 +3601,27 @@ if(require.main===module){
                                `${String(i?Math.round(b/i*100):0).padStart(4)}% ${h}/${n}`;
         console.log(`      ${date}  ${vs.padEnd(16)}${String(n).padStart(3)}   `+
                     `${fmt(iM,bM,hM)}   ${fmt(iAll,bAll,hAll)}`);
+      }
+      /* 警告あり／なしの通し合計。これは全レースぶんなので、
+         日ごとの数字より意味がある（それでも寄せ集めではある）。 */
+      {
+        const allW = totals.flatMap(t=>t.warnD), allO = totals.flatMap(t=>t.okD);
+        const row = (label, arr) => {
+          if(!arr.length){ console.log(`      ${label.padEnd(10)} 0レース`); return; }
+          const inv = arr.reduce((a,c)=>a+c.n*100,0);
+          const hits = arr.filter(c=>c.inM).map(c=>c.pay);
+          const back = hits.reduce((a,c)=>a+c,0);
+          const top = hits.length ? Math.max(...hits) : 0;
+          console.log(`      ${label.padEnd(10)} ${String(arr.length).padStart(3)}レース  `+
+            `回収率${String(Math.round(back/inv*100)).padStart(4)}%  `+
+            `最大1件除くと${String(Math.round((back-top)/inv*100)).padStart(4)}%  `+
+            `的中${hits.length}/${arr.length}`);
+        };
+        console.log('\n  警告（10倍未満が2点以上）で分けた本線10点・通し');
+        row('警告あり', allW);
+        row('警告なし', allO);
+        console.log('      ※ これは配信時に警告を出したかどうかで分けただけ。');
+        console.log('         「警告ありは見送る」と決める前に、判定⑦の条件で確かめること。');
       }
       console.log('\n  ※ ここは「買ったレースだけ」の寄せ集め。良い日も悪い日も、');
       console.log('     レースを選んだ結果が入っている。買い方を変える根拠にはしないこと。');
