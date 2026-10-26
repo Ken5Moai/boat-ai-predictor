@@ -1520,7 +1520,21 @@ const RACES=[
  {reg:'4478',g:'A1',nat:6.08,loc:6.03,mot:33.62,bt:40.28,st:0.16,F:0,exST:0.05,exF:null,exT:6.76,tilt:-0.5,wt:48.7,entry:3,rec:[[2,.18,3]]},
  {reg:'5108',g:'B2',nat:2.75,loc:2.23,mot:37.78,bt:36.76,st:0.25,F:0,exST:0.05,exF:null,exT:6.7,tilt:-0.5,wt:47.7,entry:4,rec:[[3,.35,5],[1,.26,3]]},
  {reg:'5361',g:'B1',nat:3.41,loc:1.88,mot:33.47,bt:35.87,st:0.23,F:0,exST:0.04,exF:null,exT:6.75,tilt:-0.5,wt:49,entry:5,rec:[[2,.18,3],[1,.18,5]]},
- {reg:'5272',g:'B1',nat:4.94,loc:0,mot:39.32,bt:30.18,st:0.19,F:0,exST:0.03,exF:null,exT:6.71,tilt:-0.5,wt:47,entry:6,rec:[[3,.11,6],[2,.25,4]]}]}
+ {reg:'5272',g:'B1',nat:4.94,loc:0,mot:39.32,bt:30.18,st:0.19,F:0,exST:0.03,exF:null,exT:6.71,tilt:-0.5,wt:47,entry:6,rec:[[3,.11,6],[2,.25,4]]}]},
+{name:'桐生8R (10/26)',jcd:'01',rno:8,date:'2026-10-26',result:'5-1-3',pop:12,pay:3620,wind:null,ws:2,wave:1,temp:14,wtemp:18,
+ actualST:{1:.26,2:.27,3:.21,4:.24,5:.2,6:.16},
+ /* 2026-10-26 18:24 JST、predict.js で取得（締切18:43の18分前）。
+    展示は6艇ぶんそろっている。進入は展示進入。
+    本番進入は使わない（先読みになる）。
+    水面気象は直前情報ページの「水面気象情報 6R時点」の値。結果ページが出たら差し替える。
+    オッズは締切18分前のライブ値。レース後に締切時オッズへ取り直すこと。 */
+ B:[
+ {reg:'3334',g:'A2',nat:5.43,loc:6.58,mot:28.65,bt:31.13,st:0.2,F:0,exST:0.11,exF:null,exT:6.6,tilt:-0.5,wt:45.5,entry:1,rec:[[2,.29,4],[3,.17,2],[5,.22,4]]},
+ {reg:'5194',g:'B1',nat:4.54,loc:4.73,mot:38.41,bt:32.13,st:0.18,F:1,exST:0.37,exF:null,exT:6.74,tilt:-0.5,wt:44,entry:2,rec:[[6,.2,2],[4,.26,2]]},
+ {reg:'4484',g:'B1',nat:4.58,loc:4.1,mot:44.44,bt:32.52,st:0.21,F:0,exST:0.17,exF:null,exT:6.77,tilt:-0.5,wt:48.7,entry:3,rec:[[1,.32,"落"],[6,.3,4]]},
+ {reg:'5346',g:'B1',nat:2.96,loc:0,mot:40.51,bt:33.33,st:0.22,F:0,exST:0.13,exF:null,exT:6.71,tilt:-0.5,wt:46,entry:4,rec:[[6,.14,4],[5,.34,4]]},
+ {reg:'4347',g:'A2',nat:6.76,loc:0,mot:35.96,bt:45.79,st:0.18,F:0,exST:0.17,exF:null,exT:6.73,tilt:-0.5,wt:46.5,entry:5,rec:[[3,.29,2],[4,.26,2]]},
+ {reg:'5320',g:'B1',nat:3.75,loc:2.72,mot:36.09,bt:31.13,st:0.18,F:1,exST:0.15,exF:null,exT:6.65,tilt:-0.5,wt:47,entry:6,rec:[[2,.34,4],[3,.37,6]]}]}
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -4064,7 +4078,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点108% ／ 波乱8点だけ93% ／ 18点まとめて102%（91レース）。');
+        console.log('  実測 本線10点111% ／ 波乱8点だけ92% ／ 18点まとめて103%（92レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
