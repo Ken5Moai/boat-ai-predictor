@@ -164,7 +164,7 @@ ${lines.join(',\n')}]}`;
 };
 
 /* モデルは backtest.js 経由でしか呼ばない。ここは出力を抜き出すだけ。 */
-const show = (label, provisional) => {
+const show = (label, provisional, odds) => {
   const out = execFileSync(process.execPath,[path.join(ROOT,'backtest.js')],
     {encoding:'utf8', maxBuffer:64*1024*1024});
   const i = out.indexOf(`  ${NAME}\n`);
@@ -184,7 +184,7 @@ const show = (label, provisional) => {
        本線10点が当たったうち、当たっても赤字だったのは13/33（39%）
        10倍未満が0点  15レース ／ 1点 12 ／ 2点 19 ／ 3点 11 ／ 4点 6 */
   {
-    const m = out.slice(i, j).match(/本線10点\s+(.+)/);
+    const m = odds ? out.slice(i, j).match(/本線10点\s+(.+)/) : null;
     if(m){
       const expand = t => { const o=[];
         for(const term of t.trim().split(' / ')){ const [A,B,C]=term.split('-');
@@ -263,7 +263,7 @@ const grab = () => {
 let g = grab();
 log(`  展示 ${g.ready?'あり':'まだ（欠測のまま出します）'}　オッズ120通り（締切${g.min}分前）`);
 write(g.bf, g.od, g.min);
-show(g.ready ? `確定の買い目（締切${g.min}分前）` : `暫定の買い目（展示前・締切${g.min}分前）`, !g.ready);
+show(g.ready ? `確定の買い目（締切${g.min}分前）` : `暫定の買い目（展示前・締切${g.min}分前）`, !g.ready, g.od);
 
 if(!g.ready && !NOW_ONLY){
   log('');
@@ -282,7 +282,7 @@ if(!g.ready && !NOW_ONLY){
   }
   if(g.ready){
     write(g.bf, g.od, g.min);
-    show(`確定の買い目（展示あり・締切${g.min}分前）`, false);
+    show(`確定の買い目（展示あり・締切${g.min}分前）`, false, g.od);
   }
 }
 const oddsMin = g.min;
