@@ -21,6 +21,7 @@
    ここがやるのは、取得と pending.js への書き込みと、出力の抜き出しだけ。 */
 const fs=require('fs'), path=require('path'), {execFileSync}=require('child_process');
 const F=require('./fetch.js');
+const PLAN=require('./plan.js');
 const ROOT=__dirname;
 
 const [,, jcdArg, rnoArg, hdArg, ...flags] = process.argv;
@@ -163,6 +164,25 @@ ${lines.join(',\n')}]}`;
                                   bd.split('\n').map(x=>x?' '+x:x).join('\n').replace(/,\n$/,'}},\n'));
 };
 
+/* 買い目を vote-assist.js が読める形で書き出す。
+   組み立ては plan.js（ファイルも通信も触らない）。ここは書くだけ。 */
+const writePlan = (block, provisional) => {
+  const {plan, why} = PLAN.buildPlan(block, {
+    jcd:JCD, rno:RNO, date:`${HD.slice(0,4)}-${HD.slice(4,6)}-${HD.slice(6,8)}`,
+    race:NAME, provisional});
+  if(!plan){ log(`  ※ ${why}ので plan.json は書きません。`); return; }
+  const dir=path.join(ROOT,'tmp'); fs.mkdirSync(dir,{recursive:true});
+  const txt=JSON.stringify(plan,null,1);
+  fs.writeFileSync(path.join(dir,`plan-${JCD}-${RNO}-${HD}.json`), txt);
+  fs.writeFileSync(path.join(dir,'plan.json'), txt);
+  log('');
+  log(`  買い目を ${plan.main.length+plan.ana.length}点ぶん書き出しました`
+      + `${provisional?'（暫定。確定が出たら上書きします）':'（確定）'}`);
+  log('    tmp/plan.json');
+  log('    PCで  node vote-assist.js tmp/plan.json --dry  で中身を確かめられます。');
+  log('    金額は全点100円で書いてあります。変えるならファイルを直してください。');
+};
+
 /* モデルは backtest.js 経由でしか呼ばない。ここは出力を抜き出すだけ。 */
 const show = (label, provisional, odds) => {
   const out = execFileSync(process.execPath,[path.join(ROOT,'backtest.js')],
@@ -186,12 +206,7 @@ const show = (label, provisional, odds) => {
   {
     const m = odds ? out.slice(i, j).match(/本線10点\s+(.+)/) : null;
     if(m){
-      const expand = t => { const o=[];
-        for(const term of t.trim().split(' / ')){ const [A,B,C]=term.split('-');
-          for(const a of A) for(const b of B) for(const c of C)
-            if(a!==b && b!==c && a!==c) o.push(`${a}-${b}-${c}`); }
-        return [...new Set(o)]; };
-      const list = expand(m[1]);
+      const list = PLAN.expand(m[1]);
       const cost = list.length*100;
       const cheap = list.filter(k=>odds[k]!=null && odds[k]*100 < cost);
       log('');
@@ -201,9 +216,16 @@ const show = (label, provisional, odds) => {
       } else {
         log(`     当たっても¥${cost.toLocaleString()}に届かない組が ${cheap.length}点あります:`);
         log(`       ${cheap.map(k=>`${k} ${odds[k]}倍（¥${Math.round(odds[k]*100).toLocaleString()}）`).join(' / ')}`);
-        if(cheap.length>=2)
-          log('     ※ 昨日の集計では、10倍未満が2点以上のレースを見送ると回収率が上がりました');
-        log('       （116%→160%。ただし的中が8/27に減る数字なので、判定⑦として検証中です）');
+        /* ここには以前「10倍未満が2点以上のレースは見送ると回収率が上がる」と
+           書いていた。判定⑦として先に条件を書いて検証した結果、2026-10-26 に
+           逆の結論が出た（見送ると43% / 見送らないと72%）。
+           締切前にこの行を読んで見送られては困るので、決着した内容に差し替える。 */
+        if(cheap.length>=2){
+          log('     ※ 判定⑦（2026-10-26決着）では、ここが2点以上でも見送らないほうが');
+          log('       成績が良いと出ました（見送ると43% / 見送らないと72%）。');
+          log('       この表示は「当たっても取り返せない点がある」という事実の提示で、');
+          log('       見送りの勧めではありません。');
+        }
       }
       const best = (out.slice(i,j).match(/至極の一点\s+(\S+)/)||[])[1];
       if(best && odds[best]!=null)
@@ -211,6 +233,13 @@ const show = (label, provisional, odds) => {
       log('     ※ このオッズは締切前の値なので、締切までに動きます。');
     }
   }
+
+  /* vote-assist.js に渡す plan.json を書く。
+     これが無いと、締切前に18点を手で JSON に書き写すことになる。
+     2026-10-25 に7Rを買い逃したのは、手数が多かったからだった。
+     金額はここでは決めない（既定100円）。厚く賭けるなら人が書き換える。
+     確定版が出たら上書きするので、最後に残るのは常に確定版。 */
+  writePlan(out.slice(i, j), provisional);
 
   if(!provisional) return;
   /* 暫定がどれだけ悪いかは、backtest.js の節から読む（固定値で書かない）。 */
