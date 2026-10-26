@@ -18,6 +18,16 @@ const VENUE_IN_RATE = (()=>{
   let m; while((m = re.exec(src))) out[m[1]] = Number(m[2]);
   return out;
 })();
+/* 場コード → 場名。これも index.html の VENUES から読む（二重に持たない）。
+   2026-10-26 に桐生を 02 と打って出走表が取れなかった。02 は戸田。
+   コードと名前の対応がどこにも書いていないのが原因だったので、
+   ここで引けるようにし、出力には必ず場名を出す。 */
+const VENUE_NAME = (()=>{
+  const out = {};
+  const re = /'(\d{2})':\{name:'([^']+)'/g;
+  let m; while((m = re.exec(HTML))) out[m[1]] = m[2];
+  return out;
+})();
 
 // ---- 実際に走ったレース（結果つき） ----
 // rec は [進入コース, ST, 着順] の並び。新しい順ではなく出走表の並び（古い→新しい）。
@@ -1562,7 +1572,35 @@ const RACES=[
  {reg:'4853',g:'B1',nat:4.4,loc:6.43,mot:30.7,bt:35.58,st:0.22,F:0,exST:0.06,exF:null,exT:6.87,tilt:-0.5,wt:45,entry:3,rec:[[5,.23,4],[2,.32,2]]},
  {reg:'5153',g:'B1',nat:3.52,loc:2.76,mot:28.48,bt:33.8,st:0.16,F:1,exST:0.07,exF:null,exT:6.83,tilt:-0.5,wt:47,entry:4,rec:[[6,.03,3],[3,.32,6]]},
  {reg:'5334',g:'B1',nat:2.97,loc:1.78,mot:33.77,bt:26.8,st:0.18,F:1,exST:0.09,exF:null,exT:6.63,tilt:0,wt:46,entry:5,rec:[[1,.12,2],[6,.26,5]]},
- {reg:'5193',g:'A1',nat:6.95,loc:0,mot:32.37,bt:37.32,st:0.16,F:0,exST:0.03,exF:null,exT:6.76,tilt:0,wt:47,entry:6,rec:[[3,.15,1],[1,.23,1]]}]}
+ {reg:'5193',g:'A1',nat:6.95,loc:0,mot:32.37,bt:37.32,st:0.16,F:0,exST:0.03,exF:null,exT:6.76,tilt:0,wt:47,entry:6,rec:[[3,.15,1],[1,.23,1]]}]},
+{name:'桐生11R 予選特選(10/26)',jcd:'01',rno:11,date:'2026-10-26',result:'3-2-4',pop:18,pay:4350,wind:null,ws:0,wave:0,temp:14,wtemp:18,
+ actualST:{1:.06,2:.13,3:.1,4:.12,5:.18,6:.29},
+ /* 2026-10-26 19:59 JST、predict.js で取得（締切20:16の17分前）。
+    展示は6艇ぶんそろっている。進入は展示進入。
+    本番進入は使わない（先読みになる）。
+    水面気象は直前情報ページの「水面気象情報 9R時点」の値。結果ページが出たら差し替える。
+    オッズは締切17分前のライブ値。レース後に締切時オッズへ取り直すこと。 */
+ B:[
+ {reg:'5182',g:'B1',nat:4.07,loc:4.03,mot:26.95,bt:37.02,st:0.14,F:0,exST:0.04,exF:'F',exT:6.67,tilt:-0.5,wt:47,entry:1,rec:[[2,.07,1],[4,.15,5]]},
+ {reg:'4974',g:'A2',nat:5.48,loc:0,mot:44,bt:31.05,st:0.18,F:1,exST:0.19,exF:null,exT:6.68,tilt:-0.5,wt:47,entry:2,rec:[[3,.11,6],[6,.35,3],[1,.21,1]]},
+ {reg:'4611',g:'A1',nat:6.2,loc:6.2,mot:37.58,bt:34.56,st:0.15,F:0,exST:0.01,exF:null,exT:6.55,tilt:-0.5,wt:47,entry:3,rec:[[5,.33,5],[2,.27,6],[1,.16,1]]},
+ {reg:'3509',g:'B1',nat:3.66,loc:3.84,mot:36.49,bt:31.02,st:0.15,F:0,exST:0.05,exF:null,exT:6.72,tilt:-0.5,wt:49.3,entry:4,rec:[[2,.27,3],[1,.22,3]]},
+ {reg:'4990',g:'B2',nat:3.62,loc:4.22,mot:31.2,bt:39.07,st:0.21,F:0,exST:0.01,exF:'F',exT:6.65,tilt:-0.5,wt:47,entry:5,rec:[[4,.31,5],[3,.17,4]]},
+ {reg:'4690',g:'B2',nat:5.62,loc:4.94,mot:49.73,bt:38.84,st:null,F:0,exST:0.16,exF:'F',exT:6.56,tilt:0,wt:48.8,entry:6,rec:[[1,.25,1],[4,.12,3]]}]},
+{name:'桐生12R (10/26)',jcd:'01',rno:12,date:'2026-10-26',result:'1-3-2',pop:1,pay:670,wind:null,ws:2,wave:1,temp:14,wtemp:18,
+ actualST:{1:.12,2:.12,3:.11,4:.1,5:.07,6:.1},
+ /* 2026-10-26 20:28 JST、predict.js で取得（締切20:45の17分前）。
+    展示は6艇ぶんそろっている。進入は展示進入。
+    本番進入は使わない（先読みになる）。
+    水面気象は直前情報ページの「水面気象情報 10R時点」の値。結果ページが出たら差し替える。
+    オッズは締切17分前のライブ値。レース後に締切時オッズへ取り直すこと。 */
+ B:[
+ {reg:'4478',g:'A1',nat:6.08,loc:6.03,mot:33.62,bt:40.28,st:0.16,F:0,exST:0.11,exF:null,exT:6.8,tilt:-0.5,wt:48.7,entry:1,rec:[[2,.18,3],[3,.18,2]]},
+ {reg:'4825',g:'A1',nat:7.07,loc:6.27,mot:33.33,bt:40,st:0.14,F:1,exST:0.11,exF:null,exT:6.68,tilt:-0.5,wt:47.4,entry:2,rec:[[6,.14,4],[4,.14,1]]},
+ {reg:'4961',g:'A1',nat:6.96,loc:6.17,mot:32.18,bt:29.5,st:0.15,F:1,exST:0.09,exF:null,exT:6.63,tilt:-0.5,wt:47,entry:3,rec:[[5,.14,3],[2,.16,2]]},
+ {reg:'4738',g:'A2',nat:5.66,loc:5.71,mot:34.25,bt:44.7,st:0.16,F:1,exST:0.12,exF:null,exT:6.84,tilt:-0.5,wt:47,entry:4,rec:[[2,.25,2],[1,.24,1]]},
+ {reg:'4819',g:'A2',nat:4.81,loc:5.77,mot:44.1,bt:36.19,st:0.17,F:1,exST:0.16,exF:null,exT:6.62,tilt:0,wt:46.5,entry:5,rec:[[1,.17,2],[2,.19,5],[3,.23,1]]},
+ {reg:'5189',g:'A2',nat:5.43,loc:4,mot:41.87,bt:34.8,st:0.2,F:0,exST:0.13,exF:null,exT:6.73,tilt:0,wt:45,entry:6,rec:[[4,.25,3],[2,.15,1]]}]}
 ];
 
 function runWith(weightPatch, bandPatch, opt){
@@ -3454,6 +3492,95 @@ if(require.main===module){
     }
   }
 
+  /* 日別・場別の収支を、1場まるごとでなくても出す。
+     きっかけは運用のほう。毎晩「今日いくらだった？」を手で数えていて、
+     2026-10-26 は大村と桐生をまたいだので電卓仕事になった。
+     「まるごと1日」セクションは12レース揃った日しか出ないので、
+     途中参加の日は何も出ない。ここはレースが1本でも出す。
+
+     ただし、ここに出る数字は「その日に買ったレース」の寄せ集めで、
+     選り好みが入っている。買い方の良し悪しの証拠にはならない。
+     用途は「今日の答え合わせ」だけ。判断には全96レースの数字を使う。 */
+  console.log('\n=== 日別・場別の収支（答え合わせ用・選り好みあり） ===');
+  {
+    const byDay = new Map();
+    for(const r of RACES){
+      if(!r.date || !r.jcd || !r.rno || r.pay==null) continue;
+      const k = `${r.date}|${r.jcd}`;
+      if(!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(r);
+    }
+    const keys = [...byDay.keys()].sort();
+    if(!keys.length){
+      console.log('  結果の出ているレースがまだ無い。');
+    }else{
+      const toC = x => Object.entries(x.probOf).map(([combo,p])=>({combo,p}));
+      /* 日ごとの合計を最後にもう一度並べるので、先に貯めておく */
+      const totals = [];
+      for(const k of keys){
+        const [date,jcd] = k.split('|');
+        const list = [...byDay.get(k)].sort((a,b)=>a.rno-b.rno);
+        const names = new Set(list.map(r=>r.name));
+        const sub = base.filter(x=>names.has(x.name));
+        if(!sub.length) continue;
+        const rowOf = new Map(sub.map(x=>[x.name, x]));
+        console.log(`\n  ${date} ${VENUE_NAME[jcd] ?? '場コード'+jcd}  ${list.length}レース`);
+        console.log('      R   正解      払戻  人気  モデル順位  至極  本線  波乱');
+        let invM=0, backM=0, hitM=0, invA=0, backA=0, hitA=0, invB=0, backB=0, hitB=0;
+        for(const r of list){
+          const x = rowOf.get(r.name); if(!x) continue;
+          const pl = WIN.buyPlan(toC(x), {main:10, ana:8});
+          const res = String(r.result);
+          const inB = res===pl.best, inM = pl.main.includes(res), inA = pl.ana.includes(res);
+          invB += 100; if(inB){ backB += r.pay; hitB++; }
+          invM += pl.main.length*100; if(inM){ backM += r.pay; hitM++; }
+          invA += pl.ana.length*100;  if(inA){ backA += r.pay; hitA++; }
+          console.log(`      ${String(r.rno).padStart(2)}  ${res.padEnd(8)}`+
+            `¥${String(r.pay).padStart(6)}  ${String(r.pop ?? '—').padStart(3)}  `+
+            `${String(x.rank).padStart(8)}番目  `+
+            `${inB?'○ ':'× '}  ${inM?'○ ':'× '}  ${inA?'○':'×'}`);
+        }
+        const line = (label, inv, back, hit, n) => {
+          const d = back - inv;
+          console.log(`      ${label.padEnd(18)} 投資¥${String(inv).padStart(6)}  `+
+            `払戻¥${String(back).padStart(6)}  収支${d>=0?'+':'-'}¥${Math.abs(d).toLocaleString()}  `+
+            `回収率${String(inv?Math.round(back/inv*100):0).padStart(4)}%  的中${hit}/${n}`);
+        };
+        const n = list.length;
+        console.log('    この日の収支（1点100円）');
+        line('至極の一点（1点）', invB, backB, hitB, n);
+        line('本線（10点）',      invM, backM, hitM, n);
+        line('波乱（8点）',       invA, backA, hitA, n);
+        line('本線＋波乱（18点）', invM+invA, backM+backA, hitM+hitA, n);
+        totals.push({date, jcd, n, invM, backM, hitM, invA, backA, hitA});
+      }
+      /* 日をまたいだ合計。同じ日に2場まわった日はまとめて1行にする */
+      const byDate = new Map();
+      for(const t of totals){
+        if(!byDate.has(t.date)) byDate.set(t.date, []);
+        byDate.get(t.date).push(t);
+      }
+      console.log('\n  日ごとの合計（複数場まわった日はまとめ）');
+      console.log('      日付         場                 R   本線10点            18点');
+      for(const [date, ts] of [...byDate].sort()){
+        const n   = ts.reduce((a,c)=>a+c.n,0);
+        const iM  = ts.reduce((a,c)=>a+c.invM,0),  bM = ts.reduce((a,c)=>a+c.backM,0);
+        const hM  = ts.reduce((a,c)=>a+c.hitM,0);
+        const iAll= iM + ts.reduce((a,c)=>a+c.invA,0);
+        const bAll= bM + ts.reduce((a,c)=>a+c.backA,0);
+        const hAll= hM + ts.reduce((a,c)=>a+c.hitA,0);
+        const vs  = ts.map(t=>VENUE_NAME[t.jcd] ?? t.jcd).join('・');
+        const fmt = (i,b,h) => `${(b-i>=0?'+':'-')}¥${String(Math.abs(b-i).toLocaleString()).padEnd(7)}`+
+                               `${String(i?Math.round(b/i*100):0).padStart(4)}% ${h}/${n}`;
+        console.log(`      ${date}  ${vs.padEnd(16)}${String(n).padStart(3)}   `+
+                    `${fmt(iM,bM,hM)}   ${fmt(iAll,bAll,hAll)}`);
+      }
+      console.log('\n  ※ ここは「買ったレースだけ」の寄せ集め。良い日も悪い日も、');
+      console.log('     レースを選んだ結果が入っている。買い方を変える根拠にはしないこと。');
+      console.log('     根拠に使うのは全96レースの数字と、先に条件を書いた判定だけ。');
+    }
+  }
+
   /* 展示の情報を入れると、本当に読みが良くなるのか。
      きっかけは 2026-10-23 若松12R。展示が来る前の予想では正解 3-1-4 が4番目、
      展示（と進入変更）を入れ直したら12番目に下がり、本線10点から外れた。
@@ -4106,7 +4233,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点109% ／ 波乱8点だけ106% ／ 18点まとめて107%（94レース）。');
+        console.log('  実測 本線10点107% ／ 波乱8点だけ104% ／ 18点まとめて106%（96レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
