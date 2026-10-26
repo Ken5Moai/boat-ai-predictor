@@ -241,7 +241,25 @@ const peek = () => {
 const grab = () => {
   const g = peek();
   const od = F.parseOdds(get('odds3t'));
-  if(Object.keys(od).length!==120) throw new Error(`オッズが${Object.keys(od).length}通りしかない`);
+  /* オッズが120通りに満たないのは、欠場艇がいて5艇以下で走るとき。
+     2026-10-26 福岡6R で1号艇が欠場し、60通り（＝5艇）になった。
+     このモデルは6艇が前提で、枠ごとの重みも6艇ぶんで作ってある。
+     とくに1号艇が欠けると前提そのものが崩れるので、買い目は出さない。
+     落ちるのではなく、理由を言って止まる。 */
+  const ks = Object.keys(od);
+  if(ks.length !== 120){
+    const seen = new Set();
+    for(const k of ks) for(const d of k.split('-')) seen.add(d);
+    const missing = [1,2,3,4,5,6].filter(n=>!seen.has(String(n)));
+    log('');
+    log(`  このレースは ${ks.length}通りしかオッズがありません`+
+        `（${missing.length?missing.join('・')+'号艇が欠場。':'欠場艇あり。'}${6-missing.length}艇立て）。`);
+    log('  このモデルは6艇を前提に作ってあるので、買い目は出しません。');
+    if(missing.includes(1))
+      log('  とくに1号艇が欠けると、枠ごとの重みの前提そのものが崩れます。');
+    log('  記録にも残しません（6艇ぶんのデータが揃わないため）。');
+    process.exit(0);
+  }
   return {...g, od};
 };
 
