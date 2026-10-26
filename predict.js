@@ -200,6 +200,21 @@ const grab = () => {
   return {...g, od};
 };
 
+/* 締切まで間があるうちは、30秒おきに叩いても展示は出ない。
+   公式に無駄な負荷をかけるだけなので、20分前になるまで待つ。
+   実測では展示は締切12〜17分前に出る。 */
+{
+  let left = minsLeft();
+  while(left != null && left > 25){
+    const wait = Math.min(600, (left - 22) * 60);
+    log(`  締切まで間があるので ${Math.round(wait/60)}分待ちます（残り${left}分）。`);
+    sleep(wait);
+    /* 待っているあいだに締切がずれることがあるので、読み直す。 */
+    try{ refreshClose(get('beforeinfo')); }catch(e){}
+    left = minsLeft();
+  }
+}
+
 let g = grab();
 log(`  展示 ${g.ready?'あり':'まだ（欠測のまま出します）'}　オッズ120通り（締切${g.min}分前）`);
 write(g.bf, g.od, g.min);
