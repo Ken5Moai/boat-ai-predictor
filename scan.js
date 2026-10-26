@@ -55,8 +55,7 @@ for(const jcd of jcds){
     const cs = F.cells(html).filter(x=>x&&x!=='|');
     const ti = cs.findIndex(x=>/締切予定時刻/.test(x));
     const times = ti<0 ? [] : cs.slice(ti+1, ti+13).filter(x=>/^\d{1,2}:\d{2}$/.test(x));
-    const tcell = cs.find(x=>/\d+m$/.test(x) && /戦|選/.test(x));
-    const title = tcell ? tcell.replace(/\s*\d+m$/,'') : '';
+    const title = F.raceTitle(html) || '';   /* 取り方は fetch.js に移した */
     let boats=[];
     try{ boats = F.parseRacelist(html); }catch(e){}
     if(boats.length!==6) continue;

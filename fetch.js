@@ -59,6 +59,21 @@ const zen2han = s => String(s).replace(/[０-９]/g, c=>'０１２３４５６�
 const num = s => { const m = String(s).match(/-?\d+(\.\d+)?/); return m ? Number(m[0]) : null; };
 
 /* ---- 出走表 --------------------------------------------------------- */
+/* 番組名（「予選」「優勝戦」「一般戦」など）を出走表ページから取る。
+   backtest.js は優勝戦・準優・特選・選抜をレース名の文字で見分けているので、
+   取り込んだレースにこれが入っていないと、全部「ふつうのレース」になる。
+   番組名のセルは「◯◯戦 1800m」のように距離がくっついている。
+   （この取り方は scan.js にあったものをこちらに移した。二重に持たない） */
+function raceTitle(html){
+  const cs = cells(html).filter(x=>x && x!=='|');
+  /* 番組名のセルは「◯◯ 1800m」。距離で終わるセルはこの1つだけなので、
+     それだけを手がかりにする。最初は「戦|選を含むこと」も条件にしていたが、
+     「一般」「カタメン１予選」のような番組名が落ちた（2026-10-26）。 */
+  const hits = cs.filter(x=>/\d+m$/.test(x));
+  if(hits.length !== 1) return null;    /* 1つに絞れなければ取らない（推測しない） */
+  return hits[0].replace(/\s*\d+m$/,'').trim() || null;
+}
+
 function parseRacelist(html){
   const c = cells(html);
   const boats = [];
@@ -247,6 +262,7 @@ async function fetchRace(jcd, rno, hd){
   const before    = get('beforeinfo', jcd, rno, hd); await sleep(1200);
   const odds3t    = get('odds3t',     jcd, rno, hd); await sleep(1200);
   const result    = get('raceresult', jcd, rno, hd);
+  const title = raceTitle(racelist);
   const L = parseRacelist(racelist);
   const B = parseBefore(before);
   const O = parseOdds(odds3t);
@@ -260,7 +276,7 @@ async function fetchRace(jcd, rno, hd){
              exST: ex.st ?? null, exF: ex.f ?? null,
              entry: B.entry[i+1] ?? null };
   });
-  return { jcd:String(jcd).padStart(2,'0'), rno, hd, boats, odds:O, result:R, before:B };
+  return { jcd:String(jcd).padStart(2,'0'), rno, hd, title, boats, odds:O, result:R, before:B };
 }
 
 /* ---- 貼り付け用に出す ------------------------------------------------ */
@@ -302,7 +318,7 @@ function emit(race, name){
   console.log('  },');
 }
 
-module.exports = { fetchRace, parseRacelist, parseBefore, parseOdds, parseResult, cells, zen2han };
+module.exports = { fetchRace, raceTitle, parseRacelist, parseBefore, parseOdds, parseResult, cells, zen2han };
 
 if(require.main === module) (async ()=>{
   const a = process.argv.slice(2);
