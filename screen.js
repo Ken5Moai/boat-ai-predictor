@@ -17,7 +17,7 @@
    だから狙うのは「荒れなさそうなレース」のほう。
    ただし n=7。まだ採用条件を満たしていない（20レースで判定する）。 */
 const fs=require('fs'),path=require('path'),{JSDOM}=require('jsdom');
-const CARD=require('./card.js');
+const CARD=require('./data/card.js');
 const HTML=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
 
 const dom=new JSDOM(HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
@@ -85,7 +85,7 @@ for(const R of CARD.races){
    node screen.js --emit  で貼り付け用の pending ブロックを出す。
    以後、買い目は手で書かない。 */
 {
-  const SC=require('./screened.js');
+  const SC=require('./data/screened.js');
   const pend=(SC.pending||[]).filter(e=>e.date===CARD.date);
   let bad=0;
   for(const e of pend){
@@ -112,7 +112,7 @@ if(process.argv.includes('--emit')){
   /* 買うレースを「外にA級なし」に限らないときのために、全レース出す。
      group は結果が出たあとに picked / avoided のどちらへ移すかの目印。
      どちらに入れるかは card.js の級別で決まるので、人が選び直せない。 */
-  const SCe=require('./screened.js');
+  const SCe=require('./data/screened.js');
   const done=new Set([...SCe, ...(SCe.avoided||[])]
     .filter(e=>e.date===CARD.date).map(e=>e.rno));
   /* もう結果を入れたレースは出さない。上書きして記録を消さないため。 */
@@ -139,7 +139,7 @@ if(!pick.length){
   /* 配当の実測。最初の28レースの集計では中央値¥790で「安い」と書いていたが、
      2026-09-25の三国で1R ¥8,940・2R ¥6,270 が出て前提が崩れた。
      ここは書き換わる値なので、そのつど screened.js から数え直して出す。 */
-  const P=require('./screened.js').map(r=>r.pay).sort((a,b)=>a-b);
+  const P=require('./data/screened.js').map(r=>r.pay).sort((a,b)=>a-b);
   const med=P.length%2 ? P[(P.length-1)/2] : (P[P.length/2-1]+P[P.length/2])/2;
   console.log(`\n  ※ このグループの配当 実測${P.length}件  中央値¥${med.toLocaleString()}  `+
               `最高¥${P[P.length-1].toLocaleString()}  最低¥${P[0].toLocaleString()}`);
@@ -160,7 +160,7 @@ console.log(`  ${avoid.map(r=>r.rno+'R').join(' ')}`);
    カードがある日は12レース全部をどちらかに入れる決まりにして、
    ここで取りこぼしを検出する（一部だけ拾うと選り好みになる）。 */
 {
-  const SC=require('./screened.js');
+  const SC=require('./data/screened.js');
   const AV=SC.avoided||[];
   const day=rows.map(r=>r.rno);
   const inPicked=new Set(SC.filter(e=>e.date===CARD.date).map(e=>e.rno));
@@ -203,7 +203,7 @@ console.log(`  ${avoid.map(r=>r.rno+'R').join(' ')}`);
 
 /* ここまでの成績。採用するかどうかはここで決まる。 */
 {
-  const SC = require('./screened.js');
+  const SC = require('./data/screened.js');
   const calc = a => {
     const inv = a.length*600;
     const ret = a.reduce((s,r)=>s+(r.rank<=6?r.pay:0), 0);

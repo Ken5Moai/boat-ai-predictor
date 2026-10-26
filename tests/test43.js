@@ -15,7 +15,9 @@ const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.lo
 const ROOT=path.join(__dirname,'..');
 const HTML=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
 const BT=fs.readFileSync(path.join(ROOT,'backtest.js'),'utf8');
-const RACES=eval('['+BT.match(/const RACES=\[([\s\S]*?)\n\];\n/)[1]+']');
+/* レース記録は data/races.js（非公開リポジトリ boat-ai-data）に移した。
+   backtest.js のほうはコードの検査に使うので、別に読む。 */
+const RACES=require(path.join(ROOT,'data','races.js'));
 
 function report(R){
   const dom=new JSDOM(HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',

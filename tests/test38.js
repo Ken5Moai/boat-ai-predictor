@@ -16,10 +16,10 @@ let pass=0,fail=0;
 const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.log('  ✗ FAIL: '+m);} };
 
 const DIR=path.join(__dirname,'..');
-const src=fs.readFileSync(path.join(DIR,'backtest.js'),'utf8');
-const from=src.indexOf('const RACES=['), to=src.indexOf('\n];',from);
+const src=fs.readFileSync(path.join(DIR,'data','races.js'),'utf8');
+const from=src.indexOf('module.exports = ['), to=src.indexOf('\n];',from);
 if(from<0||to<0){ console.log('  ✗ FAIL: RACES を取り出せない'); process.exit(1); }
-const RACES=vm.runInNewContext(src.slice(from+'const RACES='.length, to+2));
+const RACES=vm.runInNewContext(src.slice(from+'module.exports ='.length, to+2));
 
 console.log('\n=== 同じ日に2回以上走った選手の出走表が食い違っていないか ===');
 const FIELDS=['g','nat','loc','mot','bt','st','F'];

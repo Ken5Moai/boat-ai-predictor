@@ -125,7 +125,7 @@ const write = (before, odds, oddsMin) => {
     オッズは締切${oddsMin}分前のライブ値。レース後に締切時オッズへ取り直すこと。 */
  B:[
 ${lines.join(',\n')}]}`;
-  let p=fs.readFileSync(path.join(ROOT,'pending.js'),'utf8');
+  let p=fs.readFileSync(path.join(ROOT,'data','pending.js'),'utf8');
   const at=p.indexOf(`{name:'${NAME}'`);
   if(at>=0){
     let end=p.indexOf("\n{name:'", at); if(end<0) end=p.lastIndexOf('\n];');
@@ -139,13 +139,13 @@ ${lines.join(',\n')}]}`;
       ? p.replace(/module\.exports = \[\s*\];?\s*$/, 'module.exports = [\n'+block+'\n];\n')
       : p.replace(/\n\];\s*$/, ',\n'+block+'\n];\n');
   }
-  fs.writeFileSync(path.join(ROOT,'pending.js'), p);
+  fs.writeFileSync(path.join(ROOT,'data','pending.js'), p);
   delete require.cache[require.resolve(path.join(ROOT,'pending.js'))];
   const P=require(path.join(ROOT,'pending.js'));
   if(P.some(r=>!r)) throw new Error('pending.js に穴ができた');
 
   const upsertOdds = (file, wrap) => {
-    let t=fs.readFileSync(path.join(ROOT,file),'utf8');
+    let t=fs.readFileSync(path.join(ROOT,'data',file),'utf8');
     const ks=Object.keys(odds);
     let body='';
     for(let a2=1;a2<=6;a2++) body += ' '+ks.filter(k=>k[0]===String(a2)).sort().map(k=>`'${k}':${odds[k]}`).join(',')+',\n';
@@ -157,7 +157,7 @@ ${lines.join(',\n')}]}`;
     } else {
       t = t.replace(/module\.exports = \{\n/, 'module.exports = {\n'+blk);
     }
-    fs.writeFileSync(path.join(ROOT,file), t);
+    fs.writeFileSync(path.join(ROOT,'data',file), t);
   };
   upsertOdds('odds.js',      bd => `  '${NAME}': {\n`+bd.replace(/,\n$/,'},\n'));
   upsertOdds('odds-live.js', bd => `  '${NAME}': { minutes: ${oddsMin}, odds: {\n`+

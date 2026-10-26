@@ -109,7 +109,7 @@ if(DRY){ console.log('\n--dry なので何も書いていません。'); process
 if(!add.length){ console.log('\n足すものがありません。'); process.exit(0); }
 
 /* ---- 書く。書いたあとで必ず読み直して確かめる ---------------------- */
-const btPath=path.join(__dirname,'backtest.js'), odPath=path.join(__dirname,'odds.js');
+const btPath=path.join(__dirname,'data','races.js'), odPath=path.join(__dirname,'data','odds.js');
 const btBefore=fs.readFileSync(btPath,'utf8'), odBefore=fs.readFileSync(odPath,'utf8');
 const nBefore=BT.RACES.length;
 
@@ -118,7 +118,7 @@ const END=/\n\];\s*\n\s*\/\* ---- 実オッズ/;
 let bt=btBefore;
 const endRe=/^\];$/m;
 const marker='\n/* ---- ここから node absorb-day.js '+HD+' で足したぶん ---- */\n';
-const racesEnd=bt.indexOf('\n];', bt.indexOf('const RACES=['));
+const racesEnd=bt.indexOf('\n];', bt.indexOf('module.exports = ['));
 if(racesEnd<0){ console.log('✗ RACES の終わりが見つからない。何も書いていない。'); process.exit(1); }
 bt = bt.slice(0,racesEnd) + ',\n' + marker + add.map(a=>a.block).join(',\n') + bt.slice(racesEnd);
 
@@ -133,8 +133,9 @@ fs.writeFileSync(btPath,bt); fs.writeFileSync(odPath,od);
 let ok=true;
 try{
   delete require.cache[require.resolve('./backtest.js')];
-  delete require.cache[require.resolve('./odds.js')];
-  const B2=require('./backtest.js'), O2=require('./odds.js');
+  delete require.cache[require.resolve('./data/races.js')];
+  delete require.cache[require.resolve('./data/odds.js')];
+  const B2=require('./backtest.js'), O2=require('./data/odds.js');
   const n2=B2.RACES.length;
   if(n2!==nBefore+add.length){ console.log(`✗ レース数が ${nBefore}→${n2}（${nBefore+add.length} のはず）`); ok=false; }
   if(B2.RACES.some(r=>r==null)){ console.log('✗ 配列に穴がある'); ok=false; }

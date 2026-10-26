@@ -14,8 +14,8 @@ let pass=0,fail=0;
 const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.log('  ✗ FAIL: '+m);} };
 
 const DIR=path.join(__dirname,'..');
-const P=require(path.join(DIR,'payouts.js'));
-const src=fs.readFileSync(path.join(DIR,'payouts.js'),'utf8');
+const P=require(path.join(DIR,'data','payouts.js'));
+const src=fs.readFileSync(path.join(DIR,'data','payouts.js'),'utf8');
 const all=[]; for(const v of P) for(const [rno,pay,pop] of v.rows) all.push({venue:v.venue,rno,pay,pop});
 
 console.log('\n書き写しの形');
@@ -73,7 +73,7 @@ ok(waka.find(r=>r[0]===12)[1]===1030,
    '若松12Rの払戻¥1,030が一致（1-2-4の10.3倍）');
 
 console.log('\n都合のいい範囲だけを見ない作り');
-const out=execFileSync(process.execPath,[path.join(DIR,'payouts.js')],{encoding:'utf8'});
+const out=execFileSync(process.execPath,[path.join(DIR,'data','payouts.js')],{encoding:'utf8'});
 ok(okp.filter(x=>x.pop===1).length>=50,
    `1番人気で決まった回が十分ある（${okp.filter(x=>x.pop===1).length}件）`);
 ok(/1〜  1番人気/.test(out) && /61〜120番人気/.test(out),

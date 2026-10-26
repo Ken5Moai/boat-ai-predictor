@@ -21,11 +21,11 @@ const DIR=path.join(__dirname,'..');
 const fix=n=>zlib.gunzipSync(fs.readFileSync(
   path.join(__dirname,'fixtures',`karatsu1R_20261020_${n}.html.gz`))).toString('utf8');
 
-const src=fs.readFileSync(path.join(DIR,'backtest.js'),'utf8');
-const from=src.indexOf('const RACES=['), to=src.indexOf('\n];',from);
-const RACES=vm.runInNewContext(src.slice(from+'const RACES='.length,to+2));
+const src=fs.readFileSync(path.join(DIR,'data','races.js'),'utf8');
+const from=src.indexOf('module.exports = ['), to=src.indexOf('\n];',from);
+const RACES=vm.runInNewContext(src.slice(from+'module.exports ='.length,to+2));
 const mine=RACES.find(r=>r.name==='唐津1R 予選(10/20)');
-const ODDS=require(path.join(DIR,'odds.js'))['唐津1R 予選(10/20)'];
+const ODDS=require(path.join(DIR,'data','odds.js'))['唐津1R 予選(10/20)'];
 
 const L=F.parseRacelist(fix('racelist'));
 const B=F.parseBefore(fix('beforeinfo'));

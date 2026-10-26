@@ -71,7 +71,7 @@ ok(/【判定】/.test(out), '採用の判定が出ている');
 
 /* 成績の集計が rank で決まっていること。
    手書きの picks で数えていると、書き間違いがそのまま成績になる。 */
-const scr=fs.readFileSync(path.join(DIR,'screened.js'),'utf8');
+const scr=fs.readFileSync(path.join(DIR,'data','screened.js'),'utf8');
 ok(/rank:\s*5/.test(scr) && /pay:8940/.test(scr),
    '三国1Rは rank:5 の的中として記録されている（モデルの順位で数える）');
 ok(/rank:\s*18/.test(scr) && /pay:6270/.test(scr),
@@ -97,7 +97,7 @@ ok(split(RS,[3],[4])===true,       '外にA級ありを picked 側に入れた�
 ok(split(RS,[1],[2])===true,       '外にA級なしを avoided 側に入れたら止まる');
 ok(split(RS,[1],[])===false,       'まだ結果を入れていないレースがあっても止めない');
 
-const SC=require(path.join(DIR,'screened.js'));
+const SC=require(path.join(DIR,'data','screened.js'));
 ok(Array.isArray(SC.avoided)&&SC.avoided.length>0, '避けたほうの記録が存在する');
 ok(SC.avoided.every(r=>r.rank!=null&&r.pay!=null&&r.rno!=null),
    '避けたほうの記録に rank・pay・rno がそろっている');

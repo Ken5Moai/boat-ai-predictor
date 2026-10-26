@@ -12,7 +12,8 @@ const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.lo
 
 const DIR=path.join(__dirname,'..');
 const BT=path.join(DIR,'backtest.js');
-const PEND=path.join(DIR,'pending.js');
+const RACES_FILE=path.join(DIR,'data','races.js');
+const PEND=path.join(DIR,'data','pending.js');
 const src=fs.readFileSync(BT,'utf8');
 const pendSrc=fs.readFileSync(PEND,'utf8');
 
@@ -71,10 +72,10 @@ function dupKeys(src){
 console.log('\nodds.js の見出しの重複');
 ok(dupKeys("module.exports={\n 'A': {\n 'B': {\n}").length===0, '重複が無ければ通る');
 ok(dupKeys("module.exports={\n 'A': {\n 'A': {\n}")[0]==='A', '同じ名前が2回あれば見つかる');
-const oddsSrc=fs.readFileSync(path.join(DIR,'odds.js'),'utf8');
+const oddsSrc=fs.readFileSync(path.join(DIR,'data','odds.js'),'utf8');
 ok(dupKeys(oddsSrc).length===0, 'いまの odds.js に重複した見出しが無い');
 const names=[...oddsSrc.matchAll(/^\s*'([^']+)'\s*:\s*\{/gm)].map(m=>m[1]);
-ok(names.length===Object.keys(require(path.join(DIR,'odds.js'))).length,
+ok(names.length===Object.keys(require(path.join(DIR,'data','odds.js'))).length,
    '見出しの数と読み込めたレース数が一致する（消えていない）');
 ok(/odds\.js に同じレース名が2回書かれています/.test(src),
    'backtest.js にその検査が入っている');
@@ -87,9 +88,11 @@ ok(/odds\.js に同じレース名が2回書かれています/.test(src),
 console.log('\n名前と中身（場・レース番号）');
 {
   const vm2=require('vm');
-  const bt=fs.readFileSync(BT,'utf8');
-  const a=bt.indexOf('const RACES=['), b2=bt.indexOf('\n];',a);
-  const RACES=vm2.runInNewContext(bt.slice(a+'const RACES='.length,b2+2));
+  /* レース記録は data/races.js に移した（非公開リポジトリ boat-ai-data）。
+     ここは配列に穴が無いかを見たいので、require ではなく本文から組み立てる。 */
+  const bt=fs.readFileSync(RACES_FILE,'utf8');
+  const a=bt.indexOf('module.exports = ['), b2=bt.indexOf('\n];',a);
+  const RACES=vm2.runInNewContext(bt.slice(a+'module.exports ='.length,b2+2));
   const VEN={'01':'桐生','04':'平和島','10':'三国','13':'尼崎','18':'徳山',
              '19':'下関','20':'若松','23':'唐津','24':'大村'};
   let ng=0;
@@ -123,10 +126,14 @@ console.log('\n=== 配列に穴（undefined）が開いていないか ===');
     ok(holes===0, `${label} に穴が無い（${arr.length}件）`);
     ok(badB===0,  `${label} はすべて6艇ぶん持っている`);
   };
-  const BT = fs.readFileSync(path.join(__dirname,'..','backtest.js'),'utf8');
-  const RACES_ = eval('['+BT.match(/const RACES=\[([\s\S]*?)\n\];\n/)[1]+']');
+  /* 配列の穴は require では見えない（穴は undefined として読めてしまう）。
+     本文から組み立てて確かめる。レース記録は data/races.js に移した。 */
+  const RSRC = fs.readFileSync(path.join(__dirname,'..','data','races.js'),'utf8');
+  const m_ = RSRC.match(/module\.exports = \[([\s\S]*?)\n\];/);
+  if(!m_) throw new Error('data/races.js から RACES を取り出せない');
+  const RACES_ = eval('['+m_[1]+']');
   look('RACES', RACES_);
-  const PENDING = require(path.join(__dirname,'..','pending.js'));
+  const PENDING = require(path.join(__dirname,'..','data','pending.js'));
   look('PENDING', PENDING);
 }
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);

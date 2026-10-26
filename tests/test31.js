@@ -13,7 +13,7 @@ const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.lo
 
 const DIR=path.join(__dirname,'..');
 const HTML=fs.readFileSync(path.join(DIR,'index.html'),'utf8');
-const ODDS=require(path.join(DIR,'odds.js'))['若松11R 準優勝戦'];
+const ODDS=require(path.join(DIR,'data','odds.js'))['若松11R 準優勝戦'];
 const dom=new JSDOM(HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
  beforeParse(w){w.Tesseract={createWorker:async()=>({})};w.fetch=async()=>{throw new Error('x')};w.alert=()=>{}}});
 const w=dom.window,d=w.document;

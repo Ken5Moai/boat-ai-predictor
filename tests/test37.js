@@ -17,14 +17,14 @@ let pass=0,fail=0;
 const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.log('  ✗ FAIL: '+m);} };
 
 const DIR=path.join(__dirname,'..');
-const ODDS=require(path.join(DIR,'odds.js'));
+const ODDS=require(path.join(DIR,'data','odds.js'));
 
 /* backtest.js は読み込むだけで全部走ってしまうので、RACES の部分だけ取り出す。 */
-const src=fs.readFileSync(path.join(DIR,'backtest.js'),'utf8');
-const from=src.indexOf('const RACES=[');
+const src=fs.readFileSync(path.join(DIR,'data','races.js'),'utf8');
+const from=src.indexOf('module.exports = [');
 const to=src.indexOf('\n];', from);
 if(from<0||to<0){ console.log('  ✗ FAIL: backtest.js から RACES を取り出せない'); process.exit(1); }
-const RACES=vm.runInNewContext(src.slice(from+'const RACES='.length, to+2));
+const RACES=vm.runInNewContext(src.slice(from+'module.exports ='.length, to+2));
 
 const ALL=[];
 for(let a=1;a<=6;a++)for(let b=1;b<=6;b++)for(let c=1;c<=6;c++)

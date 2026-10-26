@@ -27,7 +27,7 @@ const get = (page, jcd, rno, hd) => {
 };
 const sleep = sec => { try{ execFileSync('sleep',[String(sec)]); }catch(e){} };
 
-const PENDING = require('./pending.js');
+const PENDING = require('./data/pending.js');
 const targets = PENDING.filter(r => r && (!only || r.name===only));
 if(!targets.length){ console.log('対象がありません。'); process.exit(0); }
 
@@ -63,7 +63,7 @@ for(const R of targets){
   }
 
   /* --- pending から取り出す --- */
-  let p=fs.readFileSync(path.join(ROOT,'pending.js'),'utf8');
+  let p=fs.readFileSync(path.join(ROOT,'data','pending.js'),'utf8');
   const at=p.indexOf(`{name:'${R.name}'`);
   if(at<0){ hold('pending.js に見つかりません'); continue; }
   let end=p.indexOf("\n{name:'", at); if(end<0) end=p.lastIndexOf('\n];');
@@ -83,13 +83,13 @@ for(const R of targets){
   if(/result:null/.test(blk)){ hold('result が置き換わっていません'); continue; }
   if(/,ws:null,|,wave:null,/.test(blk)){ hold('気象が置き換わっていません'); continue; }
 
-  /* --- backtest.js へ足す --- */
-  let b=fs.readFileSync(path.join(ROOT,'backtest.js'),'utf8');
+  /* --- data/races.js へ足す（レース記録は非公開リポジトリ側） --- */
+  let b=fs.readFileSync(path.join(ROOT,'data','races.js'),'utf8');
   const close=b.indexOf('\n];\n');
   const newB=b.slice(0,close)+',\n'+blk+b.slice(close);
 
   /* --- 締切時オッズに差し替える --- */
-  let oj=fs.readFileSync(path.join(ROOT,'odds.js'),'utf8');
+  let oj=fs.readFileSync(path.join(ROOT,'data','odds.js'),'utf8');
   const ks=Object.keys(odds);
   let o=`  '${R.name}': {\n`;
   for(let a=1;a<=6;a++) o+=' '+ks.filter(k=>k[0]===String(a)).sort().map(k=>`'${k}':${odds[k]}`).join(',')+',\n';
@@ -112,9 +112,9 @@ for(const R of targets){
   }catch(e){ fs.existsSync(tmp)&&fs.unlinkSync(tmp); hold(`書き込み前の検算で止めました（${e.message}）`); continue; }
   fs.unlinkSync(tmp);
 
-  fs.writeFileSync(path.join(ROOT,'pending.js'), newP);
-  fs.writeFileSync(path.join(ROOT,'backtest.js'), newB);
-  fs.writeFileSync(path.join(ROOT,'odds.js'), newO);
+  fs.writeFileSync(path.join(ROOT,'data','pending.js'), newP);
+  fs.writeFileSync(path.join(ROOT,'data','races.js'), newB);
+  fs.writeFileSync(path.join(ROOT,'data','odds.js'), newO);
   delete require.cache[require.resolve(path.join(ROOT,'pending.js'))];
   if(require(path.join(ROOT,'pending.js')).some(x=>!x)) throw new Error('pending.js に穴ができた');
   console.log(`  ${R.name}: ${res.result} ¥${res.pay}（${res.pop}番人気）を記録しました`);

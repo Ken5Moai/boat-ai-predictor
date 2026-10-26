@@ -15,7 +15,9 @@ const fs=require('fs'),path=require('path');
 let pass=0,fail=0;
 const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.log('  ✗ FAIL: '+m);} };
 const BT=fs.readFileSync(path.join(__dirname,'..','backtest.js'),'utf8');
-const RACES=eval('['+BT.match(/const RACES=\[([\s\S]*?)\n\];\n/)[1]+']');
+/* レース記録は data/races.js（非公開リポジトリ boat-ai-data）に移した。
+   backtest.js のほうはコードの検査に使うので、別に読む。 */
+const RACES=require(path.join(__dirname,'..','data','races.js'));
 
 console.log('=== 穴の判定（⑤⑥）の条件が残っているか ===');
 const upset=BT.match(/const PREREG_UPSET_NAMES = new Set\(\[([\s\S]*?)\]\);/);

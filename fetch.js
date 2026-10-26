@@ -294,7 +294,7 @@ function emit(race, name){
         .map(l=>`${l}:${dot(R.actualST[l])}`).join(',')}},\n` : '';
   const ref = R.refund.length ? ` refund:[${R.refund.join(',')}],\n` : '';
   const f = (v,dp)=> v==null ? 'null' : Number(v).toFixed(dp);
-  console.log(`\n/* ---- backtest.js の RACES に貼る ---- */`);
+  console.log(`\n/* ---- data/races.js に貼る ---- */`);
   console.log(`{name:'${name}',jcd:'${race.jcd}',rno:${race.rno},date:'${d}',`
     + `result:'${R.result}',pop:${R.pop},pay:${R.pay},`);
   console.log(ref + st + ` wind:null,ws:${R.ws},wave:${R.wave},temp:${R.temp},wtemp:${R.wtemp},`);
@@ -310,7 +310,7 @@ function emit(race, name){
       + `${typeof r[2]==='number'?r[2]:`'${r[2]}'`}]`).join(',')}]}${i<5?',':']},'}`);
   });
   const keys = Object.keys(race.odds);
-  console.log(`\n/* ---- odds.js に貼る（${keys.length}通り） ---- */`);
+  console.log(`\n/* ---- data/odds.js に貼る（${keys.length}通り） ---- */`);
   console.log(`  '${name}': {`);
   const lines = [];
   for(let a=1;a<=6;a++) for(let b=1;b<=6;b++){
@@ -340,10 +340,8 @@ if(require.main === module) (async ()=>{
 
 /* ---- 突き合わせ ------------------------------------------------------ */
 async function verify(limit){
-  const src = fs.readFileSync(path.join(__dirname,'backtest.js'),'utf8');
-  const from = src.indexOf('const RACES=['), to = src.indexOf('\n];', from);
-  const RACES = vm.runInNewContext(src.slice(from+'const RACES='.length, to+2));
-  const ODDS = require(path.join(__dirname,'odds.js'));
+  const RACES = require(path.join(__dirname,'data','races.js'));
+  const ODDS = require(path.join(__dirname,'data','odds.js'));
   let target = RACES.filter(r=>r.date && r.jcd && r.rno);
   if(limit) target = target.slice(0, limit);
   console.log(`手で書き写した ${target.length}レースを、公式から取り直して突き合わせます。\n`);
