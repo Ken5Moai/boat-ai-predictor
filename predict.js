@@ -130,7 +130,13 @@ ${lines.join(',\n')}]}`;
     let end=p.indexOf("\n{name:'", at); if(end<0) end=p.lastIndexOf('\n];');
     p = p.slice(0,at) + block + p.slice(end);
   } else {
-    p = p.replace(/\n\];\s*$/, ',\n'+block+'\n];\n');
+    /* 結果待ちが0件のときは配列が空なので、カンマを付けると先頭に穴ができる。
+       2026-10-26 福岡1R で実際に起きた（前夜に全部記録して空になっていた）。
+       中身があるかどうかで分ける。 */
+    const empty = /module\.exports = \[\s*\];?\s*$/.test(p);
+    p = empty
+      ? p.replace(/module\.exports = \[\s*\];?\s*$/, 'module.exports = [\n'+block+'\n];\n')
+      : p.replace(/\n\];\s*$/, ',\n'+block+'\n];\n');
   }
   fs.writeFileSync(path.join(ROOT,'pending.js'), p);
   delete require.cache[require.resolve(path.join(ROOT,'pending.js'))];
