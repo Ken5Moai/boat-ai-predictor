@@ -280,12 +280,18 @@ async function fetchRace(jcd, rno, hd){
 }
 
 /* ---- 貼り付け用に出す ------------------------------------------------ */
+/* 0.18 を .18 と書くための変換。
+   以前は String(v).replace(/^0/,'') でやっていたが、v がちょうど 0 のとき
+   空文字になり `exST:,` `6:}` という壊れた行を作っていた（2026-10-26）。
+   展示STが 0.00 のレース、本番STが 0 のレースで実際に起きる。
+   先頭が "0." のときだけ 0 を落とす。 */
+const dot = v => v==null ? 'null' : (String(v).startsWith('0.') ? String(v).slice(1) : String(v));
 function emit(race, name){
   const d = `${race.hd.slice(0,4)}-${race.hd.slice(4,6)}-${race.hd.slice(6,8)}`;
   const R = race.result;
   const st = Object.keys(R.actualST).length
     ? ` actualST:{${[1,2,3,4,5,6].filter(l=>R.actualST[l]!=null)
-        .map(l=>`${l}:${String(R.actualST[l]).replace(/^0/,'')}`).join(',')}},\n` : '';
+        .map(l=>`${l}:${dot(R.actualST[l])}`).join(',')}},\n` : '';
   const ref = R.refund.length ? ` refund:[${R.refund.join(',')}],\n` : '';
   const f = (v,dp)=> v==null ? 'null' : Number(v).toFixed(dp);
   console.log(`\n/* ---- backtest.js の RACES に貼る ---- */`);
@@ -296,11 +302,11 @@ function emit(race, name){
   race.boats.forEach((b,i)=>{
     console.log(` {reg:'${b.reg}',g:'${b.g}',nat:${f(b.nat,2)},loc:${f(b.loc,2)},`
       + `mot:${f(b.mot,2)},bt:${f(b.bt,2)},st:${b.st==null?'null':f(b.st,2)},F:${b.F},`
-      + `exST:${b.exST==null?'null':String(b.exST).replace(/^0/,'')},`
+      + `exST:${dot(b.exST)},`
       + `exF:${b.exF?"'F'":'null'},exT:${f(b.exT,2)},tilt:${f(b.tilt,1)},wt:${f(b.wt,1)},`
       + (b.adj ? `adj:${f(b.adj,1)},` : '')
       + (b.parts ? `parts:'${b.parts}',` : '')
-      + `entry:${b.entry},rec:[${b.rec.map(r=>`[${r[0]},${String(r[1]).replace(/^0/,'')},`
+      + `entry:${b.entry},rec:[${b.rec.map(r=>`[${r[0]},${dot(r[1])},`
       + `${typeof r[2]==='number'?r[2]:`'${r[2]}'`}]`).join(',')}]}${i<5?',':']},'}`);
   });
   const keys = Object.keys(race.odds);

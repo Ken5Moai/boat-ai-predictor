@@ -74,10 +74,21 @@ for(const r of RACES){
   }
   if(typeof r.pop==='number'){
     const list = ref.length ? alive : Object.entries(o);
-    const rank=[...list].sort((a,b)=>a[1]-b[1]).findIndex(([k])=>k===r.result)+1;
-    ok(rank===r.pop,
+    const sorted=[...list].sort((a,b)=>a[1]-b[1]);
+    const rank=sorted.findIndex(([k])=>k===r.result)+1;
+    /* オッズがぴったり同じ組は、どちらが何番人気かをオッズからは決められない。
+       公式の人気は票数で付いていて、票数は表示オッズより細かいため。
+       219レースにしたとき3件で1つずれた（丸亀12R 1-2-4と1-2-5がどちらも10.4倍、
+       大村1R 1-3-4と1-3-5が10倍、大村11R 1-3-4と1-4-2が8.9倍）。
+       データの誤りではないので、同値の組がまたがる範囲に入っていれば通す。 */
+    const mine=o[r.result];
+    const lo=sorted.findIndex(([,v])=>v===mine)+1;
+    const hi=sorted.length-[...sorted].reverse().findIndex(([,v])=>v===mine);
+    const tied=hi>lo;
+    ok(r.pop>=lo && r.pop<=hi,
        `${r.name} 人気 ${r.result} は${ref.length?`返還艇を除く${list.length}通りの中で`:'オッズ順'}${rank}番目`
-       + `（結果画面 ${r.pop}番人気）`);
+       + (tied?`（${mine}倍の同値が${lo}〜${hi}番目にあるので ${r.pop}番人気で合う）`
+             :`（結果画面 ${r.pop}番人気）`));
   }
 }
 ok(checked>0, `締切時オッズのレースが ${checked} 件あり、照合できている`);
