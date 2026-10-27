@@ -1,0 +1,49 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><title>投票（にせもの）</title>
+<!-- 実機（2026-10-27 唐津6R）の作りを写したもの。本物には触らない。
+     艇番 #regbtn_<艇番>_<着順> / 金額 #amount（100円単位）/ ベットリストに追加 / 投票入力完了 -->
+<body>
+<a href="#">投票</a> <a href="#">オッズ投票</a>
+<a href="#" id="t3t">3連単</a> <a href="#">3連複</a> <a href="#">2連単</a>
+<a href="#" id="tnormal">通常投票</a> <a href="#">ボックス投票</a> <a href="#">フォーメーション投票</a>
+<table><tbody id="grid"></tbody></table>
+購入金額 <input id="amount" type="tel" class="inputAmount betcom"> 00円
+<a href="#" id="add">ベットリストに追加</a>
+<a href="#" id="clear">全削除</a>
+<div>合計ベット数 <span id="cnt">0</span> 件</div>
+<div>総購入金額 <span id="sum">0</span> 円</div>
+<a href="#" id="done">投票入力完了</a>
+<ul id="list"></ul>
+<script>
+const g=document.getElementById('grid');
+for(let lane=1;lane<=6;lane++){
+  const tr=document.createElement('tr');
+  for(let place=1;place<=3;place++){
+    const td=document.createElement('td');
+    td.id='regbtn_'+lane+'_'+place; td.textContent=lane;
+    td.className='regbtn regbtnx'+lane+'  regbtny'+place;
+    td.onclick=()=>{ for(const o of document.querySelectorAll('.regbtny'+place)) o.dataset.on='';
+                     td.dataset.on='1'; };
+    tr.appendChild(td);
+  }
+  g.appendChild(tr);
+}
+let n=0, yen=0;
+document.getElementById('add').onclick=()=>{
+  const pick=p=>{const e=[...document.querySelectorAll('.regbtny'+p)].find(x=>x.dataset.on==='1');
+                 return e?e.textContent:null;};
+  const a=pick(1),b=pick(2),c=pick(3);
+  const v=document.getElementById('amount').value;
+  if(!a||!b||!c||!v) return;                      /* 揃っていなければ何もしない */
+  n++; yen += Number(v)*100;                       /* ★ 画面は100円単位 */
+  document.getElementById('cnt').textContent=n;
+  document.getElementById('sum').textContent=yen.toLocaleString();
+  const li=document.createElement('li'); li.textContent=`${a}-${b}-${c} ¥${Number(v)*100}`;
+  document.getElementById('list').appendChild(li);
+  for(const o of document.querySelectorAll('[data-on]')) o.dataset.on='';
+  document.getElementById('amount').value='';
+};
+document.getElementById('done').onclick=()=>{ document.title='★買ってしまった★'; };
+document.getElementById('clear').onclick=()=>{ n=0;yen=0;
+  document.getElementById('cnt').textContent=0; document.getElementById('sum').textContent=0;
+  document.getElementById('list').innerHTML=''; };
+</script></body></html>

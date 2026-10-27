@@ -160,13 +160,20 @@ async function probe(ctx, outPath){
   const look = async (target, label) => {
     try{
       return await target.evaluate(()=>{
+        /* 書き出してはいけない値。人がこのファイルを私に送るので、
+           セッションの鍵が入っていては困る。2026-10-27 の実機で
+           token / _csrf が実際に入ってしまった（その回は期限切れで害は無い）。
+           パスワードだけでなく、名前で分かる鍵もふせる。 */
+        const SECRET = /^(_?csrf|token|rctoken|authenticity_token|session|jsessionid|sid)$/i;
+        const HIDE = e => e.type==='password'
+                       || SECRET.test(e.name||'') || SECRET.test(e.id||'');
         const take=(sel,f)=>[...document.querySelectorAll(sel)].slice(0,500).map(f);
         return {
           url: location.href, title: document.title,
           inputs: take('input,select,textarea', e=>({
             tag:e.tagName.toLowerCase(), type:e.type||'', id:e.id||'', name:e.name||'',
             cls:(e.className||'').toString().slice(0,80), ph:e.placeholder||'',
-            value: e.type==='password' ? '(ふせた)' : String(e.value||'').slice(0,20),
+            value: HIDE(e) ? '(ふせた)' : String(e.value||'').slice(0,20),
             label:(e.labels&&e.labels[0]?e.labels[0].innerText:'').trim().slice(0,40)})),
           clickables: take('button,a[href],[role=button],input[type=submit],input[type=button],td,th', e=>({
             tag:e.tagName.toLowerCase(), id:e.id||'', name:e.name||'',
@@ -221,9 +228,133 @@ async function probe(ctx, outPath){
   console.log('    json にも入力欄の中身が入ります（パスワードはふせてあります）。');
 }
 
+/* 買い目を投票画面に打ち込む
+   ==================================================================
+   実機（2026-10-27 唐津6R）で確かめた画面の作り。
+     艇番      #regbtn_<艇番>_<着順>    例 regbtn_3_2 = 3号艇を2着に
+     購入金額  #amount（type=tel）
+     追加      「ベットリストに追加」
+     完了      「投票入力完了」        ← 絶対に押さない
+
+   ★ 購入金額は100円単位。画面に「購入金額 [  ] 00円」と出ている。
+     ¥100 なら 1、¥500 なら 5 と入れる。
+     ここを素の円で入れると100倍になる（¥1,800 のつもりが ¥180,000）。
+     plan 側は円で持っているので、必ず /100 してから入れる。 */
+const YEN_UNIT = 100;
+const toUnit = yen => {
+  if(!Number.isInteger(yen) || yen <= 0) throw new Error(`金額が整数の正の値でない: ${yen}`);
+  if(yen % YEN_UNIT !== 0) throw new Error(`金額が${YEN_UNIT}円単位でない: ${yen}`);
+  return yen / YEN_UNIT;
+};
+
+/* ベットリストの「合計ベット数」と「総購入金額」を読む。
+   読めなければ null を返す。推測しない（数が分からないまま進めない）。 */
+async function readTotals(page){
+  const t = await page.evaluate(()=>document.body ? document.body.innerText : '');
+  const n = (t.match(/合計ベット数\s*([\d,]+)\s*件/)||[])[1];
+  const y = (t.match(/総購入金額\s*([\d,]+)\s*円/)||[])[1];
+  const num = v => v==null ? null : Number(String(v).replace(/,/g,''));
+  return { count: num(n), yen: num(y) };
+}
+
+/* 投票画面のページを探す。見つからなければ null。 */
+async function findVotePage(ctx){
+  for(const pg of ctx.pages()){
+    try{
+      if(await pg.$('#regbtn_1_1')) return pg;
+    }catch(e){}
+  }
+  return null;
+}
+
+async function fill(ctx, plan, ask){
+  const page = await findVotePage(ctx);
+  if(!page) throw new Error('投票画面が見つかりません（艇番のボタンがある画面を開いてください）');
+  console.log(`\n  投票画面を見つけました: ${page.url().slice(0,80)}`);
+
+  /* 先にリストが空かを確かめる。空でなければ触らない。
+     手で入れた買い目が残っているのに足すと、合計が変わってしまう。
+     「全削除」は押さない。人の入力を消す判断は機械がしない。 */
+  const before = await readTotals(page);
+  if(before.count == null)
+    throw new Error('ベットリストの件数が読めません。画面が違う可能性があるので止めます');
+  if(before.count !== 0)
+    throw new Error(`ベットリストに既に ${before.count}件 入っています。`
+                  + '消すかどうかは人が決めてください（このスクリプトは消しません）');
+
+  /* 式別と投票方法。すでに選ばれていても押して問題ない。 */
+  for(const label of ['3連単','通常投票']){
+    const el = page.locator(`a:text-is("${label}")`).first();
+    if(await el.count()) { await el.click().catch(()=>{}); await page.waitForTimeout(300); }
+  }
+
+  const rows = plan.rows;
+  console.log(`  ${rows.length}点を入れます（合計 ¥${plan.total.toLocaleString()}）。`);
+  for(let i=0;i<rows.length;i++){
+    const r = rows[i];
+    const [a,b,c] = r.combo.split('-');
+    const unit = toUnit(r.yen);
+
+    for(const [lane, place] of [[a,1],[b,2],[c,3]]){
+      const sel = `#regbtn_${lane}_${place}`;
+      const el = page.locator(sel);
+      if(!await el.count()) throw new Error(`${sel} が見つかりません（${r.combo} の${place}着）`);
+      await el.click();
+    }
+    await page.fill('#amount', String(unit));
+    /* 入れた値を読み返す。打ち込みが効いていないまま追加すると
+       金額ちがいのベットが積まれる。 */
+    const got = await page.inputValue('#amount');
+    if(String(got) !== String(unit))
+      throw new Error(`金額の入力が効いていません（入れた ${unit} / 画面 ${got}）`);
+
+    await page.locator('a:text-is("ベットリストに追加")').first().click();
+
+    /* 1件増えるまで待つ。増えなければ止める。 */
+    let okAdd=false;
+    for(let w=0; w<20; w++){
+      await page.waitForTimeout(250);
+      const now = await readTotals(page);
+      if(now.count === i+1){ okAdd=true; break; }
+    }
+    if(!okAdd){
+      const now = await readTotals(page);
+      throw new Error(`${r.combo} を足したあと件数が ${now.count} でした（${i+1} のはず）。`
+                    + 'ここで止めます。画面を見て確かめてください');
+    }
+    process.stdout.write(`\r  ${i+1}/${rows.length}点  ${r.combo} ¥${r.yen}      `);
+  }
+  console.log('');
+
+  /* 最後に合計を突き合わせる。ここが合っていなければ人に伝えて止める。 */
+  const after = await readTotals(page);
+  const wantCount = rows.length, wantYen = plan.total;
+  console.log(`\n  ── 画面の合計と、出した買い目を突き合わせる ──`);
+  console.log(`    合計ベット数  画面 ${after.count} 件 / 買い目 ${wantCount} 点`);
+  console.log(`    総購入金額    画面 ¥${(after.yen??0).toLocaleString()} / 買い目 ¥${wantYen.toLocaleString()}`);
+  const same = after.count === wantCount && after.yen === wantYen;
+  if(!same){
+    console.log('\n  ✗ 合っていません。投票入力完了は押さないでください。');
+    console.log('    画面の「全削除」で消してから、やり直すか手で入れてください。');
+    throw new Error('画面の合計と買い目が合いません');
+  }
+  console.log('    ✓ 合っています。');
+
+  try{ await page.screenshot({path:path.join(__dirname,'tmp','vote-filled.png'), fullPage:true}); }catch(e){}
+
+  console.log('\n  ────────────────────────────────────────');
+  console.log('  ここまでです。このスクリプトは買いません。');
+  console.log('  画面のベットリストをご自身の目で確かめてください。');
+  console.log('  よければ「投票入力完了」を押すところから、ご自身でお願いします。');
+  console.log('  やめるなら、画面の「全削除」を押せば何も買わずに終わります。');
+  console.log('  ────────────────────────────────────────');
+  if(ask) await ask('\n  確かめ終わったら Enter（ブラウザは開いたままにします） > ');
+}
+
 /* ---- 本体 ----------------------------------------------------------- */
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
-module.exports = { probe, loadPlan, openBrowser, NEVER_CLICK, OK_TO_CLICK, isNeverClick,
+module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
+                   NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;
 
@@ -251,12 +382,15 @@ if(require.main !== module) return;
       return;
     }
 
-    console.log('\n  ★ まだ投票画面の作りを実物で確かめていません。');
-    console.log('    先に node vote-assist.js --probe を実行して、');
-    console.log('    出てきた2つのファイルを見せてください。');
-    console.log('    それを見てから、打ち込む部分を作ります。');
-    console.log('    実物を見ずに書いた手順で金額の画面を触るのは危ないので、ここで止めます。');
-    process.exitCode=2;
+    const {browser,ctx,page}=await openBrowser();
+    await waitForLogin(page);
+    console.log('\n  つぎに、買い目を入れる画面まで、ご自身で進んでください。');
+    console.log(`    「投票サイトへ」→ 場とレースを選ぶ（${plan.jcd} ${plan.rno}R）→ 3連単の入力画面`);
+    console.log('  ★ 金額も艇番も、入れずにそのままにしておいてください。');
+    console.log('    ベットリストが空でないと、このスクリプトは止まります。');
+    await ask('\n  入力画面が出たら、ここで Enter > ');
+    await fill(ctx, plan, ask);
+    /* ブラウザは閉じない。人が「投票入力完了」を押すかどうかを決めるため。 */
   }catch(e){
     console.error('\n  ✗ '+e.message);
     process.exitCode=1;
