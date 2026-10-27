@@ -450,6 +450,13 @@ async function fill(ctx, plan, ask){
   /* 購入の最後に「投票用パスワード」を聞かれる。ログインに使う3つとは別もの。
      2026-10-27、ここで分からなくなって買えなかった。先に出しておく。 */
   console.log('');
+  {
+    const miss = buyReadiness();
+    if(miss.length){
+      console.log('  （ここから先を自動にするには、まだこれが要ります）');
+      for(const m of miss) console.log(`     ・${m}`);
+    }
+  }
   console.log('  ★ このあと「投票用パスワード」を聞かれます。');
   console.log('    ログインの3つ（加入者番号・暗証番号・認証用パスワード）とは別物です。');
   console.log('    分からなければ画面上部の 会員情報変更 → 投票用パスワードを変更する。');
@@ -457,10 +464,34 @@ async function fill(ctx, plan, ask){
   if(ask) await ask('\n  確かめ終わったら Enter（ブラウザは開いたままにします） > ');
 }
 
+/* ③ 購入まで自動にするときの入口（まだ押さない）
+   ==================================================================
+   いま足りないのは3つ。どれも人からしか来ない。
+     1. テレボート会員規約に自動投票を禁じる条項が無いことの確認
+        会員エリアの中にあり、こちらからは読めない。
+     2. 投票用パスワード。環境変数 BOAT_BET_PASSWORD で実行時に渡す。
+        ファイルには書かない。引数にも書かない（ps で見える）。
+     3. 損切り額。auto.js --stop-loss で渡す。
+
+   3つ揃ったら、ここに「投票入力完了 → 購入金額と投票用パスワードを入れる
+   → 投票する」を書く。画面は probe で取れているので実装そのものは短い。
+
+   いま押さない理由は2つ。
+     ・規約が未確認。口座が止まると買い目どころではない。
+     ・無人で回す最後のひと押しを、実機で一度も通さずに入れたくない。
+       今日だけで金額の100倍ちがい、別レースの買い目、record.js の検算と
+       3つ踏んでいる。どれも人が見ていたから止まった。 */
+function buyReadiness(){
+  const miss=[];
+  if(!process.env.BOAT_BET_PASSWORD) miss.push('投票用パスワード（環境変数 BOAT_BET_PASSWORD）');
+  if(!process.env.BOAT_TERMS_OK)     miss.push('テレボート会員規約の確認（BOAT_TERMS_OK=yes）');
+  return miss;
+}
+
 /* ---- 本体 ----------------------------------------------------------- */
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
 module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
-                   readRaceOnScreen, venueName, gotoRace,
+                   readRaceOnScreen, venueName, gotoRace, buyReadiness,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;
