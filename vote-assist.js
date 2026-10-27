@@ -396,24 +396,57 @@ if(require.main !== module) return;
       return;
     }
 
-    const plan=loadPlan(planPath);
-    show(plan);
-
-    if(plan.sample && !DRY)
-      throw new Error('これは見本の買い目です。ブラウザを開く側では使えません（--dry だけ）');
+    /* 買い目がまだ無くてもブラウザは開けるようにする。
+       ログインと画面遷移に数分かかるので、展示待ちのあいだに
+       そこまで済ませておけるほうがいい（2026-10-27 丸亀6Rで間に合わなかった）。
+       買い目は打ち込む直前に読み直す。 */
+    const have = planPath && fs.existsSync(planPath);
+    let plan = have ? loadPlan(planPath) : null;
+    if(plan) show(plan);
 
     if(DRY){
+      if(!plan) throw new Error(`${planPath} がありません`);
       console.log('\n  --dry なので、ブラウザは開きません。中身と上限の確認だけです。');
       return;
+    }
+    if(plan && plan.sample)
+      throw new Error('これは見本の買い目です。ブラウザを開く側では使えません（--dry だけ）');
+    if(!plan){
+      console.log(`\n  ${planPath} はまだありません。`);
+      console.log('  先にブラウザを開いて、ログインと画面の用意だけ済ませておきます。');
+      console.log('  買い目は、打ち込む直前にもう一度読みます。');
     }
 
     const {browser,ctx,page}=await openBrowser();
     await waitForLogin(page);
     console.log('\n  つぎに、買い目を入れる画面まで、ご自身で進んでください。');
-    console.log(`    「投票サイトへ」→ 場とレースを選ぶ（${plan.jcd} ${plan.rno}R）→ 3連単の入力画面`);
+    console.log(plan
+      ? `    「投票サイトへ」→ 場とレースを選ぶ（${plan.jcd} ${plan.rno}R）→ 3連単の入力画面`
+      : '    「投票サイトへ」→ 場とレースを選ぶ → 3連単の入力画面');
     console.log('  ★ 金額も艇番も、入れずにそのままにしておいてください。');
     console.log('    ベットリストが空でないと、このスクリプトは止まります。');
     await ask('\n  入力画面が出たら、ここで Enter > ');
+
+    /* ここで読み直す。待っているあいだに確定版が書かれていることがある
+       （暫定→確定で上書きされる）。古いほうを打ち込まないため。 */
+    const fresh = loadPlan(planPath);
+    if(fresh.sample)
+      throw new Error('これは見本の買い目です。ブラウザを開く側では使えません');
+    if(plan && JSON.stringify(plan.rows) !== JSON.stringify(fresh.rows)){
+      console.log('\n  ※ 待っているあいだに買い目が変わりました（展示が出たのだと思います）。');
+      console.log('    新しいほうを打ち込みます。');
+    }
+    plan = fresh;
+    show(plan);
+    if(plan.provisional){
+      console.log('\n  ★ これは展示の前に出した暫定です。');
+      console.log('    実測では確定版よりはっきり悪くなります（本線10点 85% → 77%）。');
+      const a = await ask('    それでも打ち込みますか（y で続ける / それ以外でやめる）> ');
+      if(String(a).toLowerCase() !== 'y'){
+        console.log('  やめました。何も入れていません。');
+        await browser.close(); return;
+      }
+    }
     await fill(ctx, plan, ask);
     /* ブラウザは閉じない。人が「投票入力完了」を押すかどうかを決めるため。 */
   }catch(e){
