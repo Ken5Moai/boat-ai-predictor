@@ -249,6 +249,26 @@ const toUnit = yen => {
   return yen / YEN_UNIT;
 };
 
+/* 場コード → 場名。index.html の VENUES から読む（二重に持たない）。 */
+const venueName = jcd => {
+  try{
+    const html = fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
+    const re = new RegExp(`'${jcd}':\\{name:'([^']+)'`);
+    const m = html.match(re);
+    return m ? m[1] : null;
+  }catch(e){ return null; }
+};
+
+/* いま画面に出ている場とレース番号を読む。
+   画面にはこう出ている:  唐津 … 場変更・複数場選択 … 6R予選 1800m 電話投票締切予定時刻まで 9分
+   読めなければ null を返す。推測しない。 */
+async function readRaceOnScreen(page){
+  const t = await page.evaluate(()=>document.body ? document.body.innerText : '');
+  const rno = (t.match(/(\d{1,2})R[^\n]*?\d+m[^\n]*?電話投票締切/)||[])[1];
+  const venue = (t.match(/([^\s\n]+)\s*\n\s*場変更・複数場選択/)||[])[1];
+  return { venue: venue||null, rno: rno==null ? null : Number(rno) };
+}
+
 /* ベットリストの「合計ベット数」と「総購入金額」を読む。
    読めなければ null を返す。推測しない（数が分からないまま進めない）。 */
 async function readTotals(page){
@@ -273,6 +293,25 @@ async function fill(ctx, plan, ask){
   const page = await findVotePage(ctx);
   if(!page) throw new Error('投票画面が見つかりません（艇番のボタンがある画面を開いてください）');
   console.log(`\n  投票画面を見つけました: ${page.url().slice(0,80)}`);
+
+  /* ★ 画面のレースと買い目のレースが同じか確かめる。
+     2026-10-27、丸亀6Rの買い目が tmp/plan.json に残ったまま
+     7Rの画面を開いていた。ここを見ていなかったので、
+     別のレースの買い目をそのまま打ち込むところだった。
+     読めないときも進まない（「たぶん合っている」で金は賭けない）。 */
+  const on = await readRaceOnScreen(page);
+  const want = venueName(plan.jcd);
+  console.log(`  画面のレース: ${on.venue||'(場が読めない)'} ${on.rno!=null?on.rno+'R':'(Rが読めない)'}`);
+  console.log(`  買い目のレース: ${want||('場コード'+plan.jcd)} ${plan.rno}R`);
+  if(on.rno == null || on.venue == null)
+    throw new Error('画面のレースが読めません。投票画面かどうか確かめてください');
+  if(on.rno !== plan.rno)
+    throw new Error(`レース番号が違います（画面 ${on.rno}R / 買い目 ${plan.rno}R）。`
+                  + '画面を合わせるか、買い目を出し直してください');
+  if(want && on.venue !== want)
+    throw new Error(`場が違います（画面 ${on.venue} / 買い目 ${want}）。`
+                  + '画面を合わせるか、買い目を出し直してください');
+  console.log('    ✓ 同じレースです。');
 
   /* 先にリストが空かを確かめる。空でなければ触らない。
      手で入れた買い目が残っているのに足すと、合計が変わってしまう。
@@ -356,6 +395,7 @@ async function fill(ctx, plan, ask){
 /* ---- 本体 ----------------------------------------------------------- */
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
 module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
+                   readRaceOnScreen, venueName,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;

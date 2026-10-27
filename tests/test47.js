@@ -22,6 +22,7 @@ catch(e){
 const V=require('../vote-assist.js');
 const MOCK='file://'+path.join(__dirname,'fixtures','mock-vote.html');
 
+/* モックは「唐津 6R」を表示している。plan もそれに合わせる。 */
 const PLAN={ jcd:'23', rno:6, date:'2026-10-27', race:'唐津6R', total:1800,
   best:'1-2-3', rows:[
     {combo:'1-2-3',yen:500,kind:'本線'},
@@ -98,6 +99,42 @@ PLAN.total = PLAN.rows.reduce((a,r)=>a+r.yen,0);
     console.log=real;
     ok_(!!err && /投票画面が見つかりません/.test(err.message),
         `投票画面が無ければ止まる（${err?err.message.slice(0,30):'止まらなかった'}）`);
+    await ctx.close();
+  }
+
+  /* ---- 画面のレースと買い目のレースが違う場合 ----
+     2026-10-27、丸亀6Rの買い目が残ったまま7Rの画面を開いていた。
+     ここを見ていなければ、別のレースの買い目をそのまま打ち込んでいた。 */
+  console.log('\n  画面のレースと買い目のレースの照合');
+  {
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    const r=await V.readRaceOnScreen(pg);
+    ok_(r.venue==='唐津' && r.rno===6, `画面から「唐津 6R」を読める（${r.venue} ${r.rno}R）`);
+
+    const real=console.log; console.log=()=>{};
+    let e1=null, e2=null;
+    try{ await V.fill(ctx, {...PLAN, rno:7}, null); }catch(e){ e1=e; }
+    try{ await V.fill(ctx, {...PLAN, jcd:'15'}, null); }catch(e){ e2=e; }
+    console.log=real;
+    ok_(!!e1 && /レース番号が違います/.test(e1.message),
+        `R が違えば止まる（${e1?e1.message.slice(0,30):'止まらなかった'}）`);
+    ok_(!!e2 && /場が違います/.test(e2.message),
+        `場が違えば止まる（${e2?e2.message.slice(0,24):'止まらなかった'}）`);
+    ok_((await pg.textContent('#cnt'))==='0', '違うレースのときは1点も入れていない');
+    await ctx.close();
+  }
+  {
+    /* レースが読めない画面でも進まない */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    await pg.evaluate(()=>document.getElementById('raceline').remove());
+    const real=console.log; console.log=()=>{};
+    let e=null; try{ await V.fill(ctx, PLAN, null); }catch(x){ e=x; }
+    console.log=real;
+    ok_(!!e && /読めません/.test(e.message),
+        `レースが読めなければ止まる（${e?e.message.slice(0,24):'止まらなかった'}）`);
+    ok_((await pg.textContent('#cnt'))==='0', '読めないときも1点も入れていない');
     await ctx.close();
   }
 
