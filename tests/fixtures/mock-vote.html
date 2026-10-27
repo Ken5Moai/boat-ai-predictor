@@ -6,6 +6,7 @@
      そのあとに「<R>R<番組名> <距離>m 電話投票締切予定時刻まで N分」 -->
 <div id="venue">唐津</div>
 <div><a href="#">場変更・複数場選択</a></div>
+<div id="tabs"></div>
 <div id="raceline">6R予選 1800m 電話投票締切予定時刻まで 9分</div>
 <a href="#">投票</a> <a href="#">オッズ投票</a>
 <a href="#" id="t3t">3連単</a> <a href="#">3連複</a> <a href="#">2連単</a>
@@ -19,6 +20,17 @@
 <a href="#" id="done">投票入力完了</a>
 <ul id="list"></ul>
 <script>
+/* レースタブ。実機と同じく id も class も無い <a> で、文字は「7R\n11:22」。 */
+{
+  const tb=document.getElementById('tabs');
+  for(let r=1;r<=12;r++){
+    const a=document.createElement('a'); a.href='#';
+    a.textContent=r+'R\n'+(8+r)+':00';
+    a.onclick=()=>{ document.getElementById('raceline').textContent=
+      r+'R予選 1800m 電話投票締切予定時刻まで 9分'; return false; };
+    tb.appendChild(a); tb.appendChild(document.createTextNode(' '));
+  }
+}
 const g=document.getElementById('grid');
 for(let lane=1;lane<=6;lane++){
   const tr=document.createElement('tr');

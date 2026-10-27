@@ -320,6 +320,27 @@ async function findVotePage(ctx){
   return null;
 }
 
+/* 画面のレースを切り替える（同じ場の中だけ）。
+   レースタブは id も class も無い <a> で、文字が「7R\n11:22」の形。
+   場をまたぐ切り替えは「場変更・複数場選択」が別ウィンドウを開く作りで、
+   中を見ていないので自動では触らない。場が変わるときは人に頼む。
+
+   切り替えたあとは必ず readRaceOnScreen で確かめる。
+   押したつもりで変わっていないまま打ち込むのがいちばん怖い。 */
+async function gotoRace(page, rno){
+  const before = await readRaceOnScreen(page);
+  if(before.rno === rno) return true;
+  const tab = page.locator('a').filter({hasText:new RegExp(`^\\s*${rno}R\\b`)}).first();
+  if(!await tab.count()) return false;
+  await tab.click().catch(()=>{});
+  for(let i=0;i<24;i++){
+    await page.waitForTimeout(250);
+    const now = await readRaceOnScreen(page);
+    if(now.rno === rno) return true;
+  }
+  return false;
+}
+
 async function fill(ctx, plan, ask){
   const page = await findVotePage(ctx);
   if(!page) throw new Error('投票画面が見つかりません（艇番のボタンがある画面を開いてください）');
@@ -330,8 +351,15 @@ async function fill(ctx, plan, ask){
      7Rの画面を開いていた。ここを見ていなかったので、
      別のレースの買い目をそのまま打ち込むところだった。
      読めないときも進まない（「たぶん合っている」で金は賭けない）。 */
-  const on = await readRaceOnScreen(page);
+  /* レースが違うなら、同じ場の中ならタブで合わせてみる。
+     合わなければ下の照合で止まる。 */
+  let on = await readRaceOnScreen(page);
   const want = venueName(plan.jcd);
+  if(on.rno != null && on.rno !== plan.rno && (!want || on.venue === want)){
+    console.log(`  画面が ${on.rno}R なので ${plan.rno}R に切り替えます…`);
+    await gotoRace(page, plan.rno);
+    on = await readRaceOnScreen(page);
+  }
   console.log(`  画面のレース: ${on.venue||'(場が読めない)'} ${on.rno!=null?on.rno+'R':'(Rが読めない)'}`);
   console.log(`  買い目のレース: ${want||('場コード'+plan.jcd)} ${plan.rno}R`);
   if(on.rno == null || on.venue == null)
@@ -432,7 +460,7 @@ async function fill(ctx, plan, ask){
 /* ---- 本体 ----------------------------------------------------------- */
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
 module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
-                   readRaceOnScreen, venueName,
+                   readRaceOnScreen, venueName, gotoRace,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;

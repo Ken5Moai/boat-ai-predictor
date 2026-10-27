@@ -72,5 +72,49 @@ console.log('\n=== 持ち出しの見込み ===');
     ok_(YEN*n===yen, `${n}レースで最大 ¥${yen.toLocaleString()}`);
 }
 
+console.log('\n=== 損切り ===');
+{
+  /* auto.js の中と同じ規則をここに写して確かめる。
+     settle() は「当たった組の金額ぶんだけ払戻を受け取る」。
+     至極を厚くしている場合、その組が来たときだけ多く戻る。 */
+  const settleCalc=(plan,res,pay)=>{
+    const rows=plan.rows.filter(x=>x.combo===res);
+    const back=rows.reduce((a,x)=>a+pay*(x.yen/100),0);
+    return {hit:rows.length>0, inv:plan.total, back, net:back-plan.total};
+  };
+  const plan={total:2200, rows:[
+    {combo:'1-2-3',yen:500},{combo:'1-3-2',yen:100},{combo:'2-1-3',yen:100},
+    ...Array.from({length:15},(_,i)=>({combo:'x'+i,yen:100}))]};
+
+  let s=settleCalc(plan,'1-2-3',860);
+  ok_(s.hit && s.back===4300, `至極(¥500)が ¥860 で当たれば払戻¥4,300（${s.back}）`);
+  ok_(s.net===2100, `収支 +¥2,100（${s.net}）`);
+
+  s=settleCalc(plan,'1-3-2',860);
+  ok_(s.hit && s.back===860, `100円の組が ¥860 なら払戻¥860（${s.back}）`);
+  ok_(s.net===-1340, `当たっても赤字 -¥1,340（${s.net}）＝警告どおりの形`);
+
+  s=settleCalc(plan,'6-5-4',99999);
+  ok_(!s.hit && s.back===0, '買っていない組が来たら払戻0');
+  ok_(s.net===-2200, `外れは投資ぶん丸ごとマイナス（${s.net}）`);
+
+  /* 損切りは通算で見る。1レースごとではない。 */
+  const stop=(nets,limit)=>{ let n=0,k=0;
+    for(const x of nets){ n+=x; k++; if(n<=-Math.abs(limit)) return {k,n}; } return {k,n}; };
+  let r=stop([-1800,-1800,-1800,-1800],5000);
+  ok_(r.k===3 && r.n===-5400, `¥5,000の損切りなら3本目で止まる（${r.k}本・${r.n}）`);
+  r=stop([-1800,+8200,-1800,-1800],5000);
+  ok_(r.k===4 && r.n===2800, `途中で当たれば止まらない（${r.k}本・${r.n}）`);
+  r=stop([-1800,-1800],5000);
+  ok_(r.n===-3600, `届かなければ止まらない（${r.n}）`);
+  ok_(stop([-1800,-1800,-1800],1).k===1, '損切りを極端に小さくすれば1本で止まる');
+}
+
+console.log('\n=== auto.js が損切りを持っていること ===');
+ok_(/STOP_LOSS/.test(SRC), '損切りを引数で受ける');
+ok_(/net <= -Math\.abs\(Number\(STOP_LOSS\)\)/.test(SRC), '通算の収支で判定している（1レースごとではない）');
+ok_(/残りのレースは捨てて終わります/.test(SRC), '当たったら残りを捨てて終わる');
+ok_(/買いましたか/.test(SRC), '実際に買ったかを人に聞いてから収支に入れる');
+
 console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
 process.exitCode = ng ? 1 : 0;

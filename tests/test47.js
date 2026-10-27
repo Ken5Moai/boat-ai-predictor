@@ -102,26 +102,59 @@ PLAN.total = PLAN.rows.reduce((a,r)=>a+r.yen,0);
     await ctx.close();
   }
 
-  /* ---- 画面のレースと買い目のレースが違う場合 ----
+  /* ---- 画面のレースと買い目のレースの照合 ----
      2026-10-27、丸亀6Rの買い目が残ったまま7Rの画面を開いていた。
-     ここを見ていなければ、別のレースの買い目をそのまま打ち込んでいた。 */
+     ここを見ていなければ、別のレースの買い目をそのまま打ち込んでいた。
+
+     そのあと、同じ場の中ならタブで切り替えるようにした（auto.js 用）。
+     なので「R が違う」は、同じ場なら切り替えて進み、場が違えば止まる。 */
   console.log('\n  画面のレースと買い目のレースの照合');
   {
     const ctx=await browser.newContext();
     const pg=await ctx.newPage(); await pg.goto(MOCK);
     const r=await V.readRaceOnScreen(pg);
     ok_(r.venue==='唐津' && r.rno===6, `画面から「唐津 6R」を読める（${r.venue} ${r.rno}R）`);
-
-    const real=console.log; console.log=()=>{};
-    let e1=null, e2=null;
-    try{ await V.fill(ctx, {...PLAN, rno:7}, null); }catch(e){ e1=e; }
-    try{ await V.fill(ctx, {...PLAN, jcd:'15'}, null); }catch(e){ e2=e; }
+    ok_(await V.gotoRace(pg, 9), 'タブでレースを切り替えられる');
+    ok_((await V.readRaceOnScreen(pg)).rno===9, '切り替わったことを読み返して確かめている');
+    ok_(!(await V.gotoRace(pg, 99)), '無いレースには切り替わらない（false を返す）');
+    await ctx.close();
+  }
+  {
+    /* 同じ場で R だけ違う → 切り替えて進む */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    const real=console.log; const said=[]; console.log=(...a)=>said.push(a.join(' '));
+    let err=null; try{ await V.fill(ctx, {...PLAN, rno:9}, null); }catch(e){ err=e; }
     console.log=real;
-    ok_(!!e1 && /レース番号が違います/.test(e1.message),
-        `R が違えば止まる（${e1?e1.message.slice(0,30):'止まらなかった'}）`);
-    ok_(!!e2 && /場が違います/.test(e2.message),
-        `場が違えば止まる（${e2?e2.message.slice(0,24):'止まらなかった'}）`);
-    ok_((await pg.textContent('#cnt'))==='0', '違うレースのときは1点も入れていない');
+    ok_(!err, `同じ場なら R が違っても切り替えて進む（${err?err.message.slice(0,40):'エラーなし'}）`);
+    ok_((await V.readRaceOnScreen(pg)).rno===9, '画面が9Rに変わっている');
+    ok_((await pg.textContent('#cnt'))==='5', '切り替えたうえで5点入っている');
+    ok_(said.join('\n').includes('切り替えます'), '切り替えたことを画面に出す');
+    await ctx.close();
+  }
+  {
+    /* 場が違う → 止まる（場の切り替えは自動でやらない） */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    const real=console.log; console.log=()=>{};
+    let err=null; try{ await V.fill(ctx, {...PLAN, jcd:'15'}, null); }catch(e){ err=e; }
+    console.log=real;
+    ok_(!!err && /場が違います/.test(err.message),
+        `場が違えば止まる（${err?err.message.slice(0,24):'止まらなかった'}）`);
+    ok_((await pg.textContent('#cnt'))==='0', '場が違うときは1点も入れていない');
+    await ctx.close();
+  }
+  {
+    /* 切り替えられないとき（タブが無い）→ 止まる */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    await pg.evaluate(()=>document.getElementById('tabs').remove());
+    const real=console.log; console.log=()=>{};
+    let err=null; try{ await V.fill(ctx, {...PLAN, rno:9}, null); }catch(e){ err=e; }
+    console.log=real;
+    ok_(!!err && /レース番号が違います/.test(err.message),
+        `切り替えられなければ止まる（${err?err.message.slice(0,24):'止まらなかった'}）`);
+    ok_((await pg.textContent('#cnt'))==='0', '切り替え失敗のときは1点も入れていない');
     await ctx.close();
   }
   {

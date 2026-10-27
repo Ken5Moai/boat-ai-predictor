@@ -34,6 +34,15 @@ const HD = args.find(a=>/^\d{8}$/.test(a))
 const MAX = Number(flag('max', 20));
 const ONLY = (flag('venues','')||'').split(',').filter(Boolean).map(s=>s.padStart(2,'0'));
 const PLAN_ONLY = args.includes('--plan');
+/* --fill を付けると、ブラウザを開いたまま1レースずつ打ち込む。
+   買わない。確認画面の手前で止めて、押すかどうかは毎回人が決める。
+   場が変わるときだけ、画面の切り替えを人に頼む
+   （「場変更・複数場選択」は別ウィンドウで、中を見ていないので触らない）。 */
+const FILL = args.includes('--fill');
+/* 1日の損切り。ここを超えたら、残りのレースを捨てて終わる。
+   既定は上限レース数ぶんの投資額（＝全部外しても止まらない）なので、
+   実際に使うなら必ず指定すること。 */
+const STOP_LOSS = flag('stop-loss', null);
 
 /* 1点100円・18点で計算する。vote-assist.js と同じ前提。 */
 const YEN_PER_RACE = 1800;
@@ -94,6 +103,20 @@ function exhibitionReady(jcd, rno){
   }catch(e){ return false; }
 }
 
+/* 終わったレースの結果を取って、その回の収支を出す。
+   損切りを金額で止めるには、いくら戻ったかを知る必要がある。
+   結果がまだ出ていなければ null を返す（待たない。次の準備中に取り直す）。 */
+function settle(r, plan){
+  let res;
+  try{ res = F.parseResult(get('raceresult', r.jcd, r.rno)); }catch(e){ return null; }
+  if(!res || res.void || res.result==null || res.pay==null) return null;
+  const hit = plan.rows.some(x=>x.combo===String(res.result));
+  const back = hit ? plan.rows.filter(x=>x.combo===String(res.result))
+                              .reduce((a,x)=>a + res.pay*(x.yen/100), 0) : 0;
+  return {result:String(res.result), pay:res.pay, pop:res.pop,
+          hit, inv:plan.total, back, net:back-plan.total};
+}
+
 /* 買い目を作る。predict.js をそのまま呼ぶ（モデルは一箇所にしか置かない）。 */
 function makePlan(r){
   const out=execFileSync(process.execPath,
@@ -106,7 +129,7 @@ function makePlan(r){
 }
 
 /* ---- 本体 ------------------------------------------------------- */
-(function main(){
+(async function main(){
   console.log(`\n=== 複数場の自動ループ（${HD}） ===`);
   console.log(`  上限 ${MAX}レース`
     + (ONLY.length?` / 場を ${ONLY.map(j=>VN[j]||j).join('・')} に限定`:' / 全場')
@@ -156,10 +179,64 @@ function makePlan(r){
 
   if(PLAN_ONLY){ console.log('\n  --plan なので、ここまでです。'); return; }
   if(!queue.length){ console.log('\n  まわせるレースがありません。'); return; }
+  if(FILL) return withBrowser(queue);
+  runLoop(queue, null, null);
+})();
 
+/* --fill のとき。ブラウザを1回だけ開いて、最後まで使い回す。 */
+async function withBrowser(queue){
+  const V=require('./vote-assist.js');
+  const readline=require('readline');
+  const ask = q => new Promise(r=>{
+    const rl=readline.createInterface({input:process.stdin,output:process.stdout});
+    rl.question(q, a=>{ rl.close(); r(a.trim()); });
+  });
+  const {browser, ctx, page} = await V.openBrowser();
+  console.log('\n  ブラウザを開きました。');
+  console.log('  ★ 加入者番号・暗証番号・認証用パスワードは、ご自身で画面に打ってください。');
+  console.log('    このスクリプトはそれを受け取りませんし、保存もしません。');
+  await page.goto('https://www.boatrace.jp/owpc/pc/login_?authAfterTrans=stay',
+                  {waitUntil:'domcontentloaded'}).catch(()=>{});
+  await ask('\n  ログインが終わったら Enter > ');
+  console.log(`\n  最初のレース（${queue[0].venue} ${queue[0].rno}R）の入力画面まで進んでください。`);
+  console.log('    「投票サイトへ」→ 場とレースを選ぶ → 3連単 → 通常投票');
+  console.log('  ★ ベットリストは空のままにしておいてください。');
+  await ask('\n  入力画面が出たら Enter > ');
+  await runLoop(queue, ctx, ask, V);
+  console.log('\n  ブラウザは開いたままにします。閉じるときはウィンドウを閉じてください。');
+}
+
+async function runLoop(queue, ctx, ask, V){
   console.log('\n  ここから1レースずつ進みます。止めるときは Ctrl+C。\n');
-  let done=0;
+  if(STOP_LOSS!=null)
+    console.log(`  損切り ¥${Number(STOP_LOSS).toLocaleString()}。収支がここまで減ったら残りを捨てて終わります。\n`);
+  let done=0, spent=0, lastVenue=null, net=0;
+  const waiting=[];   /* 結果待ち。次のレースの準備中に取りに行く */
+
+  /* 結果の出たものを精算して、収支を更新する。損切りに当たれば true。 */
+  const settleAll = () => {
+    for(let i=waiting.length-1; i>=0; i--){
+      const w=waiting[i];
+      if(r0(w.r) > 0) continue;              /* まだ締切前 */
+      const s=settle(w.r, w.plan);
+      if(!s) continue;                        /* 結果がまだ */
+      waiting.splice(i,1);
+      net += s.net;
+      log(`${w.r.venue}${w.r.rno}R 結果 ${s.result} ¥${s.pay}（${s.pop}番人気）`
+        + ` → ${s.hit?'的中 +¥'+(s.back-s.inv).toLocaleString():'外れ -¥'+s.inv.toLocaleString()}`
+        + `  通算 ${net>=0?'+':''}¥${net.toLocaleString()}`);
+    }
+    if(STOP_LOSS!=null && net <= -Math.abs(Number(STOP_LOSS))){
+      console.log(`\n  ★ 損切りに当たりました（通算 ¥${net.toLocaleString()} / 損切り ¥${(-Math.abs(Number(STOP_LOSS))).toLocaleString()}）。`);
+      console.log('    残りのレースは捨てて終わります。');
+      return true;
+    }
+    return false;
+  };
+  const r0 = rr => rr.closeMin - nowMin();
+
   for(const r of queue){
+    if(settleAll()) break;
     const label=`${r.venue}${r.rno}R`;
     let left=r.closeMin-nowMin();
     if(left < MIN_LEAD){ log(`${label} は締切が近すぎるので飛ばします（残り${left}分）`); continue; }
@@ -187,13 +264,46 @@ function makePlan(r){
     console.log(`──────── ${label} 買い目（締切${r.close}・残り${r.closeMin-nowMin()}分） ────────`);
     console.log(p.block);
     if(p.warn) console.log('  '+p.warn.trim());
-    console.log(`\n  打ち込むなら別の画面で:  node vote-assist.js tmp/plan.json`);
-    console.log(`  （すでにブラウザを開いて ${r.venue} ${r.rno}R の入力画面にしてある場合は Enter）`);
-    console.log(`  ここまで ${done}/${queue.length}本。持ち出しは最大 ¥${(YEN_PER_RACE*done).toLocaleString()}\n`);
+    if(!ctx){
+      console.log(`\n  打ち込むなら別の画面で:  node vote-assist.js tmp/plan.json`);
+      console.log(`  ここまで ${done}/${queue.length}本。持ち出しは最大 ¥${(YEN_PER_RACE*done).toLocaleString()}\n`);
+    }else{
+      /* 場が変わるときだけ人に頼む。レースの切り替えは fill() がやる。 */
+      if(lastVenue && lastVenue !== r.venue){
+        console.log(`\n  ★ 場が ${lastVenue} → ${r.venue} に変わります。`);
+        console.log('    画面上部の「場変更・複数場選択」で切り替えてください。');
+        console.log('    （別ウィンドウが開く作りなので、ここは自動にしていません）');
+        await ask(`    ${r.venue} ${r.rno}R の入力画面が出たら Enter > `);
+      }
+      let plan; try{ plan=V.loadPlan(path.join(ROOT,'tmp','plan.json')); }
+      catch(e){ console.log(`  買い目を読めませんでした: ${e.message}`); continue; }
+      try{
+        await V.fill(ctx, plan, null);
+        spent += plan.total;
+      }catch(e){
+        console.log(`\n  ✗ ${label} は打ち込めませんでした: ${e.message}`);
+        console.log('    何も入れていないか、途中で止まっています。画面を見て確かめてください。');
+        const a=await ask('    続けますか（y で次のレースへ / それ以外でやめる）> ');
+        if(String(a).toLowerCase()!=='y'){ console.log('  やめました。'); break; }
+        continue;
+      }
+      lastVenue = r.venue;
+      console.log(`  ここまで ${done}/${queue.length}本。入れた合計 ¥${spent.toLocaleString()}`);
+      const a2 = await ask('\n  買いましたか（y なら収支に入れる / それ以外は買っていない） > ');
+      if(String(a2).toLowerCase()==='y') waiting.push({r, plan});
+      else console.log('  買っていないものとして、収支には入れません。');
+    }
 
     /* 締切をまたぐまで待ってから次へ（同じ時間に2レース進めない） */
     while(r.closeMin-nowMin() > 0) sleep(20);
   }
+  /* 終わる前に、残っている結果を取れるだけ取る */
+  for(let i=0;i<10 && waiting.length;i++){ if(settleAll()) break; sleep(60); }
   console.log(`\n=== 終わりました。買い目を出したのは ${done}本 ===`);
+  if(ctx){
+    console.log(`  打ち込んだ合計 ¥${spent.toLocaleString()}（実際に買ったかは人が決めたとおり）`);
+    console.log(`  買ったぶんの収支 ${net>=0?'+':''}¥${net.toLocaleString()}`);
+    if(waiting.length) console.log(`  結果待ちが ${waiting.length}本 残っています（node record.js で取り込めます）`);
+  }
   console.log('  結果は  node record.js  で取り込めます（レースが終わってから）。');
-})();
+}
