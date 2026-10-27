@@ -28,9 +28,13 @@
      node vote-assist.js plan.json --dry
          ブラウザを開かず、入れる中身と上限だけを確かめる。
 
+     node vote-assist.js --race 15 8
+         これひとつで終わる。ブラウザを開く → 自分でログイン →
+         投票画面まで進む → Enter → そこで買い目を作って打ち込む →
+         最終確認の手前で止まる。日付を足すこともできる（--race 15 8 20261027）。
+
      node vote-assist.js plan.json
-         ブラウザを開く → 自分でログイン → 買い目を入れる →
-         最終確認の手前で止まる。
+         すでに作ってある買い目を使う場合。
 
    plan.json の形
      { "jcd":"01", "rno":12, "date":"2026-10-26",
@@ -79,8 +83,35 @@ const VOTE_URL  = 'https://www.boatrace.jp/owpc/VoteConfirm.xhtml?authAfterTrans
 const args=process.argv.slice(2);
 const PROBE=args.includes('--probe');
 const SAMPLE=args.includes('--sample');
+/* --race <場コード> <R> [日付] で、買い目づくりから打ち込みまでを1コマンドにする。
+   もとは「別のターミナルで predict.js を走らせて plan.json を作っておく」形だった。
+   2026-10-27、リモートデスクトップ越しでそれができず、7Rに間に合わなかった。
+   画面ひとつで終わるようにする。 */
+const RACE_I = args.indexOf('--race');
+const RACE = RACE_I >= 0 ? {
+  jcd: String(args[RACE_I+1]||'').padStart(2,'0'),
+  rno: Number(args[RACE_I+2]),
+  hd : args[RACE_I+3] && /^\d{8}$/.test(args[RACE_I+3]) ? args[RACE_I+3]
+       : new Date(Date.now()+9*3600*1000).toISOString().slice(0,10).replace(/-/g,''),
+} : null;
 const DRY=args.includes('--dry');
-const planPath=args.find(a=>!a.startsWith('--'));
+const planPath = RACE ? path.join(__dirname,'tmp','plan.json')
+                      : args.find(a=>!a.startsWith('--'));
+
+/* 買い目を作る。predict.js をそのまま呼ぶ（モデルは一箇所にしか置かない）。 */
+function makePlan(){
+  const {execFileSync}=require('child_process');
+  console.log(`\n  買い目を作ります（${RACE.jcd} ${RACE.rno}R）。少しかかります…`);
+  const out = execFileSync(process.execPath,
+    [path.join(__dirname,'predict.js'), RACE.jcd, String(RACE.rno), RACE.hd, '--now'],
+    {encoding:'utf8', maxBuffer:64*1024*1024});
+  /* 買い目の中身は人にも見せる。どこを見ればいいか分かるように抜き出す。 */
+  const i = out.indexOf('── 買い目 ──');
+  const j = out.indexOf('※ 上の「市場」');
+  if(i>=0) console.log(out.slice(i, j<0?out.length:j).replace(/\n+$/,''));
+  const warn = out.match(/── 当たっても元が取れるか[\s\S]*?(?=\n\s*※ このオッズは締切前)/);
+  if(warn) console.log('\n  '+warn[0].trim());
+}
 
 const ask = q => new Promise(r=>{
   const rl=readline.createInterface({input:process.stdin,output:process.stdout});
@@ -440,11 +471,14 @@ if(require.main !== module) return;
        ログインと画面遷移に数分かかるので、展示待ちのあいだに
        そこまで済ませておけるほうがいい（2026-10-27 丸亀6Rで間に合わなかった）。
        買い目は打ち込む直前に読み直す。 */
-    const have = planPath && fs.existsSync(planPath);
+    const have = !RACE && planPath && fs.existsSync(planPath);
     let plan = have ? loadPlan(planPath) : null;
     if(plan) show(plan);
 
     if(DRY){
+      /* --race と一緒なら、ここで作って見せる（ブラウザは開かない）。
+         買い目だけ先に見たいときに使う。 */
+      if(!plan && RACE){ makePlan(); plan = loadPlan(planPath); show(plan); }
       if(!plan) throw new Error(`${planPath} がありません`);
       console.log('\n  --dry なので、ブラウザは開きません。中身と上限の確認だけです。');
       return;
@@ -452,9 +486,15 @@ if(require.main !== module) return;
     if(plan && plan.sample)
       throw new Error('これは見本の買い目です。ブラウザを開く側では使えません（--dry だけ）');
     if(!plan){
-      console.log(`\n  ${planPath} はまだありません。`);
-      console.log('  先にブラウザを開いて、ログインと画面の用意だけ済ませておきます。');
-      console.log('  買い目は、打ち込む直前にもう一度読みます。');
+      if(RACE){
+        console.log(`\n  ${RACE.jcd} ${RACE.rno}R（${RACE.hd}）`);
+        console.log('  先にブラウザを開きます。ログインと画面の用意を済ませてください。');
+        console.log('  買い目は、展示が出てから（あなたが Enter を押したときに）作ります。');
+      }else{
+        console.log(`\n  ${planPath} はまだありません。`);
+        console.log('  先にブラウザを開いて、ログインと画面の用意だけ済ませておきます。');
+        console.log('  買い目は、打ち込む直前にもう一度読みます。');
+      }
     }
 
     const {browser,ctx,page}=await openBrowser();
@@ -466,6 +506,8 @@ if(require.main !== module) return;
     console.log('  ★ 金額も艇番も、入れずにそのままにしておいてください。');
     console.log('    ベットリストが空でないと、このスクリプトは止まります。');
     await ask('\n  入力画面が出たら、ここで Enter > ');
+
+    if(RACE) makePlan();
 
     /* ここで読み直す。待っているあいだに確定版が書かれていることがある
        （暫定→確定で上書きされる）。古いほうを打ち込まないため。 */
