@@ -121,7 +121,7 @@ async function openBrowser(){
   const browser=await pw.chromium.launch({headless:false, args:['--window-size=1280,960']});
   const ctx=await browser.newContext({viewport:{width:1280,height:900}});
   const page=await ctx.newPage();
-  return {browser, page};
+  return {browser, ctx, page};
 }
 
 async function waitForLogin(page){
@@ -133,50 +133,98 @@ async function waitForLogin(page){
   return true;
 }
 
-/* 画面にあるものを書き出す。押さない・入れない。 */
-async function probe(page, outPath){
-  await page.goto(VOTE_URL, {waitUntil:'domcontentloaded'}).catch(()=>{});
-  await page.waitForTimeout(2000);
-  const info=await page.evaluate(()=>{
-    const take=(sel,f)=>[...document.querySelectorAll(sel)].slice(0,400).map(f);
-    return {
-      url: location.href,
-      title: document.title,
-      inputs: take('input,select,textarea', e=>({
-        tag:e.tagName.toLowerCase(), type:e.type||'', id:e.id||'', name:e.name||'',
-        cls:(e.className||'').toString().slice(0,80), ph:e.placeholder||'',
-        label:(e.labels&&e.labels[0]?e.labels[0].innerText:'').trim().slice(0,40)})),
-      clickables: take('button,a[href],[role=button],input[type=submit],input[type=button]', e=>({
-        tag:e.tagName.toLowerCase(), id:e.id||'', name:e.name||'',
-        text:(e.innerText||e.value||'').trim().slice(0,40),
-        cls:(e.className||'').toString().slice(0,80)})),
-      frames: [...document.querySelectorAll('iframe')].map(f=>f.src||f.name||'(no src)'),
-    };
-  });
+/* 画面にあるものを書き出す。押さない・入れない。
+   ==================================================================
+   はじめは VOTE_URL に自分で飛んでいたが、2026-10-27 に実機で走らせたら
+   「投票サイトへ」というボタンのあるページで止まっていた（入力欄1個）。
+   本当の投票画面はその先にあり、別のウィンドウか別のサイトで開く。
+   どこにあるかは中に入らないと分からないので、こちらから飛ばない。
+   人に進んでもらって、そのとき開いている画面を全部そのまま書き出す。
+
+   ページが複数（別ウィンドウ・別タブ）開くので、ぜんぶ見る。
+   投票の入力は iframe の中にあることも多いので、frame も中を見る。 */
+async function probe(ctx, outPath){
+  const look = async (target, label) => {
+    try{
+      return await target.evaluate(()=>{
+        const take=(sel,f)=>[...document.querySelectorAll(sel)].slice(0,500).map(f);
+        return {
+          url: location.href, title: document.title,
+          inputs: take('input,select,textarea', e=>({
+            tag:e.tagName.toLowerCase(), type:e.type||'', id:e.id||'', name:e.name||'',
+            cls:(e.className||'').toString().slice(0,80), ph:e.placeholder||'',
+            value: e.type==='password' ? '(ふせた)' : String(e.value||'').slice(0,20),
+            label:(e.labels&&e.labels[0]?e.labels[0].innerText:'').trim().slice(0,40)})),
+          clickables: take('button,a[href],[role=button],input[type=submit],input[type=button],td,th', e=>({
+            tag:e.tagName.toLowerCase(), id:e.id||'', name:e.name||'',
+            text:(e.innerText||e.value||'').trim().slice(0,30),
+            cls:(e.className||'').toString().slice(0,80)})).filter(c=>c.text||c.id),
+          text: (document.body?document.body.innerText:'').slice(0,4000),
+        };
+      });
+    }catch(e){ return {label, error:String(e.message).slice(0,120)}; }
+  };
+
+  const out=[];
+  const pages = ctx.pages();
+  for(let pi=0; pi<pages.length; pi++){
+    const pg=pages[pi];
+    const one = await look(pg, `page${pi}`);
+    one.label = `page${pi}`;
+    one.frames = [];
+    for(const fr of pg.frames()){
+      if(fr === pg.mainFrame()) continue;
+      const f = await look(fr, 'frame');
+      f.frameUrl = fr.url();
+      one.frames.push(f);
+    }
+    out.push(one);
+    const shot = outPath.replace(/\.\w+$/, `-page${pi}.png`);
+    try{ await pg.screenshot({path:shot, fullPage:true}); }catch(e){}
+  }
+
   fs.mkdirSync(path.dirname(outPath),{recursive:true});
-  fs.writeFileSync(outPath, JSON.stringify(info,null,1));
-  const shot=outPath.replace(/\.\w+$/,'.png');
-  await page.screenshot({path:shot, fullPage:true});
-  console.log(`\n  画面の作りを ${outPath} に書き出しました。`);
-  console.log(`  画面の写真を ${shot} に保存しました。`);
-  console.log(`  入力欄 ${info.inputs.length}個 / 押せるもの ${info.clickables.length}個 / iframe ${info.frames.length}個`);
-  /* 押してはいけないものが実際にあるか、名前を並べて見せる */
-  const danger=info.clickables.filter(c=>NEVER_CLICK.some(w=>c.text.includes(w)));
+  fs.writeFileSync(outPath, JSON.stringify(out,null,1));
+
+  console.log(`\n  開いている画面 ${out.length}個 を ${outPath} に書き出しました。`);
+  for(const o of out){
+    const nf = (o.frames||[]).length;
+    console.log(`    ${o.label}  入力欄${(o.inputs||[]).length}個 / 押せるもの${(o.clickables||[]).length}個`
+                + `${nf?` / iframe ${nf}個`:''}`);
+    console.log(`      ${o.url||'(URL不明)'}`);
+    for(const f of (o.frames||[]))
+      console.log(`      └ iframe 入力欄${(f.inputs||[]).length}個  ${f.frameUrl||''}`);
+  }
+  console.log(`  写真は ${outPath.replace(/\.\w+$/,'-pageN.png')} に保存しました。`);
+
+  /* 押してはいけないものが実際にあるか、名前を並べて見せる（押さない） */
+  const danger = out.flatMap(o=>(o.clickables||[])).filter(c=>NEVER_CLICK.some(w=>c.text.includes(w)));
   if(danger.length){
     console.log(`\n  ★ 押してはいけないもの（このスクリプトは押しません）`);
-    for(const d of danger) console.log(`     「${d.text}」 id=${d.id||'-'} class=${d.cls.slice(0,40)}`);
+    for(const d of danger.slice(0,10)) console.log(`     「${d.text}」 id=${d.id||'-'} class=${d.cls.slice(0,40)}`);
   }
-  console.log('\n  この2つのファイルを私に見せてください。画面に合わせて続きを作ります。');
+  console.log('\n  書き出したファイルを私に見せてください。画面に合わせて続きを作ります。');
   console.log('  ※ 写真に加入者番号などが写っていないか、送る前に確かめてください。');
+  console.log('    json にも入力欄の中身が入ります（パスワードはふせてあります）。');
 }
 
 /* ---- 本体 ----------------------------------------------------------- */
+/* require されたときは走らせない（テストから probe だけ呼べるように） */
+module.exports = { probe, loadPlan, openBrowser, NEVER_CLICK,
+                   MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
+if(require.main !== module) return;
+
 (async()=>{
   try{
     if(PROBE){
-      const {browser,page}=await openBrowser();
+      const {browser,ctx,page}=await openBrowser();
       await waitForLogin(page);
-      await probe(page, path.join(__dirname,'tmp','vote-probe.json'));
+      console.log('\n  つぎに、買い目を入れる画面まで、ご自身で進んでください。');
+      console.log('    「投票サイトへ」を押す → 場とレースを選ぶ → 3連単の入力画面を出す');
+      console.log('    別のウィンドウが開いても構いません。開いたまま進めてください。');
+      console.log('  ★ 金額は入れなくて構いません。入れても、このスクリプトは買いません。');
+      await ask('\n  買い目を入れる画面が出たら、ここで Enter > ');
+      await probe(ctx, path.join(__dirname,'tmp','vote-probe.json'));
       await ask('\n  ブラウザを閉じてよければ Enter > ');
       await browser.close();
       return;
