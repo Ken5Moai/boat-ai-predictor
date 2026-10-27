@@ -2713,7 +2713,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点86% ／ 波乱8点だけ135% ／ 18点まとめて108%（224レース）。');
+        console.log('  実測 本線10点73% ／ 波乱8点だけ122% ／ 18点まとめて94%（383レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

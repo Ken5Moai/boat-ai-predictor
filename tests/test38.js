@@ -22,7 +22,18 @@ if(from<0||to<0){ console.log('  ✗ FAIL: RACES を取り出せない'); proces
 const RACES=vm.runInNewContext(src.slice(from+'module.exports ='.length, to+2));
 
 console.log('\n=== 同じ日に2回以上走った選手の出走表が食い違っていないか ===');
-const FIELDS=['g','nat','loc','mot','bt','st','F'];
+/* 選手を特定する項目。ここが食い違えば、取り込みで行を取り違えている。
+   同じ日・同じ登番なら必ず一致しなければならない。 */
+const FIELDS=['g','nat','loc','st','F'];
+/* モーター2連率・ボート2連率は別扱い。
+   2026-10-28、桐生5R と桐生12R の登番4961 で bt が 29.5 と 30.81 に割れた。
+   取り込みの誤りかと思って公式ページを直接見たら、公式が同じ日の
+   同じ選手にこの2つの値を出していた（江戸川4R/9R の登番4230 も同様）。
+   理由までは分からない（ボート交換か、集計の切り替わりか）。
+   取り込みは正しいので、ここは一致を求めない。
+   ただし別の艇と取り違えていれば大きく離れるはずなので、幅だけ見る。 */
+const BOAT_FIELDS=['mot','bt'];
+const BOAT_TOLERANCE=6;
 const seen=new Map();          /* "日付|登番" → [{race, boat}] */
 for(const r of RACES){
   if(!r.date) continue;
@@ -43,13 +54,30 @@ const UNRESOLVED = {
     +'どちらか分かるまで、この1件だけ別扱いにする。',
 };
 let pairs=0, unresolved=0;
+const boatDiffs=[];   /* モーター/ボート2連率が動いたもの（落とさない） */
 for(const [k,list] of seen){
   if(list.length<2) continue;
   pairs++;
   const [d,reg]=k.split('|');
   const first=list[0];
   const bad=[];
-  for(const cur of list.slice(1))
+  for(const cur of list.slice(1)){
+    for(const f of BOAT_FIELDS){
+      const a=first.b[f], c=cur.b[f];
+      if(a==null || c==null || a===c) continue;
+      const diff=Math.abs(a-c);
+      const key=`${d}|${reg}|${f}`;
+      if(UNRESOLVED[key]){
+        /* 前から別扱いにしてある食い違い。幅の検査より先に見る。 */
+        unresolved++;
+        console.log(`  － 未解決 ${key}\n      ${UNRESOLVED[key]}`);
+      }else if(diff > BOAT_TOLERANCE){
+        bad.push(`${f}: ${first.race.name}=${a} / ${cur.race.name}=${c}`
+               + `（差${diff.toFixed(2)} > ${BOAT_TOLERANCE}。別の艇と取り違えている疑い）`);
+      }else{
+        boatDiffs.push(`${d} 登番${reg} ${f} ${a}→${c}（差${diff.toFixed(2)}）`);
+      }
+    }
     for(const f of FIELDS)
       if(first.b[f]!==cur.b[f]){
         const key=`${d}|${reg}|${f}`;
@@ -60,7 +88,8 @@ for(const [k,list] of seen){
           bad.push(`${f}: ${first.race.name}=${first.b[f]} / ${cur.race.name}=${cur.b[f]}`);
         }
       }
-  if(bad.length===0 && !list.slice(1).some(cur=>FIELDS.some(f=>first.b[f]!==cur.b[f]))){
+  }
+  if(bad.length===0){
     ok(true, `${d} 登番${reg}（${list.length}走: ${list.map(x=>'R'+x.race.rno).join(' ')}）の出走表が一致`);
   }else if(bad.length){
     ok(false, `${d} 登番${reg}（${list.length}走）の出走表が一致  ${bad.join(' / ')}`);
