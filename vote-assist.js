@@ -55,10 +55,23 @@ const MAX_POINTS = 24;            /* 点数 */
    テレボートの画面の作りはまだ実物で確かめていないので、
    --probe で出した一覧を見て、ここに足していくこと。
    「押さないものの一覧」は、増やすぶんには安全側に働く。 */
+/* 押すと投票が進む・確定するもの。実機の画面（2026-10-27 唐津6R）で確かめた。
+   「投票入力完了」を押すと入力画面を離れて確認に進む。ここが引き返せる最後の線。
+   このスクリプトは入力画面から出ない。 */
 const NEVER_CLICK = [
-  '投票', '投票する', '購入', '購入する', '確定', 'ベット',
-  'BET', 'bet', '金額確定', '投票内容確認',
+  '投票入力完了', '投票する', '購入する', '確定', '金額確定', '投票内容確認',
+  '投票を確定', 'ベットを確定',
 ];
+/* 押してよいもの。買い目をリストに積むだけで、投票は進まない。
+   「ベットリストに追加」は語に「ベット」を含むので、
+   NEVER_CLICK に 'ベット' を入れていたときは誤って禁止側に入っていた。
+   必要な操作まで禁止すると、結局人が90回手で押すことになる。 */
+const OK_TO_CLICK = ['ベットリストに追加'];
+const isNeverClick = t => {
+  const s = String(t||'').trim();
+  if(OK_TO_CLICK.some(w=>s.includes(w))) return false;
+  return NEVER_CLICK.some(w=>s.includes(w));
+};
 
 const LOGIN_URL = 'https://www.boatrace.jp/owpc/pc/login_?authAfterTrans=stay';
 const VOTE_URL  = 'https://www.boatrace.jp/owpc/VoteConfirm.xhtml?authAfterTrans=stay&voteTagId=commonHead';
@@ -198,7 +211,7 @@ async function probe(ctx, outPath){
   console.log(`  写真は ${outPath.replace(/\.\w+$/,'-pageN.png')} に保存しました。`);
 
   /* 押してはいけないものが実際にあるか、名前を並べて見せる（押さない） */
-  const danger = out.flatMap(o=>(o.clickables||[])).filter(c=>NEVER_CLICK.some(w=>c.text.includes(w)));
+  const danger = out.flatMap(o=>(o.clickables||[])).filter(c=>isNeverClick(c.text));
   if(danger.length){
     console.log(`\n  ★ 押してはいけないもの（このスクリプトは押しません）`);
     for(const d of danger.slice(0,10)) console.log(`     「${d.text}」 id=${d.id||'-'} class=${d.cls.slice(0,40)}`);
@@ -210,7 +223,7 @@ async function probe(ctx, outPath){
 
 /* ---- 本体 ----------------------------------------------------------- */
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
-module.exports = { probe, loadPlan, openBrowser, NEVER_CLICK,
+module.exports = { probe, loadPlan, openBrowser, NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;
 

@@ -25,7 +25,8 @@ const INNER=`<!doctype html><meta charset="utf-8"><title>iframe の中</title>
 <input id="kumiban" name="kumiban" placeholder="組番">
 <input id="kingaku" name="kingaku" placeholder="金額">
 <select id="shiki" name="shiki"><option>3連単</option></select>
-<button id="go" class="btn">投票</button><button id="clr">クリア</button></body>`;
+<button id="go" class="btn">ベットリストに追加</button>
+<button id="done">投票入力完了</button></body>`;
 const MAIN=`<!doctype html><meta charset="utf-8"><title>投票メイン</title>
 <body><h1>投票サイト</h1>
 <input id="pw" type="password" value="ひみつ">
@@ -78,8 +79,29 @@ fs.writeFileSync(path.join(DIR,'main.html'),MAIN);
   /* 押してはいけないものを見つけても、押さずに名前を出すだけ */
   const said1=said.join('\n');
   ok_(/押してはいけないもの/.test(said1), '押してはいけないものを知らせる');
-  for(const w of ['投票サイトへ','購入する','投票'])
+  /* 挙げるのは「押すと投票が進む／確定するもの」だけ。
+     「投票サイトへ」は遷移リンク、「投票」は式別のタブなので挙げない。
+     何でも挙げると、本当に危ないものが埋もれる。 */
+  for(const w of ['購入する','投票入力完了'])
     ok_(said1.includes(w), `「${w}」を押してはいけないものとして挙げる`);
+  for(const w of ['投票サイトへ','ベットリストに追加'])
+    ok_(!said1.includes(w+'」'), `「${w}」は危ない側に挙げない`);
+
+  /* 押してよいもの／絶対に押さないものの線引き。
+     実機の画面（2026-10-27 唐津6R 3連単 通常投票）の文言で確かめる。
+     ここを間違えると、必要な操作まで禁止して人が90回手で押すことになるか、
+     逆に投票を確定させてしまう。どちらも困るので両向きに見る。 */
+  console.log('\n  押してよいもの／絶対に押さないもの');
+  const never=[['投票入力完了','入力画面を離れて確認に進む'],
+               ['投票する',''],['購入する',''],['確定',''],
+               ['投票内容確認',''],['金額確定','']];
+  const fine =[['ベットリストに追加','買い目を積むだけ。投票は進まない'],
+               ['おまかせ',''],['更新',''],['資金配分',''],['全削除',''],
+               ['オッズ投票',''],['ボックス投票','']];
+  for(const [t,why] of never)
+    ok_(V.isNeverClick(t)===true, `「${t}」は押さない${why?'（'+why+'）':''}`);
+  for(const [t,why] of fine)
+    ok_(V.isNeverClick(t)===false, `「${t}」は押してよい${why?'（'+why+'）':''}`);
 
   fs.rmSync(DIR,{recursive:true,force:true});
   console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
