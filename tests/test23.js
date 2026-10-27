@@ -136,5 +136,33 @@ console.log('\n=== 配列に穴（undefined）が開いていないか ===');
   const PENDING = require(path.join(__dirname,'..','data','pending.js'));
   look('PENDING', PENDING);
 }
+/* data/ に移したファイルを、古い場所のまま指していないか
+   ==================================================================
+   2026-10-27、predict.js の require.resolve が 'pending.js' のままで、
+   予想を出す直前に落ちた。移設のとき require() だけ直して
+   require.resolve() と readFileSync を見落としていた。
+   テストは通っていた（書き込み経路を誰も通していなかったため）。
+   文字列として残っていないかを、ここで機械的に見る。 */
+console.log('\n=== data/ のファイルを古い場所で指していないか ===');
+{
+  const moved=['races','odds','odds-live','payouts','card','pending','screened','bets'];
+  const files=[...fs.readdirSync(DIR).filter(f=>f.endsWith('.js')),
+               ...fs.readdirSync(path.join(DIR,'tests')).filter(f=>f.endsWith('.js')).map(f=>'tests/'+f)];
+  let bad=0;
+  for(const f of files){
+    const src=fs.readFileSync(path.join(DIR,f),'utf8');
+    for(const m of moved){
+      /* ROOT や __dirname のすぐ下に置いている書き方だけを見る。
+         'data','pending.js' のように分けてあるものは見逃さないよう別に書く。 */
+      const re=new RegExp(`(ROOT|__dirname)\\s*,\\s*['"\`]${m.replace('-','\\-')}\\.js['"\`]`);
+      const re2=new RegExp(`require\\(['"\`]\\.{1,2}/${m.replace('-','\\-')}\\.js['"\`]\\)`);
+      if(re.test(src) || re2.test(src)){
+        bad++; console.log(`  ✗ FAIL: ${f} が ${m}.js を古い場所で指している`);
+      }
+    }
+  }
+  ok(bad===0, `${files.length}個のファイルに古い指し方が残っていない`);
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);

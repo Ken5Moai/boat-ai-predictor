@@ -78,6 +78,7 @@ const VOTE_URL  = 'https://www.boatrace.jp/owpc/VoteConfirm.xhtml?authAfterTrans
 
 const args=process.argv.slice(2);
 const PROBE=args.includes('--probe');
+const SAMPLE=args.includes('--sample');
 const DRY=args.includes('--dry');
 const planPath=args.find(a=>!a.startsWith('--'));
 
@@ -118,6 +119,7 @@ function loadPlan(p){
 }
 
 function show(plan){
+  if(plan.sample) console.log('\n  ★ これは見本です。本物の買い目ではありません。');
   console.log(`\n  ${plan.date||''} 場コード${plan.jcd} ${plan.rno}R  3連単`);
   console.log(`  ${plan.rows.length}点 / 合計 ¥${plan.total.toLocaleString()}\n`);
   for(const r of plan.rows)
@@ -360,6 +362,26 @@ if(require.main !== module) return;
 
 (async()=>{
   try{
+    /* 見本の plan.json を書く。--dry の練習用。
+       本物の買い目は predict.js が書く。見本と取り違えないよう、
+       race に「見本」と入れ、--dry 以外では使えないようにしてある。 */
+    if(SAMPLE){
+      const dir=path.join(__dirname,'tmp'); fs.mkdirSync(dir,{recursive:true});
+      const f=path.join(dir,'plan-sample.json');
+      fs.writeFileSync(f, JSON.stringify({
+        jcd:'23', rno:1, date:'1970-01-01',
+        race:'見本（これは練習用です。本物の買い目ではありません）',
+        sample:true, provisional:false,
+        best:'1-2-3', bestYen:100, unitYen:100,
+        main:['1-2-3','1-2-4','1-3-2','1-3-4','2-1-3','2-1-4','2-3-1','3-1-2','3-2-1','1-2-5'],
+        ana :['4-1-2','4-2-1','5-1-2','5-2-1','6-1-2','6-2-1','4-1-3','5-1-3'],
+      },null,1));
+      console.log(`\n  見本を書きました: ${f}`);
+      console.log('  試すとき:  node vote-assist.js tmp/plan-sample.json --dry');
+      console.log('  ※ 見本はブラウザを開く側では使えません（--dry だけ）。');
+      return;
+    }
+
     if(PROBE){
       const {browser,ctx,page}=await openBrowser();
       await waitForLogin(page);
@@ -376,6 +398,9 @@ if(require.main !== module) return;
 
     const plan=loadPlan(planPath);
     show(plan);
+
+    if(plan.sample && !DRY)
+      throw new Error('これは見本の買い目です。ブラウザを開く側では使えません（--dry だけ）');
 
     if(DRY){
       console.log('\n  --dry なので、ブラウザは開きません。中身と上限の確認だけです。');

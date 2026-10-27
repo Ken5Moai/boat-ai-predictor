@@ -115,8 +115,8 @@ for(const R of targets){
   fs.writeFileSync(path.join(ROOT,'data','pending.js'), newP);
   fs.writeFileSync(path.join(ROOT,'data','races.js'), newB);
   fs.writeFileSync(path.join(ROOT,'data','odds.js'), newO);
-  delete require.cache[require.resolve(path.join(ROOT,'pending.js'))];
-  if(require(path.join(ROOT,'pending.js')).some(x=>!x)) throw new Error('pending.js に穴ができた');
+  delete require.cache[require.resolve(path.join(ROOT,'data','pending.js'))];
+  if(require(path.join(ROOT,'data','pending.js')).some(x=>!x)) throw new Error('pending.js に穴ができた');
   console.log(`  ${R.name}: ${res.result} ¥${res.pay}（${res.pop}番人気）を記録しました`);
   moved++;
   sleep(2);

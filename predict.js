@@ -140,8 +140,8 @@ ${lines.join(',\n')}]}`;
       : p.replace(/\n\];\s*$/, ',\n'+block+'\n];\n');
   }
   fs.writeFileSync(path.join(ROOT,'data','pending.js'), p);
-  delete require.cache[require.resolve(path.join(ROOT,'pending.js'))];
-  const P=require(path.join(ROOT,'pending.js'));
+  delete require.cache[require.resolve(path.join(ROOT,'data','pending.js'))];
+  const P=require(path.join(ROOT,'data','pending.js'));
   if(P.some(r=>!r)) throw new Error('pending.js に穴ができた');
 
   const upsertOdds = (file, wrap) => {
@@ -297,7 +297,12 @@ const grab = () => {
    実測では展示は締切12〜17分前に出る。 */
 {
   let left = minsLeft();
-  while(left != null && left > 25){
+  /* --now は「待たずに今すぐ出す」という意味。展示待ちだけ飛ばして
+     こちらの待機が残っていたので、--now なのに10分待つことがあった
+     （2026-10-27 三国7R で踏んだ）。下見や練習用なので、ここも飛ばす。 */
+  if(NOW_ONLY && left != null && left > 25)
+    log(`  --now なので待ちません（残り${left}分。展示はまだのはずです）。`);
+  while(!NOW_ONLY && left != null && left > 25){
     const wait = Math.min(600, (left - 22) * 60);
     log(`  締切まで間があるので ${Math.round(wait/60)}分待ちます（残り${left}分）。`);
     sleep(wait);
