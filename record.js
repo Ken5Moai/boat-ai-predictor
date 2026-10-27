@@ -102,7 +102,13 @@ for(const R of targets){
   /* --- 書く前に、書いた結果が読めるかを確かめる --- */
   const tmp = path.join(ROOT,'.record-check.js');
   try{
-    fs.writeFileSync(tmp, 'module.exports=['+newB.match(/const RACES=\[([\s\S]*?)\n\];\n/)[1]+'];\n');
+    /* data/races.js は module.exports = [ … ]; の形。
+       移設前は const RACES=[ だった。ここを直し忘れていて、
+       2026-10-27 に5件まとめて「検算で止めました」になった
+       （止まったのは正しい。書く前に気づけている）。 */
+    const m = newB.match(/module\.exports = \[([\s\S]*?)\n\];/);
+    if(!m) throw new Error('data/races.js から RACES を取り出せない');
+    fs.writeFileSync(tmp, 'module.exports=['+m[1]+'];\n');
     /* require はキャッシュするので、消してから読む。これを忘れると
        1件目の結果を使い回して、2件目以降が全部「末尾が違う」で止まる。 */
     delete require.cache[require.resolve(tmp)];

@@ -164,5 +164,30 @@ console.log('\n=== data/ のファイルを古い場所で指していないか 
   ok(bad===0, `${files.length}個のファイルに古い指し方が残っていない`);
 }
 
+/* RACES の目印を古いまま探しているコードが残っていないか
+   ==================================================================
+   data/races.js に移したとき、配列の頭が const RACES=[ から
+   module.exports = [ に変わった。require() の経路は直したが、
+   本文から切り出している箇所を2回見落とした。
+     absorb-day.js（移設時に気づいた）
+     record.js の検算（2026-10-27、5件まとめて止まって気づいた）
+   どちらも「止まった」ので実害は無かったが、気づくのが遅い。
+   文字列として残っていないかを機械的に見る。 */
+console.log('\n=== RACES の目印を古いまま探していないか ===');
+{
+  const files=[...fs.readdirSync(DIR).filter(f=>f.endsWith('.js')),
+               ...fs.readdirSync(path.join(DIR,'tests')).filter(f=>f.endsWith('.js')).map(f=>'tests/'+f)];
+  let bad=0;
+  for(const f of files){
+    const src=fs.readFileSync(path.join(DIR,f),'utf8');
+    /* 「const RACES=[」を探している書き方。コメントの中は見逃してよいので、
+       indexOf / match / RegExp の引数に出てくるものだけを見る。 */
+    if(/(indexOf|match|RegExp|test)\s*\(\s*[/'"`][^'"`/]*const\s+RACES=\\?\[/.test(src)){
+      bad++; console.log(`  ✗ FAIL: ${f} が「const RACES=[」を探している（いまは module.exports = [）`);
+    }
+  }
+  ok(bad===0, `${files.length}個のファイルに古い目印が残っていない`);
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exit(fail?1:0);
