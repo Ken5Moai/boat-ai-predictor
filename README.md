@@ -1,5 +1,25 @@
 # ボートAI予想ツール v24 STRUCTURED
 
+## はじめに — data/ が要ります（2026-10-27）
+
+レース記録とオッズは **[boat-ai-data](https://github.com/Ken5Moai/boat-ai-data)（非公開）** に分けてあります。
+このリポジトリは GitHub Pages で公開しているので、公式から取り込んだ内容を置いたままにしないためです。
+（BOAT RACE サイトポリシーの著作権の項: 私的使用の範囲を超えた複製・頒布はできない）
+
+    git clone https://github.com/Ken5Moai/boat-ai-predictor
+    cd boat-ai-predictor
+    git clone https://github.com/Ken5Moai/boat-ai-data data
+    node tests/run.js
+
+`data/` が無いと `backtest.js` もテストも動きません。
+無いまま走ると「0レース」でもっともらしい嘘の数字が出るので、
+`need-data.js` が先頭で止めて、取ってくる手順を出します。
+
+クラウドのセッションは使い捨てなので、**張り直すたびに data/ のクローンが要ります。**
+
+生データを書くのは `record.js` / `absorb-day.js` / `predict.js` です。
+書いたら `data/` の中で commit して push してください（別リポジトリです）。
+
 ## v24 で変えたこと（2026-10-25 夜）
 
 **record.js を追加。結果を記録するまでを1コマンドにした。**

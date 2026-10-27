@@ -2,6 +2,7 @@
 // 重みやバンドを思いつきで変えないための検証環境。
 //   使い方: node backtest.js        （index.html と同じ場所で実行）
 const fs=require('fs'),path=require('path'),{JSDOM}=require('jsdom');
+require('./need-data.js')(__dirname);   /* data/ が無ければ理由を出して止まる */
 const ODDS=require('./data/odds.js');   /* 実オッズ120通り（あるレースだけ） */
 /* 予想のときに見ていた締切前のオッズ。締切時オッズとのずれを測るのに使う。 */
 const ODDS_LIVE = require('./data/odds-live.js');

@@ -1,4 +1,5 @@
 /* 全テストを順に実行する。  node tests/run.js  */
+require('../need-data.js')(require('path').join(__dirname,'..'));
 const {execFileSync}=require('child_process'),fs=require('fs'),path=require('path');
 const files=fs.readdirSync(__dirname).filter(f=>/^test\d*\.js$/.test(f))
   .sort((a,b)=>(parseInt(a.replace(/\D/g,''))||1)-(parseInt(b.replace(/\D/g,''))||1));
