@@ -196,11 +196,15 @@ function makePlan(r){
       console.log('                                  禁じる条項が無いことを確かめてから');
       return;
     }
+    /* 損切りは必須にしない。本人は1回¥10,000しか入金しないので、
+       残高そのものが上限になっている（2026-10-28）。
+       そのぶん、残高が尽きたら止まることを buy() 側で見る。
+       指定してあれば今までどおり効く。 */
     if(BUY && STOP_LOSS==null){
-      console.log('\n  ✗ --buy のときは --stop-loss を必ず指定してください。');
-      console.log('     無人で押す以上、金額の歯止めが要ります。');
-      console.log('     例:  node auto.js --max 10 --fill --buy --stop-loss 5000');
-      return;
+      console.log('\n  ※ --stop-loss を指定していません。');
+      console.log('     止まるのは「上限レース数に達したとき」と「残高が足りなくなったとき」です。');
+      console.log(`     上限まで回ると最大 ¥${(YEN_PER_RACE*MAX).toLocaleString()} 使います。`);
+      console.log('     金額で止めたいときは --stop-loss 5000 のように指定してください。');
     }
     if(!FILL){
       console.log('\n  ✗ --buy は --fill と一緒に使ってください（打ち込まないと買えません）。');
@@ -211,7 +215,17 @@ function makePlan(r){
   if(!queue.length){ console.log('\n  まわせるレースがありません。'); return; }
   if(FILL) return withBrowser(queue);
   runLoop(queue, null, null);
-})();
+})().catch(e=>{
+  /* 生の例外をそのまま出さない。何が起きたかと、どうすればいいかを出す。 */
+  const m=String(e && e.message || e);
+  console.error('\n  ✗ 止まりました: '+m.slice(0,200));
+  if(/browserType\.launch|Target page, context or browser has been closed/.test(m)){
+    console.error('    ブラウザを開けませんでした。');
+    console.error('    画面のあるPCで動かしてください（クラウド側には画面がありません）。');
+    console.error('    はじめての場合:  npm install && npx playwright install chromium');
+  }
+  process.exitCode=1;
+});
 
 /* --fill のとき。ブラウザを1回だけ開いて、最後まで使い回す。 */
 async function withBrowser(queue){
@@ -315,6 +329,11 @@ async function runLoop(queue, ctx, ask, V){
           if(res.bought){ waiting.push({r, plan}); bought++; }
         }
       }catch(e){
+        if(e.outOfMoney){
+          console.log(`\n  ★ ${e.message}`);
+          console.log('    残高が尽きたので、ここで終わります。入金してから走らせ直してください。');
+          break;
+        }
         console.log(`\n  ✗ ${label} は打ち込めませんでした: ${e.message}`);
         console.log('    何も入れていないか、途中で止まっています。画面を見て確かめてください。');
         const a=await ask('    続けますか（y で次のレースへ / それ以外でやめる）> ');

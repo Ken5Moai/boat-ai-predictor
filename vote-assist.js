@@ -496,6 +496,17 @@ async function amountUnit(page, handle){
   return {unit:null, why:`欄のうしろが読めない（「${suffix}」）`};
 }
 
+/* 画面の「購入限度額」を読む。残高が尽きたら止めるために使う。
+   投票画面の上に「購入限度額0円」「購入可能ベット数9,999」と出ている。
+   読めなければ null（推測しない）。
+   本人は1回¥10,000しか入金しないので、残高そのものが上限になる。
+   それでも、尽きたあと空振りを続けないようにここで見る。 */
+async function readBalance(page){
+  const t = await page.evaluate(()=>document.body?document.body.innerText:'');
+  const m = t.match(/購入限度額\s*([\d,]+)\s*円/);
+  return m ? Number(m[1].replace(/,/g,'')) : null;
+}
+
 /* 確定画面に出ている「合計ベット数」と「購入金額」を読む。 */
 async function readConfirm(page){
   /* 画面ぜんぶから拾うと、入力画面に残っている「購入金額 00円」を
@@ -533,6 +544,17 @@ async function buy(ctx, plan, opt){
 
   const page = await findVotePage(ctx);
   if(!page) throw new Error('投票画面が見つかりません');
+
+  /* 残高。足りなければ押さない。買えないのに押しても断られるだけ。 */
+  const bal = await readBalance(page);
+  if(bal != null){
+    console.log(`  購入限度額 ¥${bal.toLocaleString()}`);
+    if(bal < plan.total){
+      const e=new Error(`残高が足りません（限度額 ¥${bal.toLocaleString()} / 買い目 ¥${plan.total.toLocaleString()}）`);
+      e.outOfMoney = true;
+      throw e;
+    }
+  }
 
   /* 入力画面の合計をもう一度見る。fill 直後に人が触っているかもしれない。 */
   const before = await readTotals(page);
@@ -627,7 +649,7 @@ function buyReadiness(){
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
 module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
                    readRaceOnScreen, venueName, gotoRace, buyReadiness,
-                   buy, readConfirm, amountUnit,
+                   buy, readConfirm, amountUnit, readBalance,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;

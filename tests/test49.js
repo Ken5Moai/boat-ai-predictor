@@ -111,6 +111,40 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
     await ctx.close();
   }
 
+  console.log('\n  残高（購入限度額）');
+  {
+    const {ctx,pg}=await prep();
+    ok_((await V.readBalance(pg))===10000, '画面から購入限度額を読める（¥10,000）');
+    await ctx.close();
+  }
+  {
+    /* 残高が買い目に足りない */
+    const {ctx,pg}=await prep();
+    await pg.evaluate(()=>{document.getElementById('bal').textContent='購入限度額 500 円　購入可能ベット数 9,999';});
+    const {err}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(!!err && /残高が足りません/.test(err.message),
+        `足りなければ押さない（${err?err.message.slice(0,30):'止まらなかった'}）`);
+    ok_(!!err && err.outOfMoney===true, 'ループに「残高切れ」と伝える印が付く');
+    ok_(!(await pg.evaluate(()=>window.__bought)), 'そのとき買っていない');
+    await ctx.close();
+  }
+  {
+    /* ちょうど足りる */
+    const {ctx,pg}=await prep();
+    await pg.evaluate(()=>{document.getElementById('bal').textContent='購入限度額 900 円　購入可能ベット数 9,999';});
+    const {err}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(!err, `ちょうど足りれば買える（${err?err.message.slice(0,30):'エラーなし'}）`);
+    await ctx.close();
+  }
+  {
+    /* 限度額が読めない画面でも、ほかが揃っていれば買える（読めないだけで止めない） */
+    const {ctx,pg}=await prep();
+    await pg.evaluate(()=>{const e=document.getElementById('bal'); if(e) e.remove();});
+    const {err}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(!err, `限度額が読めなくても、ほかが揃っていれば進む（${err?err.message.slice(0,30):'エラーなし'}）`);
+    await ctx.close();
+  }
+
   console.log('\n  --buy-dry なら押さない');
   {
     const {ctx,pg}=await prep();
