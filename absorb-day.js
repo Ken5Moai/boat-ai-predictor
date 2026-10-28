@@ -73,7 +73,8 @@ for(const file of fs.readdirSync(DIR).filter(x=>/^\d\d\.json$/.test(x)).sort()){
       + `result:'${R.result}',pop:${R.pop},pay:${R.pay},\n`
       + st + ` wind:null,ws:${R.ws},wave:${R.wave},temp:${R.temp},wtemp:${R.wtemp},\n B:[\n`
       + r.boats.map((b,i)=>` {reg:'${b.reg}',g:'${b.g}',nat:${f(b.nat,2)},loc:${f(b.loc,2)},`
-        + `mot:${f(b.mot,2)},bt:${f(b.bt,2)},st:${b.st==null?'null':f(b.st,2)},F:${b.F},`
+        + `motNo:${b.motNo??'null'},mot:${f(b.mot,2)},`
+        + `btNo:${b.btNo??'null'},bt:${f(b.bt,2)},st:${b.st==null?'null':f(b.st,2)},F:${b.F},`
         + `exST:${dot(b.exST)},`
         + `exF:${b.exF?"'F'":'null'},exT:${f(b.exT,2)},tilt:${f(b.tilt,1)},wt:${f(b.wt,1)},`
         + (b.adj ? `adj:${f(b.adj,1)},` : '')

@@ -18,7 +18,7 @@ const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.lo
 const DIR=path.join(__dirname,'..');
 const src=fs.readFileSync(path.join(DIR,'data','races.js'),'utf8');
 const from=src.indexOf('module.exports = ['), to=src.indexOf('\n];',from);
-if(from<0||to<0){ console.log('  ✗ FAIL: RACES を取り出せない'); process.exit(1); }
+if(from<0||to<0){ console.log('  ✗ FAIL: RACES を取り出せない'); process.exitCode = 1; return; }
 const RACES=vm.runInNewContext(src.slice(from+'module.exports ='.length, to+2));
 
 console.log('\n=== 同じ日に2回以上走った選手の出走表が食い違っていないか ===');
@@ -26,14 +26,44 @@ console.log('\n=== 同じ日に2回以上走った選手の出走表が食い違
    同じ日・同じ登番なら必ず一致しなければならない。 */
 const FIELDS=['g','nat','loc','st','F'];
 /* モーター2連率・ボート2連率は別扱い。
-   2026-10-28、桐生5R と桐生12R の登番4961 で bt が 29.5 と 30.81 に割れた。
-   取り込みの誤りかと思って公式ページを直接見たら、公式が同じ日の
-   同じ選手にこの2つの値を出していた（江戸川4R/9R の登番4230 も同様）。
-   理由までは分からない（ボート交換か、集計の切り替わりか）。
-   取り込みは正しいので、ここは一致を求めない。
-   ただし別の艇と取り違えていれば大きく離れるはずなので、幅だけ見る。 */
+   同じ日・同じ選手でも、公式がこの2つだけ違う値を出すことがある。
+   取り込みの誤りかと思って公式ページを直接見たら、公式自身が割れていた
+   （桐生5R/12R 登番4961、江戸川4R/9R 登番4230、蒲郡6R/11R 登番4743）。
+
+   以前はここを「差が6以内なら通す」という幅で見ていた。これは当てずっぽうで、
+   実測の差は 0.35 / 1.31 / 5.26 / 9.53 / 15.07 と散っていて、幅をどこに置いても
+   「本当の取り違え」と「本当の交換」を分けられない。幅を広げるのは逃げなので、
+   理由で見る形に変えた。
+
+   理由は公式の出走表に出ている。モーター2連率の左にモーター番号、
+   ボート2連率の左にボート番号が並んでいて、番号が違えば別の機体なので
+   値が違って当たり前。2026-10-28 常滑の登番3499 は 5R=20号艇 / 11R=11号艇 で、
+   公式ページを直接見て確かめた（bt 28.99 → 34.25）。
+
+   そこで:
+     ・番号を記録してあるレース同士 → 番号が違えば交換として通す。
+                                      番号が同じなのに値が違えば失敗。
+     ・番号を記録していない古いレース → 下の VERIFIED に1件ずつ登録する。
+                                        登録が無ければ失敗（勝手には通さない）。
+   番号の取り込みは 2026-10-28 に入れたので、それ以前の記録には番号が無い。 */
 const BOAT_FIELDS=['mot','bt'];
-const BOAT_TOLERANCE=6;
+const NO_FIELD={mot:'motNo', bt:'btNo'};
+
+/* 番号が無い記録のうち、公式ページを直接見て「公式自身が割れている」と
+   確かめたもの。証拠を書いた1件だけを通す。幅ではないので勝手には増えない。 */
+const VERIFIED = {
+  '2026-10-27|4961|bt':
+    '桐生5R=29.5 / 桐生12R=30.81。公式の出走表を両方開いて同じ値が出ることを確認済み。',
+  '2026-10-27|4230|bt':
+    '江戸川4R=29.35 / 江戸川9R=29.7。公式の出走表を両方開いて確認済み。',
+  '2026-10-28|4743|bt':
+    '蒲郡6R=33.33 / 蒲郡11R=42.86。公式の出走表を両方開いて確認済み'
+    +'（mot=46.51・nat=6.48・loc=6.56 は両方一致しており、艇の取り違えではない）。',
+  '2026-10-28|3499|bt':
+    '常滑5R=28.99 / 常滑11R=34.25。公式の出走表を両方開いたところ、'
+    +'ボート番号が 20 と 11 で違っていた（モーター番号は両方1）。本当の交換。',
+};
+
 const seen=new Map();          /* "日付|登番" → [{race, boat}] */
 for(const r of RACES){
   if(!r.date) continue;
@@ -53,7 +83,7 @@ const UNRESOLVED = {
     +'書き写しの誤りか本当の交換かは、9/24の出走表を見直さないと決められない。'
     +'どちらか分かるまで、この1件だけ別扱いにする。',
 };
-let pairs=0, unresolved=0;
+let pairs=0, unresolved=0, verified=0;
 const boatDiffs=[];   /* モーター/ボート2連率が動いたもの（落とさない） */
 for(const [k,list] of seen){
   if(list.length<2) continue;
@@ -67,15 +97,28 @@ for(const [k,list] of seen){
       if(a==null || c==null || a===c) continue;
       const diff=Math.abs(a-c);
       const key=`${d}|${reg}|${f}`;
+      const nf=NO_FIELD[f], na=first.b[nf], nc=cur.b[nf];
       if(UNRESOLVED[key]){
-        /* 前から別扱いにしてある食い違い。幅の検査より先に見る。 */
+        /* 前から別扱いにしてある食い違い。ほかの検査より先に見る。 */
         unresolved++;
         console.log(`  － 未解決 ${key}\n      ${UNRESOLVED[key]}`);
-      }else if(diff > BOAT_TOLERANCE){
-        bad.push(`${f}: ${first.race.name}=${a} / ${cur.race.name}=${c}`
-               + `（差${diff.toFixed(2)} > ${BOAT_TOLERANCE}。別の艇と取り違えている疑い）`);
+      }else if(na!=null && nc!=null){
+        /* 番号がある。これが理由を決める。 */
+        if(na!==nc){
+          boatDiffs.push(`${d} 登番${reg} ${f} ${a}→${c}`
+                       + `（${nf} ${na}→${nc}。機体が替わっているので当然）`);
+        }else{
+          bad.push(`${f}: ${first.race.name}=${a} / ${cur.race.name}=${c}`
+                 + `（${nf} はどちらも${na}で同じ機体なのに値が違う。読み違いの疑い）`);
+        }
+      }else if(VERIFIED[key]){
+        verified++;
+        boatDiffs.push(`${d} 登番${reg} ${f} ${a}→${c}（公式で確認ずみ）`);
       }else{
-        boatDiffs.push(`${d} 登番${reg} ${f} ${a}→${c}（差${diff.toFixed(2)}）`);
+        bad.push(`${f}: ${first.race.name}=${a} / ${cur.race.name}=${c}（差${diff.toFixed(2)}）\n`
+               + `      → 公式の出走表を両方開いて、${nf}（機体の番号）が違うかを見てください。\n`
+               + `         違えば本当の交換なので tests/test38.js の VERIFIED に証拠つきで足す。\n`
+               + `         同じなら読み違いなので data/races.js を直す。`);
       }
     }
     for(const f of FIELDS)
@@ -98,6 +141,18 @@ for(const [k,list] of seen){
 ok(pairs>0, `同じ日に2回以上走った選手が ${pairs} 人ぶんあり、突き合わせできている`);
 ok(unresolved===Object.keys(UNRESOLVED).length,
    `未解決として別扱いにしている食い違いは ${unresolved} 件（一覧と同じ数）`);
+/* VERIFIED は「公式を見て確かめた」という記録。使われない行が残っていると
+   次に本当の取り違えが来たとき黙って通す口になるので、数も見る。 */
+ok(verified===Object.keys(VERIFIED).length,
+   `公式で確認ずみとして通した食い違いは ${verified} 件（一覧の ${Object.keys(VERIFIED).length} 件と同じ数）`
+   + (verified < Object.keys(VERIFIED).length
+      ? `\n      → 使われていない登録があります。その日のレースに機体の番号が入った`
+       + `（番号で判定できるようになった）なら、VERIFIED からその行を消してください。`
+      : ''));
+if(boatDiffs.length){
+  console.log(`  － モーター/ボート2連率が同じ日に動いたもの ${boatDiffs.length} 件（理由つきで通している）`);
+  boatDiffs.forEach(x=>console.log('      '+x));
+}
 
 console.log('\n=== 今節成績の着順が、記録ずみのレース結果と食い違っていないか ===');
 /* 同じ日・同じ場で、この選手が出ていた「前のレース」を古い順に並べる。
@@ -151,4 +206,5 @@ if(ambiguous) console.log(`  － 同じSTが今節成績に複数あり、どれ
 if(notRecorded) console.log(`  － 今節成績を取っていないため突き合わせできなかった選手 ${notRecorded} 人（古い記録。誤りではない）`);
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

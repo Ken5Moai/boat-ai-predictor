@@ -133,5 +133,5 @@ MEMO
   ok(Object.keys(w.eval('proxyHealth')).length===0,'通信テスト時にリセットされる');
 
   console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-  process.exit(fail?1:0);
+  process.exitCode = fail ? 1 : 0;
 })();

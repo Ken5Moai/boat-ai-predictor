@@ -1809,11 +1809,43 @@ if(require.main===module){
       const nos = new Set(list.map(r=>r.rno));
       return [...Array(12)].every((_,i)=>nos.has(i+1));
     });
+    /* 1日ぶんだけ見ても12レースしかなく、たまたまで上下する。
+       「何日かたまって、はじめて意味を持つ」とだけ書いて合計を出していなかったので、
+       たまった分をここで足す。これが選り好みの入っていない唯一の数字。 */
+    const TOTAL = new Map();   /* 買い方 → {inv, back, races, won:[払戻…]} */
+    /* 当たった払戻を1件ずつ持つ。合計だけでは
+       「大穴1本で足りている」のか「散らばって足りている」のかが分からない。
+       事前に決めた判定条件が「最大の1件を除いても100%以上」なので、
+       この一覧が無いと判定できない。 */
+    /* 判定⑧用。凍結した場日を除いた分だけを別に積む。
+       「全部の合計」と「凍結後だけ」を取り違えないよう、入れものを分ける。 */
+/* 【判定⑧】で凍結する場日。宣言はループより前に置く必要がある
+       （場日ごとに「凍結後か」を切り替えながら積むため）。 */
+    const PREREG_ANA_DAYS = new Set([
+      '2026-10-20|23','2026-10-24|20',
+      '2026-10-26|01','2026-10-26|04','2026-10-26|05','2026-10-26|06','2026-10-26|09',
+      '2026-10-26|10','2026-10-26|11','2026-10-26|15','2026-10-26|21','2026-10-26|24',
+      '2026-10-27|01','2026-10-27|03','2026-10-27|05','2026-10-27|07','2026-10-27|08',
+      '2026-10-27|10','2026-10-27|13','2026-10-27|15','2026-10-27|16','2026-10-27|22',
+      '2026-10-28|07','2026-10-28|09','2026-10-28|10','2026-10-28|13','2026-10-28|15',
+      '2026-10-28|16','2026-10-28|22',
+    ]);
+
+    const FRESH_TOTAL = new Map();
+    let FRESH_FLAG = false;      /* いま足している場日が凍結後かどうか */
+    const addTotal = (label, inv, won, races) => {
+      for(const M of FRESH_FLAG ? [TOTAL, FRESH_TOTAL] : [TOTAL]){
+        if(!M.has(label)) M.set(label, {inv:0, races:0, won:[]});
+        const t=M.get(label);
+        t.inv+=inv; t.races+=races; t.won.push(...won);
+      }
+    };
     if(!full.length){
       console.log('  12レースそろった日はまだ無い。');
     }else{
       for(const [k,list] of full){
         const [date,jcd] = k.split('|');
+        FRESH_FLAG = !PREREG_ANA_DAYS.has(k);   /* 凍結後の場日だけ判定⑧に入れる */
         const names = new Set(list.map(r=>r.name));
         const sub = base.filter(x=>names.has(x.name));
         const lane1 = list.filter(r=>String(r.result).startsWith('1')).length;
@@ -1849,6 +1881,7 @@ if(require.main===module){
               if(ks.includes(info.result)) hits.push(info.pay);
             }
             const back=hits.reduce((a,c)=>a+c,0);
+            addTotal(label.trim(), inv, hits, 12);
             console.log(`      ${label.padEnd(18)} 投資¥${String(inv).padStart(6)}  `+
               `払戻¥${String(back).padStart(6)}  収支${(back-inv>=0?'+':'')}¥${(back-inv).toLocaleString()}  `+
               `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits.length}/12`);
@@ -1876,17 +1909,18 @@ if(require.main===module){
           money('本線＋波乱（18点）', p=>p.all);
           /* 至極を厚くした場合も同じ日で出す。払戻は100円あたりなので X/100 倍する。 */
           const weighted = (label, topYen, use) => {
-            let inv=0, back=0, hits=0;
+            let inv=0, won=[];
             for(const x of sub){
               const info = payOfDay[x.name]; if(!info || info.pay==null) continue;
               const pl = WIN.buyPlan(toC(x), {main:10, ana:8});
               const ks = [...new Set(use(pl))];
               for(const k of ks) inv += (k===pl.best ? topYen : 100);
               if(ks.includes(info.result)){
-                hits++;
-                back += info.pay * ((info.result===pl.best ? topYen : 100)/100);
+                won.push(Math.round(info.pay * ((info.result===pl.best ? topYen : 100)/100)));
               }
             }
+            const back=won.reduce((a,c)=>a+c,0), hits=won.length;
+            addTotal(label.trim(), inv, won, 12);
             console.log(`      ${label.padEnd(26)} 投資¥${String(inv).padStart(6)}  `+
               `払戻¥${String(Math.round(back)).padStart(6)}  `+
               `収支${(back-inv>=0?'+':'-')}¥${Math.abs(Math.round(back-inv)).toLocaleString()}  `+
@@ -1921,6 +1955,85 @@ if(require.main===module){
       }
       console.log('\n  ※ 1日は12レースしかない。ここの数字だけで買い方を決めないこと。');
       console.log('     選り好みの無い日が何日かたまって、はじめて意味を持つ。');
+
+      /* たまった分の合計。レースを選んでいないので、ここだけが素性の良い数字。 */
+      if(TOTAL.size){
+        const days=full.length, races=days*12;
+        console.log(`\n  ---- 上の ${days}場日 ＝ ${races}レースを全部あわせると（選り好みなし） ----`);
+        for(const [label,t] of TOTAL){
+          const back=t.won.reduce((a,c)=>a+c,0);
+          const top=t.won.length?Math.max(...t.won):0;
+          const less=back-top;
+          console.log(`      ${label.padEnd(26)} 投資¥${String(t.inv).padStart(8)}  `+
+            `払戻¥${String(back).padStart(8)}  `+
+            `収支${(back-t.inv>=0?'+':'-')}¥${Math.abs(back-t.inv).toLocaleString()}  `+
+            `回収率${String(Math.round(back/t.inv*100)).padStart(4)}%  `+
+            `最大1件除くと${String(Math.round(less/t.inv*100)).padStart(4)}%  `+
+            `的中${t.won.length}/${t.races}`);
+        }
+        console.log('      ※ 選んだレースだけを見た数字（上の「検証レース全体」）より低く出るのが普通。');
+        console.log('         低いほうが実際に近い。');
+        /* ここから下は「あとから当てた条件」であることを、はっきり書いておく。
+           100%以上 かつ 最大1件除いても100%以上 という条件は前から決めてあるが、
+           この348レースは条件を書いたあとに集めたものではなく、
+           数字を見てから当てている。つまり◎が付いても判定に通ったことにはならない。
+           ここは「判定⑧を書くきっかけになった数字」の置き場で、
+           判定そのものは下の【判定⑧】でやる。 */
+        console.log('\n      ---- 参考：条件（100%以上 かつ 最大1件除いても100%以上）に当てると ----');
+        console.log('      ※ これは数字を見たあとに当てているので、判定ではない。下の判定⑧でやる。');
+        for(const [label,t] of TOTAL){
+          const back=t.won.reduce((a,c)=>a+c,0);
+          const top=t.won.length?Math.max(...t.won):0;
+          const a=back/t.inv*100, b=(back-top)/t.inv*100;
+          const verdict = (a>=100 && b>=100) ? '条件を満たしている（ただし後出し）'
+                        : (a>=100)           ? '大穴1本に頼っている'
+                        :                      '満たしていない';
+          console.log(`      ${label.padEnd(26)} ${verdict}`);
+        }
+
+        /* 【判定⑧・2026-10-28に先に書いた】波乱8点だけを買うか
+           ------------------------------------------------------------
+           上の合計で、波乱8点だけが 130%（最大1件除いて113%）になった。
+           ほかの買い方は全部100%未満で、本線10点は63%。
+           これは「数字を見てから気づいたこと」なので、そのまま採ってはいけない。
+           丸亀の10月だけを切り出せば本線が107%に見えたのと同じ落とし穴。
+
+           そこで、今日そろっている29場日を凍結して対象外にし、
+           これから足す場日だけで判定する。条件は⑤⑥⑦と同じ2つ。
+             ・回収率100%以上
+             ・最大の払戻1件を除いても100%以上
+           必要数は15場日（180レース）。波乱8点の的中はおよそ7レースに1本で、
+           180レースなら25本前後たまる。⑤⑥（20件・12件）より厚めにしたのは、
+           波乱の払戻が大きく散らばり、少ない本数では当たり外れで決まるため。 */
+        console.log('\n  【判定⑧・2026-10-28に先に書いた】波乱8点だけを買うか');
+        {
+          const NEED_DAYS = 15;
+          const fresh = full.filter(([k])=>!PREREG_ANA_DAYS.has(k));
+          if(fresh.length < NEED_DAYS){
+            console.log(`    いま ${fresh.length}/${NEED_DAYS} 場日。たまったら判定する。`);
+            console.log(`    （凍結したのは今日時点の ${PREREG_ANA_DAYS.size} 場日。`
+                      + `これ以降にそろった場日だけで判定する）`);
+            if(fresh.length){
+              const t = FRESH_TOTAL.get('波乱（8点）');
+              if(t){
+                const back=t.won.reduce((a,c)=>a+c,0), top=t.won.length?Math.max(...t.won):0;
+                console.log(`    （参考 回収率${Math.round(back/t.inv*100)}% / `
+                          + `最大1件除くと${Math.round((back-top)/t.inv*100)}% / `
+                          + `的中${t.won.length}件。場日が足りないので根拠にしない）`);
+              }
+            }
+          }else{
+            const t = FRESH_TOTAL.get('波乱（8点）');
+            const back=t.won.reduce((a,c)=>a+c,0), top=Math.max(...t.won);
+            const a=back/t.inv*100, b=(back-top)/t.inv*100;
+            console.log(`    対象 ${fresh.length}場日 = ${fresh.length*12}レース（凍結分は除く）`);
+            console.log(`    ${a>=100?'○':'×'} 回収率100%以上        ${Math.round(a)}%`);
+            console.log(`    ${b>=100?'○':'×'} 最大1件を除いても100%以上 ${Math.round(b)}%`);
+            console.log(`    → ${a>=100&&b>=100 ? '波乱8点を採る。' : '欠けたので捨てる。採らない。'}`);
+          }
+        }
+        console.log('      ※ 判定が済むまで、買い方は本線10点のまま変えない。');
+      }
     }
   }
 
@@ -2713,7 +2826,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点72% ／ 波乱8点だけ121% ／ 18点まとめて94%（387レース）。');
+        console.log('  実測 本線10点70% ／ 波乱8点だけ115% ／ 18点まとめて90%（505レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

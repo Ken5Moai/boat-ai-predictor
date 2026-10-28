@@ -116,4 +116,5 @@ ok(rep.includes('57.2'),'レポートに住之江の実測1着率が出る');
 ok(d.querySelectorAll('.betrow').length===6,'買い目6点');
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

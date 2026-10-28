@@ -128,4 +128,5 @@ ok(need.length>=6 && need[0]===need[3] && need[1]===need[4] && need[2]===need[5]
    '2つの判定で必要な数字が同じ（後から緩めていない）');
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

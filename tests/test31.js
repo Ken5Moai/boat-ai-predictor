@@ -70,4 +70,5 @@ ok(!/oddsMap\s*=\s*map/.test(HTML.slice(i1,i2).replace('state.oddsMap = res.map'
    '検算を通さずにオッズを入れる抜け道が無い');
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

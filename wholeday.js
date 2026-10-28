@@ -67,7 +67,8 @@ const toRace=r=>({
   date:`${r.hd.slice(0,4)}-${r.hd.slice(4,6)}-${r.hd.slice(6,8)}`,
   result:r.result.result, pop:r.result.pop, pay:r.result.pay,
   wind:null, ws:r.result.ws, wave:r.result.wave, temp:r.result.temp, wtemp:r.result.wtemp,
-  B:r.boats.map(b=>({reg:b.reg,g:b.g,nat:b.nat,loc:b.loc,mot:b.mot,bt:b.bt,st:b.st,F:b.F,
+  B:r.boats.map(b=>({reg:b.reg,g:b.g,nat:b.nat,loc:b.loc,
+    motNo:b.motNo,mot:b.mot,btNo:b.btNo,bt:b.bt,st:b.st,F:b.F,
     exST:b.exST,exF:b.exF,exT:b.exT,tilt:b.tilt,wt:b.wt,adj:b.adj,parts:b.parts,
     entry:b.entry,rec:b.rec}))
 });

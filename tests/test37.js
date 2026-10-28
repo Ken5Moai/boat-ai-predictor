@@ -23,7 +23,7 @@ const ODDS=require(path.join(DIR,'data','odds.js'));
 const src=fs.readFileSync(path.join(DIR,'data','races.js'),'utf8');
 const from=src.indexOf('module.exports = [');
 const to=src.indexOf('\n];', from);
-if(from<0||to<0){ console.log('  ✗ FAIL: backtest.js から RACES を取り出せない'); process.exit(1); }
+if(from<0||to<0){ console.log('  ✗ FAIL: backtest.js から RACES を取り出せない'); process.exitCode = 1; return; }
 const RACES=vm.runInNewContext(src.slice(from+'module.exports ='.length, to+2));
 
 const ALL=[];
@@ -104,4 +104,5 @@ if(t2){
 }
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

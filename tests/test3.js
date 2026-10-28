@@ -147,5 +147,5 @@ console.log('\n=== AH. 同時実行の防止（ログで多重実行が起きて
   d.getElementById('urlCustomProxy').value='';
 
   console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-  process.exit(fail?1:0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -452,5 +452,5 @@ console.log('\n=== T. 通信失敗でも壊れない ===');
   ok(d.getElementById('btnGen').disabled===false,'失敗後も予想生成は可能なまま');
 
   console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-  process.exit(fail?1:0);
+  process.exitCode = fail ? 1 : 0;
 })();

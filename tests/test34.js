@@ -115,4 +115,5 @@ ok(/upsetView\(combos/.test(HTML) && /outerSecond\(x, x\.lane\)/.test(HTML),
 ok(/U\.restP < 0\.08/.test(HTML), '本命が堅すぎるレースでは出さない');
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

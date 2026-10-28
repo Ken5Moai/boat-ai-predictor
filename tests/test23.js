@@ -189,5 +189,78 @@ console.log('\n=== RACES の目印を古いまま探していないか ===');
   ok(bad===0, `${files.length}個のファイルに古い目印が残っていない`);
 }
 
+/* テストが process.exit() で終わっていないか
+   ------------------------------------------------------------------
+   stdout が配管のとき Node の書き出しは非同期で、process.exit() は
+   流れきる前にプロセスを落とす。2026-10-28、test38 の出力が増えたところで
+   末尾の集計行が消え、tests/run.js が「実行できませんでした」と出した。
+   このとき合計件数は 3131 と出ていたが、本当は 7403 だった。
+   4272 件が黙って捨てられていたことになる。切れる位置は実行ごとに変わるので、
+   運が悪ければ FAIL 行が消える。つまり「テストが通った」が信用できなくなる。
+   いちばん危ない種類の不具合なので、戻ってこないように見張る。 */
+console.log('\n=== テストが process.exit() で終わっていないか ===');
+/* 探し方について。
+   最初は「コメントと文字列を正規表現で剥がしてから探す」と書いたが、
+   test23.js 自身の中にある [/'"`] のような文字クラスで剥がし方が崩れ、
+   自分自身を誤検出した。正規表現リテラルと割り算を見分けるのは正規表現では無理。
+   そこで剥がすのをやめ、
+     ・複数行コメントは「いま中にいるか」を行をまたいで覚えて飛ばす
+     ・呼び出しは「文のはじめにある process.exit(」だけを見る
+   の2つにした。説明文の中の process.exit() は文のはじめには来ないので当たらない。 */
+const exitCalls = (src) => {
+  const hits=[]; let inBlock=false;
+  src.split('\n').forEach((L,i)=>{
+    let code='';
+    for(let j=0;j<L.length;j++){
+      if(inBlock){ if(L.startsWith('*/',j)){ inBlock=false; j++; } continue; }
+      if(L.startsWith('/*',j)){ inBlock=true; j++; continue; }
+      if(L.startsWith('//',j)) break;
+      code+=L[j];
+    }
+    if(/(^|[{};])\s*process\.exit\s*\(/.test(code)) hits.push(`${i+1}行目: ${L.trim()}`);
+  });
+  return hits;
+};
+{
+  const files=fs.readdirSync(path.join(DIR,'tests')).filter(f=>/\.js$/.test(f));
+  let bad=0;
+  for(const f of files){
+    const hits=exitCalls(fs.readFileSync(path.join(DIR,'tests',f),'utf8'));
+    if(hits.length){
+      bad++;
+      console.log(`  ✗ FAIL: tests/${f} が process.exit() を呼んでいる`);
+      hits.slice(0,3).forEach(h=>console.log('        '+h));
+      console.log('        → process.exitCode = … に置き換えてください（出力が切れます）');
+    }
+  }
+  ok(bad===0, `tests/ の${files.length}個が process.exit() を使っていない`);
+}
+/* 検査そのものが効いているか。空振りしていたら何も守っていないのに通る。 */
+/* 検査にかける文字列そのものが「文のはじめの呼び出し」の形になると、
+   この行自身が引っかかる。つなぎ合わせて、文面として出ないようにする。 */
+const EXIT='process.'+'exit';
+ok(exitCalls('let a=1;\n'+EXIT+'(0);\n').length===1,
+   '検査は本物の呼び出しを見つける');
+ok(exitCalls('console.log(1); '+EXIT+'(1); }\n').length===1,
+   '検査は行の途中にある呼び出しも見つける');
+ok(exitCalls('/* '+EXIT+'() は使わない。\n   '+EXIT+'() は出力を切る。 */\n').length===0,
+   '検査は複数行コメントの中の process.exit() を拾わない');
+ok(exitCalls("console.log('"+EXIT+"() はだめ');\n").length===0,
+   '検査は文字列の中の process.exit() を拾わない');
+
+/* 本体のスクリプトは出力が短く、人が画面で見るものなので process.exit() のままでよい。
+   ただし出力の多い backtest.js だけは、集計を配管に流すことがあるので見る。 */
+{
+  const src=fs.readFileSync(path.join(DIR,'backtest.js'),'utf8');
+  const hit=src.split('\n').filter(L=>/process\.exit\s*\(/.test(L.split('/*')[0].split('//')[0]));
+  /* backtest.js の exit は「データが無い」等で止まる経路だけ。
+     集計を出しきったあとに exit していないことを見る。 */
+  const last=src.lastIndexOf('process.exit(');
+  const sum=src.lastIndexOf('console.log');
+  ok(last<0 || last<sum,
+     `backtest.js は集計を出しきったあとに process.exit() していない（exit ${hit.length}箇所はすべて途中で止まる経路）`);
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

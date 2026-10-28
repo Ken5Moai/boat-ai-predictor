@@ -126,4 +126,5 @@ ok(saved.savedAt && new Date(saved.savedAt).getTime()>0,'保存時刻が残る')
 ok(saved.picks.every(p=>p.combo&&p.amount),'買い目と金額が確定した状態で保存');
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

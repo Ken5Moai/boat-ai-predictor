@@ -109,7 +109,8 @@ const write = (before, odds, oddsMin) => {
   const lines = boats.map((bt,i)=>{
     const L=i+1, bb=before.boats[i]||{}, e=before.exSt[L]||{};
     const rec='['+(bt.rec||[]).map(r=>'['+cell(r[0])+','+String(r[1]).replace(/^0/,'')+','+cell(r[2])+']').join(',')+']';
-    return ` {reg:'${bt.reg}',g:'${bt.g}',nat:${bt.nat},loc:${bt.loc},mot:${bt.mot},bt:${bt.bt},`+
+    return ` {reg:'${bt.reg}',g:'${bt.g}',nat:${bt.nat},loc:${bt.loc},`+
+      `motNo:${bt.motNo??'null'},mot:${bt.mot},btNo:${bt.btNo??'null'},bt:${bt.bt},`+
       `st:${bt.st},F:${bt.F},exST:${n(e.st)},exF:${e.f?"'F'":'null'},exT:${n(bb.exT)},`+
       `tilt:${n(bb.tilt)},wt:${n(bb.wt)},entry:${n(before.entry[L])},rec:${rec}}`;
   });

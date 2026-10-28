@@ -128,5 +128,5 @@ ok(d.getElementById('pasteDetails')!==null,'貼り付け欄が画面にある');
   ok(V(w.boatOf(1)?w.boatOf(1).registrationNumber?{value:w.boatOf(1).registrationNumber}:null:null)==='4064'
      ||w.boatOf(1).registrationNumber==='4064','登録番号は消えない');
   console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-  process.exit(fail?1:0);
+  process.exitCode = fail ? 1 : 0;
 })();

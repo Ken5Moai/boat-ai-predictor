@@ -133,5 +133,5 @@ Lo | 4957 | 40.00 3039 32.31`;
   ok(w.eval('V')(w.boatOf(1).motor2Rate)===31.22,'モーター2連率も正確');
 
   console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-  process.exit(fail?1:0);
+  process.exitCode = fail ? 1 : 0;
 })();

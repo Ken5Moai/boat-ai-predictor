@@ -124,6 +124,43 @@ console.log('\n=== 「全体で何レース」の表記が最新か ===');
   ok(bad === 0, `そのすべてが ${V_n}レースを指している`);
 }
 
+console.log('\n=== sync-figures の規則が全部当たっているか ===');
+/* sync-figures.js は「画面のこの文の数字を、実測で置き換える」規則の束。
+   文のほうを少し書き換えると規則が当たらなくなるが、黙って何もしないだけなので
+   気づけない。その箇所の数字は、昔の値のまま画面に残り続ける。
+
+   実際に2つ起きていた（2026-10-28に気づいた）。
+     ・「いちばん効いた2レースを除くと—%」
+       元の数字が消えて — になり、規則は \d+ しか探していないので二度と戻らない。
+     ・「10点の85%とは-4ポイント違います」
+       差が負になって符号が付き、\d+ に当たらなくなって 89%/85% のまま固定。
+       本当は 82%/70% で、画面は 12ポイントの差を 4ポイントと言い続けていた。
+
+   sync-figures.js は空振りした規則を自分で並べて出すので、それを読む。
+   1つでも空振りしていれば落とす。 */
+{
+  const {execFileSync}=require('child_process');
+  let out='';
+  try{
+    out=execFileSync(process.execPath,[path.join(ROOT,'sync-figures.js'),'--check'],
+                     {encoding:'utf8', maxBuffer:64*1024*1024});
+  }catch(e){ out=(e.stdout||'')+(e.stderr||''); }
+  const i=out.indexOf('当たらなかった規則');
+  if(i<0){
+    ok(true, 'sync-figures の規則がすべて画面のどこかに当たっている');
+  }else{
+    const lines=out.slice(i).split('\n').slice(1).filter(l=>l.trim().startsWith('/'));
+    ok(false, `sync-figures の規則が ${lines.length} 件空振りしている`
+            + '（画面のその箇所は古い数字のまま。文を直すか規則を直すこと）');
+    lines.slice(0,5).forEach(l=>console.log('      '+l.trim()));
+  }
+  /* 規則そのものが「— でも当たる」形になっているか。
+     \d+ だけを探す書き方だと、一度 — が入った箇所は永久に直らない。 */
+  const src=fs.readFileSync(path.join(ROOT,'sync-figures.js'),'utf8');
+  const dashSafe=(src.match(/\(\?:\\d\+\|—\)/g)||[]).length;
+  ok(dashSafe>=3, `数字が消えても当たる書き方 (?:\\d+|—) が ${dashSafe} 箇所ある（1箇所でも \\d+ だけだと戻せなくなる）`);
+}
+
 console.log('\n=== 直し方が用意されているか ===');
 /* このテストが落ちたとき、何をすればいいのかが分からないと意味がない。
    sync-figures.js を走らせれば直る、という道が消えていないかを見る。 */
@@ -135,4 +172,5 @@ ok(fs.existsSync(path.join(ROOT,'sync-figures.js')), 'sync-figures.js がある�
 }
 if(fail) console.log('\n  ※ 直し方: node sync-figures.js を走らせてから、もう一度テストする。');
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

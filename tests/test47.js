@@ -17,7 +17,7 @@ try{ pw=require('playwright'); }
 catch(e){
   console.log('\n=== vote-assist の fill ===\n  － playwright が無いので飛ばしました');
   console.log('\n================ 結果: 0 件成功 / 0 件失敗 ================');
-  process.exit(0);
+  process.exitCode = 0; return;
 }
 const V=require('../vote-assist.js');
 const MOCK='file://'+path.join(__dirname,'fixtures','mock-vote.html');

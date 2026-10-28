@@ -56,6 +56,47 @@ ok(clsNames.length>=65, `凍結した名前が65件以上ある（いま ${clsNa
 const missing2=clsNames.filter(n=>!have.has(n));
 ok(missing2.length===0, `凍結した名前がすべて RACES に実在する${missing2.length?'（欠け: '+missing2.join(' / ')+'）':''}`);
 
+console.log('\n=== 波乱の判定（⑧）の条件が残っているか ===');
+/* 判定⑧は 2026-10-28 に書いた。
+   きっかけは「選り好みなしの348レースで、波乱8点だけが130%になった」こと。
+   これは数字を見てから気づいたことなので、そのまま採ると丸亀10月だけを
+   切り出して107%に見えたのと同じ間違いになる。
+   だから今日そろっている29場日を凍結し、これから足す場日だけで判定する。
+   凍結を外す・必要数を下げる・条件を1つにする、はどれも緩める方向。落とす。 */
+const ana=BT.match(/const PREREG_ANA_DAYS = new Set\(\[([\s\S]*?)\]\);/);
+ok(!!ana, 'PREREG_ANA_DAYS がある');
+const anaDays=(ana?ana[1].match(/'[^']+'/g)||[]:[]).map(s=>s.slice(1,-1));
+ok(anaDays.length>=29, `凍結した場日が29件以上ある（いま ${anaDays.length}件。減らしてはいけない）`);
+/* 凍結したのは「日付|場コード」。実在して、しかも12レースそろっていなければ
+   凍結した意味がない（そろっていない場日はもともと判定に入らない）。 */
+{
+  const byDay=new Map();
+  for(const r of RACES){
+    if(!r.date||!r.jcd||!r.rno) continue;
+    const k=`${r.date}|${r.jcd}`;
+    if(!byDay.has(k)) byDay.set(k,new Set());
+    byDay.get(k).add(r.rno);
+  }
+  const notFull=anaDays.filter(k=>{
+    const s2=byDay.get(k); return !s2 || ![...Array(12)].every((_,i)=>s2.has(i+1));
+  });
+  ok(notFull.length===0,
+     `凍結した場日がすべて実在して12レースそろっている${notFull.length?'（欠け: '+notFull.join(' / ')+'）':''}`);
+}
+ok(/const NEED_DAYS = 15;/.test(BT),
+   '判定⑧ の必要数は15場日（180レース）のまま。下げてはいけない');
+ok(/const a=back\/t\.inv\*100, b=\(back-top\)\/t\.inv\*100;/.test(BT)
+   && /a>=100\?'○':'×'/.test(BT.replace(/\s/g,''))
+   && /b>=100\?'○':'×'/.test(BT.replace(/\s/g,''))
+   && /a>=100&&b>=100\?'波乱8点を採る。'/.test(BT.replace(/\s/g,'')),
+   '判定⑧ の採用条件は2つ（100%以上 かつ 最大1件除いても100%以上）のまま');
+ok(/これは数字を見たあとに当てているので、判定ではない/.test(BT),
+   '合計欄の「後出しなので判定ではない」という断りが残っている');
+ok(/判定が済むまで、買い方は本線10点のまま変えない/.test(BT),
+   '「判定が済むまで買い方を変えない」が残っている');
+ok(/FRESH_FLAG = !PREREG_ANA_DAYS\.has\(k\)/.test(BT),
+   '判定⑧ は凍結後の場日だけを積んでいる（全部の合計と混ざっていない）');
+
 console.log('\n=== 「あとから緩めない」と書いた注意書きが残っているか ===');
 ok((BT.match(/あとから緩めない/g)||[]).length>=3,
    `「あとから緩めない」が3箇所以上残っている（いま ${(BT.match(/あとから緩めない/g)||[]).length}箇所）`);
@@ -73,4 +114,5 @@ ok(/該当件数が10件を切る行は/.test(BT),
    '件数が少ない行への注意書きがある');
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

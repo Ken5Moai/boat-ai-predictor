@@ -135,4 +135,5 @@ ok(V(w.boatOf(4).exhibitionST)===0.03,'展示STも4号艇に正しく対応');
 ok(V(w.boatOf(1).exhibitionST)===0.13,'1号艇の展示STも正しい');
 
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
-process.exit(fail?1:0);
+/* process.exit() は使わない（出力が切れる。理由は tests/run.js の末尾） */
+process.exitCode = fail ? 1 : 0;

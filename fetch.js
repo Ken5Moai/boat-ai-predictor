@@ -123,7 +123,12 @@ function parseRacelist(html){
     }
     boats.push({ reg, g, name,
       nat: nums[0], loc: nums[3],
-      mot: nums[7], bt: nums[10],
+      /* nums は 全国3 / 当地3 / モーター3 / ボート3 の順。
+         モーター・ボートの1つ目は「番号」で、2つ目が2連率。
+         番号はこれまで捨てていたが、同じ選手の値が同じ日に違ったとき
+         「艇を取り違えた」のか「本当に替わった」のかを決める唯一の手がかり
+         なので残す（2026-10-28 常滑の登番3499 は 20号艇→11号艇でボートが替わっていた）。 */
+      motNo: nums[6], mot: nums[7], btNo: nums[9], bt: nums[10],
       st: /^-$/.test(stTok) ? null : num(stTok),
       F: num(fTok) ?? 0, L: num(lTok) ?? 0,
       wt, rec });
@@ -301,7 +306,8 @@ function emit(race, name){
   console.log(' B:[');
   race.boats.forEach((b,i)=>{
     console.log(` {reg:'${b.reg}',g:'${b.g}',nat:${f(b.nat,2)},loc:${f(b.loc,2)},`
-      + `mot:${f(b.mot,2)},bt:${f(b.bt,2)},st:${b.st==null?'null':f(b.st,2)},F:${b.F},`
+      + `motNo:${b.motNo??'null'},mot:${f(b.mot,2)},`
+      + `btNo:${b.btNo??'null'},bt:${f(b.bt,2)},st:${b.st==null?'null':f(b.st,2)},F:${b.F},`
       + `exST:${dot(b.exST)},`
       + `exF:${b.exF?"'F'":'null'},exT:${f(b.exT,2)},tilt:${f(b.tilt,1)},wt:${f(b.wt,1)},`
       + (b.adj ? `adj:${f(b.adj,1)},` : '')
@@ -368,6 +374,8 @@ async function verify(limit){
       const p = `${i+1}号艇`;
       if(b.g !== o.g) bad.push(`${p} 級別: ${b.g} / ${o.g}`);
       cmp(`${p} 全国`, b.nat, o.nat, 0.005); cmp(`${p} 当地`, b.loc, o.loc, 0.005);
+      if(b.motNo!=null) cmp(`${p} モーター番号`, b.motNo, o.motNo);
+      if(b.btNo!=null)  cmp(`${p} ボート番号`,   b.btNo,  o.btNo);
       cmp(`${p} モーター`, b.mot, o.mot, 0.005); cmp(`${p} ボート`, b.bt, o.bt, 0.005);
       cmp(`${p} 平均ST`, b.st, o.st, 0.005);   cmp(`${p} F数`, b.F, o.F);
       cmp(`${p} 展示タイム`, b.exT, o.exT, 0.005);
