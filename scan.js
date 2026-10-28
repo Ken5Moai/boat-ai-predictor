@@ -28,7 +28,7 @@ const ROOT=__dirname;
 const HD = process.argv[2] || new Date(Date.now()+9*3600*1000).toISOString().slice(0,10).replace(/-/g,'');
 const get = url => execFileSync('curl',['-sS','--fail','--max-time','60','-A','Mozilla/5.0',url],
                                 {encoding:'utf8', maxBuffer:32*1024*1024});
-const sleep = sec => { try{ execFileSync('sleep',[String(sec)]); }catch(e){} };
+const sleep = require('./sleep.js');   /* OSによらず確実に待つ */
 
 const VENUES = (()=>{
   const {JSDOM}=require('jsdom');

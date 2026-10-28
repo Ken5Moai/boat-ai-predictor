@@ -77,9 +77,8 @@ const nowMin = () => { const d=jst(); return d.getUTCHours()*60+d.getUTCMinutes(
 const hhmm = () => { const d=jst();
   return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); };
 const log = (...a) => console.log(`[${hhmm()}]`, ...a);
-/* while で回すとCPUを食うので外の sleep を使う（predict.js と同じ） */
-const sleep = sec => { try{ execFileSync('sleep',[String(Math.max(1,Math.round(sec)))]); }
-                       catch(e){ } };
+
+const sleep = require('./sleep.js');   /* OSによらず確実に待つ */
 
 const get = (page, jcd, rno) => execFileSync('curl',
   ['-sS','--fail','--max-time','40','-A','boat-ai-predictor/1.0',

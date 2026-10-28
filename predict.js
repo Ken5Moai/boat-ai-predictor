@@ -96,8 +96,7 @@ log(`${NAME}`);
 log(`  締切 ${closeAt||'(読めず)'}　いま ${hhmm(jst())}　残り ${minsLeft()??'?'}分`);
 
 /* ---- ここから：暫定 → 確定 の2段で出す ------------------------- */
-/* while で回すとCPUを食い続けるので、外の sleep を使う。 */
-const sleep = sec => { try{ execFileSync('sleep',[String(sec)]); }catch(e){} };
+const sleep = require('./sleep.js');   /* OSによらず確実に待つ */
 
 const boats = F.parseRacelist(listHtml);
 if(boats.length!==6) throw new Error(`出走表から6艇ぶん取れなかった（${boats.length}艇）`);
