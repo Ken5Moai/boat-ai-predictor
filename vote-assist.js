@@ -642,18 +642,52 @@ async function buy(ctx, plan, opt){
   }
   if(!pw) throw new Error(`投票用パスワードの欄が見つかりません`
     + `（パスワード欄は${nPw}個あるが、見えているものが無い）`);
-  await pw.fill(pass);
+  /* --buy-dry のときは、パスワードを入れずに欄を選んだ状態で止める。
+     こちらから打つのが2回とも弾かれているので、人が打つほうが確実。
+     2026-10-28 丸亀9R は、この形（こちらが全部入れて人が打って押す）で
+     実際に買えている。 */
+  if(opt.dryRun){
+    await pw.click({timeout:5000}).catch(()=>{});
+    console.log('\n  ★ --buy-dry なので、投票用パスワードは入れません。');
+    console.log('    欄を選んだ状態にしてあります。ご自身で打って「投票する」を押してください。');
+    console.log('    やめるなら「投票内容を修正する」で戻れば、何も買わずに終わります。');
+    return {bought:false, yen:0, waitingHuman:true};
+  }
+
+  /* fill() は値を書き込むだけで、キーの出来事を起こさない。
+     投票用パスワードの欄は、横にソフトウェアキーボードのボタンがある。
+     キーロガー対策の作りだと、値を書き込んでもサイト側が受け取らない。
+     実際、2回とも「投票用パスワードの入力に誤りがあります」で弾かれた
+     （2026-10-28 丸亀10R・11R）。見えない欄に入れたのを直しても同じだった。
+     なので、本当にキーを打つ。欄を押してから1文字ずつ送る。 */
+  await pw.click({timeout:5000}).catch(()=>{});
+  await pw.fill('').catch(()=>{});
+  await pw.pressSequentially(pass, {delay:60});
   const pwGot = await pw.inputValue();
   if(!pwGot) throw new Error('投票用パスワードが入っていません');
   if(pwGot.length !== pass.length)
-    throw new Error('投票用パスワードが途中までしか入っていません');
-  console.log(`  投票用パスワードを入れました（${pwWhy}。画面には出しません）。`);
+    throw new Error(`投票用パスワードが途中までしか入っていません（${pwGot.length}/${pass.length}文字）`);
+  console.log(`  投票用パスワードを打ちました（${pwWhy}。画面には出しません）。`);
 
-  if(opt.dryRun){
-    console.log('\n  ★ --buy-dry なので「投票する」は押しません。ここまでです。');
-    console.log('    画面の「投票内容を修正する」で戻れば、何も買わずに終わります。');
-    return {bought:false, yen:0};
-  }
+  /* それでも弾かれるときのために、押す前の状態を書き出しておく。
+     パスワードそのものは出さない（長さだけ）。 */
+  try{
+    const diag = await page.evaluate(()=>{
+      const out=[];
+      for(const e of document.querySelectorAll('input')){
+        const r=e.getBoundingClientRect();
+        out.push({type:e.type||'', id:e.id||'', name:e.name||'',
+                  cls:(e.className||'').toString().slice(0,60),
+                  readOnly:!!e.readOnly, disabled:!!e.disabled,
+                  visible:!!(r.width||r.height),
+                  len:(e.value||'').length});
+      }
+      return out;
+    });
+    fs.mkdirSync(path.join(__dirname,'tmp'),{recursive:true});
+    fs.writeFileSync(path.join(__dirname,'tmp','vote-before-submit.json'),
+                     JSON.stringify(diag,null,1));
+  }catch(e){}
 
   console.log('\n  「投票する」を押します…');
   const go = page.locator('a:text-is("投票する"), button:text-is("投票する"), input[value="投票する"]').first();

@@ -152,7 +152,10 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
     ok_(!err, `最後まで通る（${err?err.message.slice(0,40):'エラーなし'}）`);
     ok_(out && out.bought===false, '買っていないと返す');
     ok_(!(await pg.evaluate(()=>window.__bought)), '「投票する」を押していない');
-    ok_((await pg.inputValue('#c_pw')).length>0, 'パスワードまでは入れてある（押す直前で止まる）');
+    /* --buy-dry はパスワードを入れない。人が打つほうが確実だと分かったため
+       （こちらから入れるのは実機で2回とも弾かれた）。 */
+    ok_((await pg.inputValue('#c_pw')).length===0, 'パスワードは入れない（人が打つ）');
+    ok_(out && out.waitingHuman===true, '人の入力待ちだと返す');
     await ctx.close();
   }
 
