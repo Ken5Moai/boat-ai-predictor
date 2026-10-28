@@ -156,6 +156,29 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
     await ctx.close();
   }
 
+  console.log('\n  ★ 見えないパスワード欄に入れない（実機で弾かれた罠）');
+  {
+    const {ctx,pg}=await prep();
+    const {err}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(!err, `最後まで通る（${err?err.message.slice(0,50):'エラーなし'}）`);
+    ok_(!(await pg.evaluate(()=>window.__rejected)), '弾かれていない');
+    ok_((await pg.inputValue('#c_pw'))==='abc1234', '見えている「投票用パスワード」の欄に入っている');
+    ok_((await pg.inputValue('#hiddenpw'))==='', '見えない欄には入れていない');
+    const b=await pg.evaluate(()=>window.__bought);
+    ok_(b && b.pw==='abc1234', '送られたパスワードが正しい');
+    await ctx.close();
+  }
+  {
+    /* 弾かれたときに、買えていないことをはっきり伝える */
+    const {ctx,pg}=await prep();
+    await pg.evaluate(()=>{ /* 見える欄を読み取り専用にして入らなくする */
+      const e=document.getElementById('c_pw'); e.readOnly=true; });
+    const {err,said}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(!!err, `入らなければ止まる（${err?err.message.slice(0,40):'止まらなかった'}）`);
+    ok_(!(await pg.evaluate(()=>window.__bought)), 'そのとき買っていない');
+    await ctx.close();
+  }
+
   console.log('\n  会員規約の条文を必ず出すこと');
   {
     /* 2026-10-28、第25条(4)（公式以外のソフトで投票画面を操作）に当たる

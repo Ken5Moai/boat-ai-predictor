@@ -612,12 +612,42 @@ async function buy(ctx, plan, opt){
   if(String(got)!==String(put))
     throw new Error(`購入金額が入っていません（入れた ${put} / 画面 ${got}）`);
 
-  /* 投票用パスワード。type=password の欄を使う。 */
-  const pw = page.locator('input[type=password]').first();
-  if(!await pw.count()) throw new Error('投票用パスワードの欄が見つかりません');
+  /* 投票用パスワード。
+     はじめは input[type=password] の最初の1つを取っていた。
+     実機では画面に見えていない別のパスワード欄がDOMの先にあり、
+     そちらに入れてしまって「投票用パスワードの入力に誤りがあります」で
+     弾かれた（2026-10-28 丸亀10R）。画面の欄は空のままだった。
+     こちらの確認（入れた値を読み返す）は、入れた先が間違っていると通ってしまう。
+
+     見えている欄だけを見て、そのうち「投票用パスワード」と書いてある
+     ところに近いものを選ぶ。見つからなければ入れずに止める。 */
+  const pwAll = page.locator('input[type=password]');
+  const nPw = await pwAll.count();
+  let pw=null, pwWhy='';
+  for(let i=0;i<nPw;i++){
+    const h=pwAll.nth(i);
+    if(!await h.isVisible().catch(()=>false)) continue;
+    const near = await h.evaluate(el=>{
+      /* 親をたどって「投票用パスワード」と書いてある箱を探す */
+      let e=el, hop=0;
+      while(e && hop<4){
+        const t=(e.innerText||e.textContent||'');
+        if(t.includes('投票用パスワード')) return true;
+        e=e.parentElement; hop++;
+      }
+      return false;
+    }).catch(()=>false);
+    if(near){ pw=h; pwWhy='「投票用パスワード」の欄'; break; }
+    if(!pw){ pw=h; pwWhy='見えているパスワード欄（ラベルは確かめられず）'; }
+  }
+  if(!pw) throw new Error(`投票用パスワードの欄が見つかりません`
+    + `（パスワード欄は${nPw}個あるが、見えているものが無い）`);
   await pw.fill(pass);
-  if(!(await pw.inputValue())) throw new Error('投票用パスワードが入っていません');
-  console.log('  投票用パスワードを入れました（画面には出しません）。');
+  const pwGot = await pw.inputValue();
+  if(!pwGot) throw new Error('投票用パスワードが入っていません');
+  if(pwGot.length !== pass.length)
+    throw new Error('投票用パスワードが途中までしか入っていません');
+  console.log(`  投票用パスワードを入れました（${pwWhy}。画面には出しません）。`);
 
   if(opt.dryRun){
     console.log('\n  ★ --buy-dry なので「投票する」は押しません。ここまでです。');
@@ -632,6 +662,21 @@ async function buy(ctx, plan, opt){
   await page.waitForTimeout(3000);
   try{ await page.screenshot({path:path.join(__dirname,'tmp','vote-bought.png'), fullPage:true}); }catch(e){}
   const after = await page.evaluate(()=>document.body?document.body.innerText:'');
+  /* 弾かれたときは、受付の文字より先にエラーを見る。
+     「完了」は画面のどこかに残っていることがあるので、順番が大事。 */
+  const ng = after.match(/(投票用パスワード[^\n]{0,24}誤り[^\n]*|エラー[^\n]{0,40})/);
+  if(ng){
+    const e=new Error('弾かれました: '+ng[1].slice(0,60));
+    e.rejected = true;
+    console.log(`\n  ✗ ${e.message}`);
+    if(/パスワード/.test(ng[1])){
+      console.log('    投票用パスワードが違います。環境変数を設定し直してください。');
+      console.log('      $env:BOAT_BET_PASSWORD="（投票用パスワード）"');
+      console.log('    分からなければ 会員情報変更 → 投票用パスワードを変更する。');
+    }
+    console.log('    買えていません。画面の「投票内容を修正する」で戻れます。');
+    throw e;
+  }
   const okWord = /投票を受け付けました|受付|完了/.test(after);
   console.log(okWord ? `  ✓ 買いました（¥${plan.total.toLocaleString()}）。画面は tmp/vote-bought.png に残しました。`
                      : `  ※ 「投票する」は押しましたが、受付の表示を確かめられませんでした。`
