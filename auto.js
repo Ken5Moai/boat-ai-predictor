@@ -184,7 +184,15 @@ function makePlan(r){
   for(const r of queue)
     console.log(`    ${r.close}  ${r.venue.padEnd(4)}${String(r.rno).padStart(2)}R  ${r.title||''}`);
 
-  if(BUY || BUY_DRY){
+  /* ★ 2026-10-28、テレボート会員規約 第25条(4) により、
+     このスクリプトで投票画面を操作すること自体が禁止されていると分かった。
+     --fill も --buy も動かさない。買い目を出すところはそのまま使える。 */
+  if(FILL || BUY || BUY_DRY){
+    const V=require('./vote-assist.js');
+    console.log(V.TERMS_BLOCK);
+    return;
+  }
+  if(false){
     const V=require('./vote-assist.js');
     const miss=V.buyReadiness();
     if(miss.length){

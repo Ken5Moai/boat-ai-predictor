@@ -5,13 +5,12 @@
   "scripts": {
     "test": "node tests/run.js",
     "backtest": "node backtest.js",
-    "probe": "node vote-assist.js --probe",
     "plan": "node vote-assist.js tmp/plan.json --dry",
     "sample": "node vote-assist.js --sample",
     "today": "node auto.js --plan",
-    "go": "node auto.js --max 10 --fill --stop-loss 5000",
     "record": "node record.js",
-    "figures": "node sync-figures.js"
+    "figures": "node sync-figures.js",
+    "run": "node auto.js --max 10"
   },
   "devDependencies": {
     "jsdom": "^30.1.1",
