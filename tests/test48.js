@@ -6,7 +6,8 @@
 const fs=require('fs'), path=require('path');
 let ok=0, ng=0;
 const ok_=(c,m)=>{ if(c){ok++;console.log('  ✓ '+m);} else {ng++;console.log('  ✗ FAIL: '+m);} };
-const SRC=fs.readFileSync(path.join(__dirname,'..','auto.js'),'utf8');
+const DIR=path.join(__dirname,'..');
+const SRC=fs.readFileSync(path.join(DIR,'auto.js'),'utf8');
 
 console.log('\n=== auto.js が必ず持っていること ===');
 ok_(/買いません/.test(SRC), '「買いません」と書いてある（買う処理を入れない目印）');
@@ -132,6 +133,29 @@ ok_(!/process\.env\.BOAT_BET_PASSWORD\s*=[^=]/.test(SRC),
 ok_(!/writeFileSync[^)]*BOAT_BET_PASSWORD/.test(SRC),
     'パスワードをファイルに書いていない');
 ok_(!/--buy-password|--password/.test(SRC), 'パスワードを引数で受け取らない（ps で見えるため）');
+
+/* 実際に走らせる
+   ==================================================================
+   2026-10-28、実機で「MIN_LEAD is not defined」で落ちた。
+   runLoop() を切り出したとき、MIN_LEAD が main() の中に残っていた。
+   このテストはソースを文字列で見るだけだったので捕まえられなかった。
+   --plan は通信するが待たないので、ここで実際に走らせて見る。 */
+console.log('\n=== 実際に走らせる（--plan は待たない） ===');
+{
+  const {execFileSync}=require('child_process');
+  let out='', err=null;
+  try{
+    /* 全場を見ると24場ぶん取りに行って時間がかかるので、1場に絞る。
+       見たいのは「落ちずに最後まで走るか」なので1場で足りる。 */
+    out=execFileSync(process.execPath,
+      [path.join(DIR,'auto.js'),'--venues','15','--plan','--max','3'],
+      {encoding:'utf8', maxBuffer:32*1024*1024, timeout:120000, stdio:['ignore','pipe','pipe']});
+  }catch(e){ err=e; out=(e.stdout||'')+(e.stderr||''); }
+  ok_(!err, `--plan が落ちない（${err?String(err.message).slice(0,60):'エラーなし'}）`);
+  ok_(/is not defined/.test(out)===false, `未定義の変数で落ちていない`);
+  ok_(/今日まわるレース/.test(out), '予定を出している');
+  ok_(/想定の持ち出し/.test(out), '持ち出しの見込みを出している');
+}
 
 console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
 process.exitCode = ng ? 1 : 0;

@@ -51,6 +51,13 @@ const BUY_DRY = args.includes('--buy-dry');
 
 /* 1点100円・18点で計算する。vote-assist.js と同じ前提。 */
 const YEN_PER_RACE = 1800;
+/* 締切までこれ以上ないレースは拾わない（展示を待つ時間がいる）。
+   runLoop() を切り出したときに main() の中に置いたままにしてしまい、
+   実機で「MIN_LEAD is not defined」で落ちた（2026-10-28 丸亀9R）。
+   両方から使うのでトップレベルに置く。 */
+const MIN_LEAD = 12;
+/* 同じ時間に2レース進められないので、締切がこれより近いものは足さない。 */
+const MIN_GAP = 14;
 
 const VN=(()=>{ const o={}; const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
   const re=/'(\d{2})':\{name:'([^']+)'/g; let m; while((m=re.exec(html))) o[m[1]]=m[2]; return o; })();
@@ -151,7 +158,6 @@ function makePlan(r){
   if(!all.length){ console.log('  この日に開催している場が見つかりません。'); return; }
 
   /* まだ間に合うレースだけ。展示を待つ時間がいるので12分前より手前は捨てる。 */
-  const MIN_LEAD = 12;
   const ok = all.filter(r => r.closeMin - nowMin() >= MIN_LEAD);
   const dropped = all.length - ok.length;
 
@@ -160,7 +166,6 @@ function makePlan(r){
      1日に散らしたいので、場ごとに順番で1本ずつ拾っていく。
      同じ時間に2レース進めないので、前のレースの締切から
      MIN_GAP 分あいているものだけを足す。 */
-  const MIN_GAP = 14;
   const byVenue = new Map();
   for(const r of ok){ if(!byVenue.has(r.jcd)) byVenue.set(r.jcd, []); byVenue.get(r.jcd).push(r); }
   const queue=[];
