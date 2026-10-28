@@ -4,6 +4,7 @@
 <body>
 <!-- 実機と同じ並び。場名の次の行が「場変更・複数場選択」、
      そのあとに「<R>R<番組名> <距離>m 電話投票締切予定時刻まで N分」 -->
+<div id="entry">
 <div id="venue">唐津</div>
 <div><a href="#">場変更・複数場選択</a></div>
 <div id="tabs"></div>
@@ -19,6 +20,22 @@
 <div>総購入金額 <span id="sum">0</span> 円</div>
 <a href="#" id="done">投票入力完了</a>
 <ul id="list"></ul>
+</div><!-- /entry -->
+
+<!-- 確定画面。実機は probe を取れていないので、見えている文言から写した。
+     購入金額をもう一度入れて、投票用パスワードを入れて「投票する」。
+     単位は差し替えられるようにしてある（100倍事故の検査用）。 -->
+<div id="confirm" style="display:none">
+  <h3>投票内容確認</h3>
+  <div>合計ベット数 <span id="c_cnt">0</span> 件</div>
+  <div>購入金額 <span id="c_sum">0</span> 円</div>
+  <div>購入金額と投票用パスワードを入力し、「投票する」ボタンを押下してください。</div>
+  <div>購入金額 <input id="c_amount" type="tel"><span id="c_unit"> 円</span></div>
+  <div>投票用パスワード <input id="c_pw" type="password"></div>
+  <a href="#" id="c_back">投票内容を修正する</a>
+  <a href="#" id="c_go">投票する</a>
+</div>
+<div id="donescreen" style="display:none">投票を受け付けました</div>
 <script>
 /* レースタブ。実機と同じく id も class も無い <a> で、文字は「7R\n11:22」。 */
 {
@@ -59,7 +76,26 @@ document.getElementById('add').onclick=()=>{
   for(const o of document.querySelectorAll('[data-on]')) o.dataset.on='';
   document.getElementById('amount').value='';
 };
-document.getElementById('done').onclick=()=>{ document.title='★買ってしまった★'; };
+/* 投票入力完了 → 確定画面へ。ここではまだ買っていない。 */
+document.getElementById('done').onclick=()=>{
+  document.getElementById('c_cnt').textContent=n;
+  document.getElementById('c_sum').textContent=yen.toLocaleString();
+  document.getElementById('confirm').style.display='';
+  document.getElementById('entry').style.display='none';   /* 実機は画面が切り替わる */
+  return false;
+};
+/* 投票する → ここではじめて買う。単位ちがいもそのまま再現する。 */
+document.getElementById('c_go').onclick=()=>{
+  const v=Number(document.getElementById('c_amount').value||0);
+  const mult=/00円/.test(document.getElementById('c_unit').textContent)?100:1;
+  window.__bought = {yen: v*mult, pw: document.getElementById('c_pw').value};
+  document.title='★買ってしまった★';
+  document.getElementById('donescreen').style.display='';
+  return false;
+};
+document.getElementById('c_back').onclick=()=>{
+  document.getElementById('confirm').style.display='none';
+  document.getElementById('entry').style.display=''; return false; };
 document.getElementById('clear').onclick=()=>{ n=0;yen=0;
   document.getElementById('cnt').textContent=0; document.getElementById('sum').textContent=0;
   document.getElementById('list').innerHTML=''; };

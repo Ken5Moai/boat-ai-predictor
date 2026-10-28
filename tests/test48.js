@@ -116,5 +116,22 @@ ok_(/net <= -Math\.abs\(Number\(STOP_LOSS\)\)/.test(SRC), '通算の収支で判
 ok_(/残りのレースは捨てて終わります/.test(SRC), '当たったら残りを捨てて終わる');
 ok_(/買いましたか/.test(SRC), '実際に買ったかを人に聞いてから収支に入れる');
 
+console.log('\n=== --buy の歯止め ===');
+ok_(/const BUY\s*=\s*args\.includes\('--buy'\)/.test(SRC), '--buy を引数で受ける');
+ok_(/--buy-dry/.test(SRC), '--buy-dry（押す直前で止まる）がある');
+ok_(/buyReadiness/.test(SRC), '環境変数が揃っているかを先に見る');
+ok_(/BUY && STOP_LOSS==null/.test(SRC), '--buy のとき損切りが無ければ走らない');
+ok_(/if\(!FILL\)/.test(SRC), '--buy は --fill と一緒でないと走らない');
+/* 見たいのは「値を代入していないか」。
+   使い方の説明文（$env:BOAT_BET_PASSWORD="…"）を拾わないよう、
+   process.env への代入だけを見る。 */
+ok_(/process\.env\.BOAT_BET_PASSWORD/.test(SRC) || /buyReadiness/.test(SRC),
+    'パスワードは環境変数から読む');
+ok_(!/process\.env\.BOAT_BET_PASSWORD\s*=[^=]/.test(SRC),
+    'パスワードを環境変数に書き込んでいない（読むだけ）');
+ok_(!/writeFileSync[^)]*BOAT_BET_PASSWORD/.test(SRC),
+    'パスワードをファイルに書いていない');
+ok_(!/--buy-password|--password/.test(SRC), 'パスワードを引数で受け取らない（ps で見えるため）');
+
 console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
 process.exitCode = ng ? 1 : 0;

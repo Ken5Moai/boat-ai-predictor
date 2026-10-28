@@ -464,27 +464,162 @@ async function fill(ctx, plan, ask){
   if(ask) await ask('\n  確かめ終わったら Enter（ブラウザは開いたままにします） > ');
 }
 
-/* ③ 購入まで自動にするときの入口（まだ押さない）
+/* ③ 購入まで自動で行う
    ==================================================================
-   いま足りないのは3つ。どれも人からしか来ない。
-     1. テレボート会員規約に自動投票を禁じる条項が無いことの確認
-        会員エリアの中にあり、こちらからは読めない。
-     2. 投票用パスワード。環境変数 BOAT_BET_PASSWORD で実行時に渡す。
-        ファイルには書かない。引数にも書かない（ps で見える）。
-     3. 損切り額。auto.js --stop-loss で渡す。
+   確定画面は probe を取っていない（ログインの先なので、こちらからは見られない）。
+   なので id に頼らない。ラベルの文字で探し、入れる前と入れたあとに読み返す。
 
-   3つ揃ったら、ここに「投票入力完了 → 購入金額と投票用パスワードを入れる
-   → 投票する」を書く。画面は probe で取れているので実装そのものは短い。
+   ★ 金額の単位を画面から読む
+     入力画面の購入金額は「[  ] 00円」で100円単位だった。
+     確定画面は「[  ] 円」に見えるが、確かめずに入れると100倍になる。
+     欄のうしろの文字を読んで単位を決める。読めなければ入れない。
 
-   いま押さない理由は2つ。
-     ・規約が未確認。口座が止まると買い目どころではない。
-     ・無人で回す最後のひと押しを、実機で一度も通さずに入れたくない。
-       今日だけで金額の100倍ちがい、別レースの買い目、record.js の検算と
-       3つ踏んでいる。どれも人が見ていたから止まった。 */
+   押す前に必ず通すもの
+     ・確定画面の「合計ベット数」と「購入金額」が買い目と一致
+     ・金額欄に入れた値を読み返して一致
+     ・投票用パスワードが入っている
+   どれか欠けたら押さずに止める。 */
+
+/* 入力欄のうしろにある文字から単位を決める。
+   「00円」なら100円単位、「円」だけなら円。分からなければ null。 */
+async function amountUnit(page, handle){
+  const suffix = await handle.evaluate(el=>{
+    /* 欄のあとに続く文字を、親をたどって少しだけ拾う */
+    let t='';
+    let n=el.nextSibling, hop=0;
+    while(n && hop<6){ t += (n.textContent||''); n=n.nextSibling; hop++; }
+    if(!t.trim() && el.parentElement) t = el.parentElement.textContent||'';
+    return t.replace(/\s+/g,'').slice(0,20);
+  });
+  if(/00円/.test(suffix)) return {unit:100, why:`欄のうしろが「${suffix}」`};
+  if(/円/.test(suffix))   return {unit:1,   why:`欄のうしろが「${suffix}」`};
+  return {unit:null, why:`欄のうしろが読めない（「${suffix}」）`};
+}
+
+/* 確定画面に出ている「合計ベット数」と「購入金額」を読む。 */
+async function readConfirm(page){
+  /* 画面ぜんぶから拾うと、入力画面に残っている「購入金額 00円」を
+     先に読んで ¥0 になった。確定画面の範囲に限って読む。
+     目印は「投票用パスワード」。それを含むいちばん内側の箱を使う。 */
+  const t = await page.evaluate(()=>{
+    /* 「購入金額と投票用パスワードを入力し…」という説明文の div が
+       いちばん小さい箱として選ばれ、数字が無くて読めなかった。
+       実際に数字を持っている箱だけを見る。 */
+    const CNT=/合計ベット数\s*[\d,]+\s*件/, YEN=/購入金額\s*[\d,]+\s*円/;
+    const all=[...document.querySelectorAll('div,section,form,table')];
+    const box=all.filter(e=>{
+      const s=e.innerText||'';
+      return s.includes('投票用パスワード') && CNT.test(s) && YEN.test(s);
+    }).sort((a,b)=>(a.innerText||'').length-(b.innerText||'').length)[0];
+    return box ? box.innerText : (document.body?document.body.innerText:'');
+  });
+  const num = v => v==null ? null : Number(String(v).replace(/,/g,''));
+  /* 金額は「購入金額 1,800 円」の形。入力欄のうしろの「00円」を拾わないよう、
+     数字が1桁以上あって、そのあとが「円」で終わるものだけを見る。 */
+  const yens=[...t.matchAll(/購入金額\s*([\d,]+)\s*円/g)].map(m=>num(m[1]));
+  return {
+    count: num((t.match(/合計ベット数\s*([\d,]+)\s*件/)||[])[1]),
+    yen:   yens.length ? Math.max(...yens) : null,
+  };
+}
+
+/* 実際に買う。ここだけが金を動かす。 */
+async function buy(ctx, plan, opt){
+  opt = opt || {};
+  const pass = process.env.BOAT_BET_PASSWORD;
+  if(!pass) throw new Error('投票用パスワードがありません（環境変数 BOAT_BET_PASSWORD）');
+  if(process.env.BOAT_TERMS_OK !== 'yes')
+    throw new Error('会員規約の確認が済んでいません（BOAT_TERMS_OK=yes）');
+
+  const page = await findVotePage(ctx);
+  if(!page) throw new Error('投票画面が見つかりません');
+
+  /* 入力画面の合計をもう一度見る。fill 直後に人が触っているかもしれない。 */
+  const before = await readTotals(page);
+  if(before.count !== plan.rows.length || before.yen !== plan.total)
+    throw new Error(`入力画面の合計が買い目と違います`
+      + `（画面 ${before.count}件 ¥${before.yen} / 買い目 ${plan.rows.length}件 ¥${plan.total}）`);
+
+  console.log('\n  「投票入力完了」を押します…');
+  const done = page.locator('a:text-is("投票入力完了"), button:text-is("投票入力完了")').first();
+  if(!await done.count()) throw new Error('「投票入力完了」が見つかりません');
+  await done.click();
+
+  /* 確定画面になるまで待つ */
+  let conf=null;
+  for(let i=0;i<40;i++){
+    await page.waitForTimeout(250);
+    conf = await readConfirm(page);
+    if(conf.count!=null && conf.yen!=null
+       && await page.locator('text=投票用パスワード').count()) break;
+    conf=null;
+  }
+  if(!conf) throw new Error('確定画面になりませんでした。画面を見て確かめてください');
+
+  console.log(`  確定画面  合計ベット数 ${conf.count}件 / 購入金額 ¥${conf.yen.toLocaleString()}`);
+  if(conf.count !== plan.rows.length || conf.yen !== plan.total)
+    throw new Error(`確定画面の合計が買い目と違います`
+      + `（画面 ${conf.count}件 ¥${conf.yen} / 買い目 ${plan.rows.length}件 ¥${plan.total}）。`
+      + '「投票内容を修正する」で戻ってください');
+  console.log('    ✓ 合っています。');
+
+  /* 金額欄。ラベルで探す。 */
+  const amt = page.locator('input').filter({hasNot:page.locator('[type=hidden]')});
+  let amtEl=null;
+  for(const sel of ['#amount2','#betAmount','input[name*=amount i]','input[type=tel]','input[type=text]']){
+    const l=page.locator(sel);
+    const n=await l.count();
+    for(let i=0;i<n;i++){
+      const h=l.nth(i);
+      if(!await h.isVisible().catch(()=>false)) continue;
+      if(await h.getAttribute('type')==='password') continue;
+      amtEl=h; break;
+    }
+    if(amtEl) break;
+  }
+  if(!amtEl) throw new Error('確定画面の購入金額欄が見つかりません');
+
+  const u = await amountUnit(page, await amtEl.elementHandle());
+  if(u.unit==null) throw new Error(`購入金額の単位が読めません（${u.why}）。入れずに止めます`);
+  const put = u.unit===100 ? toUnit(plan.total) : plan.total;
+  console.log(`  購入金額を入れます：${put}（${u.why} → ${u.unit===100?'100円単位':'円'}）`);
+  await amtEl.fill(String(put));
+  const got = await amtEl.inputValue();
+  if(String(got)!==String(put))
+    throw new Error(`購入金額が入っていません（入れた ${put} / 画面 ${got}）`);
+
+  /* 投票用パスワード。type=password の欄を使う。 */
+  const pw = page.locator('input[type=password]').first();
+  if(!await pw.count()) throw new Error('投票用パスワードの欄が見つかりません');
+  await pw.fill(pass);
+  if(!(await pw.inputValue())) throw new Error('投票用パスワードが入っていません');
+  console.log('  投票用パスワードを入れました（画面には出しません）。');
+
+  if(opt.dryRun){
+    console.log('\n  ★ --buy-dry なので「投票する」は押しません。ここまでです。');
+    console.log('    画面の「投票内容を修正する」で戻れば、何も買わずに終わります。');
+    return {bought:false, yen:0};
+  }
+
+  console.log('\n  「投票する」を押します…');
+  const go = page.locator('a:text-is("投票する"), button:text-is("投票する"), input[value="投票する"]').first();
+  if(!await go.count()) throw new Error('「投票する」が見つかりません');
+  await go.click();
+  await page.waitForTimeout(3000);
+  try{ await page.screenshot({path:path.join(__dirname,'tmp','vote-bought.png'), fullPage:true}); }catch(e){}
+  const after = await page.evaluate(()=>document.body?document.body.innerText:'');
+  const okWord = /投票を受け付けました|受付|完了/.test(after);
+  console.log(okWord ? `  ✓ 買いました（¥${plan.total.toLocaleString()}）。画面は tmp/vote-bought.png に残しました。`
+                     : `  ※ 「投票する」は押しましたが、受付の表示を確かめられませんでした。`
+                       + `\n     tmp/vote-bought.png と画面を必ず見てください。`);
+  return {bought:true, yen:plan.total, confirmed:okWord};
+}
+
+/* ③に何が足りないかを名前で返す。 */
 function buyReadiness(){
   const miss=[];
   if(!process.env.BOAT_BET_PASSWORD) miss.push('投票用パスワード（環境変数 BOAT_BET_PASSWORD）');
-  if(!process.env.BOAT_TERMS_OK)     miss.push('テレボート会員規約の確認（BOAT_TERMS_OK=yes）');
+  if(process.env.BOAT_TERMS_OK !== 'yes') miss.push('テレボート会員規約の確認（BOAT_TERMS_OK=yes）');
   return miss;
 }
 
@@ -492,6 +627,7 @@ function buyReadiness(){
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
 module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
                    readRaceOnScreen, venueName, gotoRace, buyReadiness,
+                   buy, readConfirm, amountUnit,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;

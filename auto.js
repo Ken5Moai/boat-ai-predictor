@@ -43,6 +43,11 @@ const FILL = args.includes('--fill');
    既定は上限レース数ぶんの投資額（＝全部外しても止まらない）なので、
    実際に使うなら必ず指定すること。 */
 const STOP_LOSS = flag('stop-loss', null);
+/* --buy を付けると最後まで押す。--buy-dry は押す直前で止まる。
+   どちらも投票用パスワード（環境変数）と規約の確認が要る。
+   --buy のときは損切りを必ず指定させる（無人で回すので歯止めがいる）。 */
+const BUY = args.includes('--buy');
+const BUY_DRY = args.includes('--buy-dry');
 
 /* 1点100円・18点で計算する。vote-assist.js と同じ前提。 */
 const YEN_PER_RACE = 1800;
@@ -134,6 +139,8 @@ function makePlan(r){
   console.log(`  上限 ${MAX}レース`
     + (ONLY.length?` / 場を ${ONLY.map(j=>VN[j]||j).join('・')} に限定`:' / 全場')
     + `\n  買いません。買い目を出すところまでです。`);
+  if(BUY) console.log('  ★ --buy なので、最後まで自動で押します。');
+  if(BUY_DRY) console.log('  ★ --buy-dry なので、押す直前で止まります。');
   console.log(`  1レース¥${YEN_PER_RACE.toLocaleString()}（18点×100円）`
     + ` → 上限まで回ると最大 ¥${(YEN_PER_RACE*MAX).toLocaleString()} の持ち出し`);
   console.log(`  実測の回収率は 本線10点86% / 18点108%（最大1件除くと96%）。`);
@@ -177,6 +184,29 @@ function makePlan(r){
   for(const r of queue)
     console.log(`    ${r.close}  ${r.venue.padEnd(4)}${String(r.rno).padStart(2)}R  ${r.title||''}`);
 
+  if(BUY || BUY_DRY){
+    const V=require('./vote-assist.js');
+    const miss=V.buyReadiness();
+    if(miss.length){
+      console.log('\n  ✗ 買うのに足りないものがあります。');
+      for(const m of miss) console.log(`     ・${m}`);
+      console.log('\n  用意のしかた（PowerShell）');
+      console.log('     $env:BOAT_BET_PASSWORD="（投票用パスワード）"');
+      console.log('     $env:BOAT_TERMS_OK="yes"   ← 会員規約を自分で読んで、自動投票を');
+      console.log('                                  禁じる条項が無いことを確かめてから');
+      return;
+    }
+    if(BUY && STOP_LOSS==null){
+      console.log('\n  ✗ --buy のときは --stop-loss を必ず指定してください。');
+      console.log('     無人で押す以上、金額の歯止めが要ります。');
+      console.log('     例:  node auto.js --max 10 --fill --buy --stop-loss 5000');
+      return;
+    }
+    if(!FILL){
+      console.log('\n  ✗ --buy は --fill と一緒に使ってください（打ち込まないと買えません）。');
+      return;
+    }
+  }
   if(PLAN_ONLY){ console.log('\n  --plan なので、ここまでです。'); return; }
   if(!queue.length){ console.log('\n  まわせるレースがありません。'); return; }
   if(FILL) return withBrowser(queue);
@@ -210,7 +240,7 @@ async function runLoop(queue, ctx, ask, V){
   console.log('\n  ここから1レースずつ進みます。止めるときは Ctrl+C。\n');
   if(STOP_LOSS!=null)
     console.log(`  損切り ¥${Number(STOP_LOSS).toLocaleString()}。収支がここまで減ったら残りを捨てて終わります。\n`);
-  let done=0, spent=0, lastVenue=null, net=0;
+  let done=0, spent=0, lastVenue=null, net=0, bought=0;
   const waiting=[];   /* 結果待ち。次のレースの準備中に取りに行く */
 
   /* 結果の出たものを精算して、収支を更新する。損切りに当たれば true。 */
@@ -280,6 +310,10 @@ async function runLoop(queue, ctx, ask, V){
       try{
         await V.fill(ctx, plan, null);
         spent += plan.total;
+        if(BUY || BUY_DRY){
+          const res = await V.buy(ctx, plan, {dryRun: BUY_DRY});
+          if(res.bought){ waiting.push({r, plan}); bought++; }
+        }
       }catch(e){
         console.log(`\n  ✗ ${label} は打ち込めませんでした: ${e.message}`);
         console.log('    何も入れていないか、途中で止まっています。画面を見て確かめてください。');
@@ -289,9 +323,15 @@ async function runLoop(queue, ctx, ask, V){
       }
       lastVenue = r.venue;
       console.log(`  ここまで ${done}/${queue.length}本。入れた合計 ¥${spent.toLocaleString()}`);
-      const a2 = await ask('\n  買いましたか（y なら収支に入れる / それ以外は買っていない） > ');
-      if(String(a2).toLowerCase()==='y') waiting.push({r, plan});
-      else console.log('  買っていないものとして、収支には入れません。');
+      if(BUY){
+        /* 自動で買ったので、人に聞かない。次のレースへ。 */
+      }else if(BUY_DRY){
+        console.log('  --buy-dry なので買っていません。次のレースへ。');
+      }else{
+        const a2 = await ask('\n  買いましたか（y なら収支に入れる / それ以外は買っていない） > ');
+        if(String(a2).toLowerCase()==='y') waiting.push({r, plan});
+        else console.log('  買っていないものとして、収支には入れません。');
+      }
     }
 
     /* 締切をまたぐまで待ってから次へ（同じ時間に2レース進めない） */
@@ -301,7 +341,8 @@ async function runLoop(queue, ctx, ask, V){
   for(let i=0;i<10 && waiting.length;i++){ if(settleAll()) break; sleep(60); }
   console.log(`\n=== 終わりました。買い目を出したのは ${done}本 ===`);
   if(ctx){
-    console.log(`  打ち込んだ合計 ¥${spent.toLocaleString()}（実際に買ったかは人が決めたとおり）`);
+    console.log(`  打ち込んだ合計 ¥${spent.toLocaleString()}`
+      + (BUY?`　うち自動で買ったのは ${bought}本`:'（実際に買ったかは人が決めたとおり）'));
     console.log(`  買ったぶんの収支 ${net>=0?'+':''}¥${net.toLocaleString()}`);
     if(waiting.length) console.log(`  結果待ちが ${waiting.length}本 残っています（node record.js で取り込めます）`);
   }
