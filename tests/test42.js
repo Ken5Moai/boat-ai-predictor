@@ -63,26 +63,21 @@ console.log('\n=== 波乱の判定（⑧）の条件が残っているか ===');
    切り出して107%に見えたのと同じ間違いになる。
    だから今日そろっている29場日を凍結し、これから足す場日だけで判定する。
    凍結を外す・必要数を下げる・条件を1つにする、はどれも緩める方向。落とす。 */
-const ana=BT.match(/const PREREG_ANA_DAYS = new Set\(\[([\s\S]*?)\]\);/);
-ok(!!ana, 'PREREG_ANA_DAYS がある');
-const anaDays=(ana?ana[1].match(/'[^']+'/g)||[]:[]).map(s=>s.slice(1,-1));
-ok(anaDays.length>=29, `凍結した場日が29件以上ある（いま ${anaDays.length}件。減らしてはいけない）`);
-/* 凍結したのは「日付|場コード」。実在して、しかも12レースそろっていなければ
-   凍結した意味がない（そろっていない場日はもともと判定に入らない）。 */
-{
-  const byDay=new Map();
-  for(const r of RACES){
-    if(!r.date||!r.jcd||!r.rno) continue;
-    const k=`${r.date}|${r.jcd}`;
-    if(!byDay.has(k)) byDay.set(k,new Set());
-    byDay.get(k).add(r.rno);
-  }
-  const notFull=anaDays.filter(k=>{
-    const s2=byDay.get(k); return !s2 || ![...Array(12)].every((_,i)=>s2.has(i+1));
-  });
-  ok(notFull.length===0,
-     `凍結した場日がすべて実在して12レースそろっている${notFull.length?'（欠け: '+notFull.join(' / ')+'）':''}`);
-}
+/* 最初は「今日そろっている29場日」を名前で凍結したが、これはすぐ破れた。
+   同じ日のレースをあとから足せる（返還ありの取り込みを直した／欠場を除いて
+   数えるようにした）ため、10/26〜10/28 の8場日が新しくそろい、
+   「凍結後の場日」として判定に入ってしまった。もう見た日なのに材料になる。
+   一覧での凍結は、あとから足すたびに破れる。日付で区切る形に変えた。
+   線を後ろにずらすのは厳しくする方向、前に戻すのは緩める方向なので、
+   「2026-10-28 より前にしてはいけない」だけを見る。 */
+const cut=BT.match(/const PREREG_ANA_AFTER = '(\d{4}-\d\d-\d\d)'/);
+ok(!!cut, 'PREREG_ANA_AFTER（判定⑧で使ってよい日の線）がある');
+ok(!!cut && cut[1]>='2026-10-28',
+   `判定に使わない日の線が 2026-10-28 以降のまま（いま ${cut?cut[1]:'なし'}。前に戻してはいけない）`);
+ok(/FRESH_FLAG = date > PREREG_ANA_AFTER/.test(BT),
+   '判定⑧ は線より後の日だけを積んでいる（全部の合計と混ざっていない）');
+ok(/full\.filter\(\(\[k\]\)=>k\.split\('\|'\)\[0\] > PREREG_ANA_AFTER\)/.test(BT),
+   '判定⑧ の対象も同じ線で選んでいる（2箇所で食い違っていない）');
 ok(/const NEED_DAYS = 15;/.test(BT),
    '判定⑧ の必要数は15場日（180レース）のまま。下げてはいけない');
 ok(/const a=back\/t\.inv\*100, b=\(back-top\)\/t\.inv\*100;/.test(BT)
@@ -94,8 +89,6 @@ ok(/これは数字を見たあとに当てているので、判定ではない/
    '合計欄の「後出しなので判定ではない」という断りが残っている');
 ok(/判定が済むまで、買い方は本線10点のまま変えない/.test(BT),
    '「判定が済むまで買い方を変えない」が残っている');
-ok(/FRESH_FLAG = !PREREG_ANA_DAYS\.has\(k\)/.test(BT),
-   '判定⑧ は凍結後の場日だけを積んでいる（全部の合計と混ざっていない）');
 
 console.log('\n=== 「あとから緩めない」と書いた注意書きが残っているか ===');
 ok((BT.match(/あとから緩めない/g)||[]).length>=3,

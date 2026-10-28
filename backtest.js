@@ -33,6 +33,10 @@ const VENUE_NAME = (()=>{
 /* レース記録は data/races.js（boat-ai-data・非公開）にある。
    公開リポジトリには取り込んだ内容を置かない。 */
 const RACES=require('./data/races.js');
+/* 採点できなかったレース（欠場で5艇になった回）。node unscorable.js で作る。
+   「まるごと1日そろった日」を数えるときに「無くてよい」として扱う。
+   無ければ空（古い data/ でも動く）。 */
+let UNSCORABLE=[]; try{ UNSCORABLE=require('./data/unscorable.js'); }catch(e){}
 
 
 function runWith(weightPatch, bandPatch, opt){
@@ -1805,9 +1809,23 @@ if(require.main===module){
       if(!byDay.has(k)) byDay.set(k, []);
       byDay.get(k).push(r);
     }
-    const full = [...byDay].filter(([,list])=>{
+    /* 「そろった」の数え方。
+       以前は12レース全部が記録にあることを求めていた。
+       そのため1本でも採点できないレース（欠場で5艇）があると、
+       残り11レースごとその日が捨てられていた。実際、2026-10-26 の常滑と福岡、
+       10/28 の常滑が、1本の欠場だけで外れていた。
+       採点できないレースを除いた残りは、レースを選んでいないので
+       選り好みは入っていない。捨てる理由がない。
+
+       そこで「記録にある、または採点できないと分かっている」で数える。
+       採点できない理由は data/unscorable.js に書いてある（手では書かない）。 */
+    const skipOf = (date,jcd) => new Set(
+      UNSCORABLE.filter(u=>u.date===date && u.jcd===jcd).map(u=>u.rno));
+    const full = [...byDay].filter(([k,list])=>{
+      const [date,jcd]=k.split('|');
       const nos = new Set(list.map(r=>r.rno));
-      return [...Array(12)].every((_,i)=>nos.has(i+1));
+      const skip = skipOf(date,jcd);
+      return [...Array(12)].every((_,i)=>nos.has(i+1) || skip.has(i+1));
     });
     /* 1日ぶんだけ見ても12レースしかなく、たまたまで上下する。
        「何日かたまって、はじめて意味を持つ」とだけ書いて合計を出していなかったので、
@@ -1819,18 +1837,16 @@ if(require.main===module){
        この一覧が無いと判定できない。 */
     /* 判定⑧用。凍結した場日を除いた分だけを別に積む。
        「全部の合計」と「凍結後だけ」を取り違えないよう、入れものを分ける。 */
-/* 【判定⑧】で凍結する場日。宣言はループより前に置く必要がある
-       （場日ごとに「凍結後か」を切り替えながら積むため）。 */
-    const PREREG_ANA_DAYS = new Set([
-      '2026-10-20|23','2026-10-24|20',
-      '2026-10-26|01','2026-10-26|04','2026-10-26|05','2026-10-26|06','2026-10-26|09',
-      '2026-10-26|10','2026-10-26|11','2026-10-26|15','2026-10-26|21','2026-10-26|24',
-      '2026-10-27|01','2026-10-27|03','2026-10-27|05','2026-10-27|07','2026-10-27|08',
-      '2026-10-27|10','2026-10-27|13','2026-10-27|15','2026-10-27|16','2026-10-27|22',
-      '2026-10-28|07','2026-10-28|09','2026-10-28|10','2026-10-28|13','2026-10-28|15',
-      '2026-10-28|16','2026-10-28|22',
-    ]);
+/* 【判定⑧】で判定に使ってよい場日の線引き。
+       最初は「今日そろっている29場日」を名前で凍結した。これはすぐ破れた。
+       同じ日のレースをあとから足せる（返還ありの取り込みを直した、欠場を
+       除いて数えるようにした）ので、10/26〜10/28 の8場日が新しくそろい、
+       「凍結後の新しい場日」として判定に入ってしまった。
+       もう中身を見た日なのに、判定の材料になってしまう。
 
+       一覧で凍結する限り、同じことが毎回起きる。
+       日付で区切れば、あとから何本足しても破れない。 */
+    const PREREG_ANA_AFTER = '2026-10-28';   /* この日までは判定に使わない */
     const FRESH_TOTAL = new Map();
     let FRESH_FLAG = false;      /* いま足している場日が凍結後かどうか */
     const addTotal = (label, inv, won, races) => {
@@ -1841,35 +1857,41 @@ if(require.main===module){
       }
     };
     if(!full.length){
-      console.log('  12レースそろった日はまだ無い。');
+      console.log('  1日ぶんそろった日はまだ無い。');
     }else{
       for(const [k,list] of full){
         const [date,jcd] = k.split('|');
-        FRESH_FLAG = !PREREG_ANA_DAYS.has(k);   /* 凍結後の場日だけ判定⑧に入れる */
+        FRESH_FLAG = date > PREREG_ANA_AFTER;   /* この日より後の場日だけ判定⑧に入れる */
         const names = new Set(list.map(r=>r.name));
         const sub = base.filter(x=>names.has(x.name));
         const lane1 = list.filter(r=>String(r.result).startsWith('1')).length;
-        console.log(`\n  ${date} 場コード${jcd}  12レース`);
+        /* 欠場で採点できなかったレースがある日は11レースなどになる。
+           12と書き決めていたせいで、1本欠けた日は丸ごと外れていた。
+           実際の本数で出す（除いた本数も断る）。 */
+        const N = list.length;
+        const dropped = skipOf(date,jcd);
+        console.log(`\n  ${date} 場コード${jcd}  ${N}レース`
+          + (dropped.size ? `（${[...dropped].sort((a,b)=>a-b).join(',')}R は欠場で採点できないので除く）` : ''));
         const h1 = (map, boat) => Object.entries(map)
           .filter(([c])=>c.startsWith(boat+'-')).reduce((a,[,v])=>a+v, 0);
-        const mdl1 = sub.length===12
-          ? sub.reduce((a,x)=>a+h1(x.probOf,'1'),0)/12*100 : null;
-        console.log(`    1号艇が1着      ${lane1}/12 = ${(lane1/12*100).toFixed(0)}%`
+        const mdl1 = sub.length===N
+          ? sub.reduce((a,x)=>a+h1(x.probOf,'1'),0)/N*100 : null;
+        console.log(`    1号艇が1着      ${lane1}/${N} = ${(lane1/N*100).toFixed(0)}%`
                     + `  （この場の公表イン率 ${VENUE_IN_RATE[jcd] ?? '—'}%`
                     + (mdl1!=null ? ` / モデルの平均 ${mdl1.toFixed(1)}%` : '') + '）');
-        if(sub.length===12){
+        if(sub.length===N){
           const ranks = sub.map(x=>x.rank);
-          const avg = ranks.reduce((a,c)=>a+c,0)/12;
+          const avg = ranks.reduce((a,c)=>a+c,0)/N;
           console.log(`    3連単の順位     平均${avg.toFixed(1)}  `
-            + `6点${ranks.filter(x=>x<=6).length}/12 `
-            + `12点${ranks.filter(x=>x<=12).length}/12 `
-            + `20点${ranks.filter(x=>x<=20).length}/12`);
-          console.log(`    1着を当てた     ${sub.filter(x=>x.head===String(x.result).split('-')[0]).length}/12`);
+            + `6点${ranks.filter(x=>x<=6).length}/${N} `
+            + `12点${ranks.filter(x=>x<=12).length}/${N} `
+            + `20点${ranks.filter(x=>x<=20).length}/${N}`);
+          console.log(`    1着を当てた     ${sub.filter(x=>x.head===String(x.result).split('-')[0]).length}/${N}`);
         }
         /* その日を1日まるごと、決めた買い方で買ったらいくらになるか。
            1レースだけ当てた話はいくらでも作れるが、1日そろえると作れない。
            買い方は index.html の buyPlan()（至極1点 / 本線10点 / 波乱8点）。 */
-        if(sub.length===12){
+        if(sub.length===N){
           const payOfDay = {}; for(const r of list) payOfDay[r.name]={pay:r.pay, result:String(r.result)};
           const toC = x => Object.entries(x.probOf).map(([combo,p])=>({combo,p}));
           const money = (label, pick) => {
@@ -1881,10 +1903,10 @@ if(require.main===module){
               if(ks.includes(info.result)) hits.push(info.pay);
             }
             const back=hits.reduce((a,c)=>a+c,0);
-            addTotal(label.trim(), inv, hits, 12);
+            addTotal(label.trim(), inv, hits, N);
             console.log(`      ${label.padEnd(18)} 投資¥${String(inv).padStart(6)}  `+
               `払戻¥${String(back).padStart(6)}  収支${(back-inv>=0?'+':'')}¥${(back-inv).toLocaleString()}  `+
-              `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits.length}/12`);
+              `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits.length}/${N}`);
           };
           /* レースごとに、どこで当たってどこで外したかを並べる。
              合計だけ見ると「惜しかった」のか「全然ちがった」のかが分からない。 */
@@ -1920,11 +1942,11 @@ if(require.main===module){
               }
             }
             const back=won.reduce((a,c)=>a+c,0), hits=won.length;
-            addTotal(label.trim(), inv, won, 12);
+            addTotal(label.trim(), inv, won, N);
             console.log(`      ${label.padEnd(26)} 投資¥${String(inv).padStart(6)}  `+
               `払戻¥${String(Math.round(back)).padStart(6)}  `+
               `収支${(back-inv>=0?'+':'-')}¥${Math.abs(Math.round(back-inv)).toLocaleString()}  `+
-              `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits}/12`);
+              `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits}/${N}`);
           };
           console.log('    至極を厚くしたら（ほかは100円のまま）');
           for(const y of [500,1000]){
@@ -1958,7 +1980,10 @@ if(require.main===module){
 
       /* たまった分の合計。レースを選んでいないので、ここだけが素性の良い数字。 */
       if(TOTAL.size){
-        const days=full.length, races=days*12;
+        /* 本数は日によって違う（欠場の日は11本）。足し算で出す。
+           days*12 と決め打ちしていたら、合計が実際より多く出ていた。 */
+        const days=full.length;
+        const races=full.reduce((a,[,l])=>a+l.length,0);
         console.log(`\n  ---- 上の ${days}場日 ＝ ${races}レースを全部あわせると（選り好みなし） ----`);
         for(const [label,t] of TOTAL){
           const back=t.won.reduce((a,c)=>a+c,0);
@@ -1998,8 +2023,8 @@ if(require.main===module){
            これは「数字を見てから気づいたこと」なので、そのまま採ってはいけない。
            丸亀の10月だけを切り出せば本線が107%に見えたのと同じ落とし穴。
 
-           そこで、今日そろっている29場日を凍結して対象外にし、
-           これから足す場日だけで判定する。条件は⑤⑥⑦と同じ2つ。
+           そこで 2026-10-28 までの日を対象外にし、
+           それより後の日の場日だけで判定する。条件は⑤⑥⑦と同じ2つ。
              ・回収率100%以上
              ・最大の払戻1件を除いても100%以上
            必要数は15場日（180レース）。波乱8点の的中はおよそ7レースに1本で、
@@ -2008,11 +2033,11 @@ if(require.main===module){
         console.log('\n  【判定⑧・2026-10-28に先に書いた】波乱8点だけを買うか');
         {
           const NEED_DAYS = 15;
-          const fresh = full.filter(([k])=>!PREREG_ANA_DAYS.has(k));
+          const fresh = full.filter(([k])=>k.split('|')[0] > PREREG_ANA_AFTER);
           if(fresh.length < NEED_DAYS){
             console.log(`    いま ${fresh.length}/${NEED_DAYS} 場日。たまったら判定する。`);
-            console.log(`    （凍結したのは今日時点の ${PREREG_ANA_DAYS.size} 場日。`
-                      + `これ以降にそろった場日だけで判定する）`);
+            console.log(`    （${PREREG_ANA_AFTER} までの場日は判定に使わない。`
+                      + `それより後の日だけで判定する）`);
             if(fresh.length){
               const t = FRESH_TOTAL.get('波乱（8点）');
               if(t){
@@ -2026,7 +2051,8 @@ if(require.main===module){
             const t = FRESH_TOTAL.get('波乱（8点）');
             const back=t.won.reduce((a,c)=>a+c,0), top=Math.max(...t.won);
             const a=back/t.inv*100, b=(back-top)/t.inv*100;
-            console.log(`    対象 ${fresh.length}場日 = ${fresh.length*12}レース（凍結分は除く）`);
+            console.log(`    対象 ${fresh.length}場日 = `
+              + `${fresh.reduce((a,[,l])=>a+l.length,0)}レース（凍結分は除く）`);
             console.log(`    ${a>=100?'○':'×'} 回収率100%以上        ${Math.round(a)}%`);
             console.log(`    ${b>=100?'○':'×'} 最大1件を除いても100%以上 ${Math.round(b)}%`);
             console.log(`    → ${a>=100&&b>=100 ? '波乱8点を採る。' : '欠けたので捨てる。採らない。'}`);
@@ -2826,7 +2852,7 @@ if(require.main===module){
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
                     `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点70% ／ 波乱8点だけ115% ／ 18点まとめて90%（505レース）。');
+        console.log('  実測 本線10点70% ／ 波乱8点だけ114% ／ 18点まとめて89%（510レース）。');
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

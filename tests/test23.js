@@ -189,6 +189,65 @@ console.log('\n=== RACES の目印を古いまま探していないか ===');
   ok(bad===0, `${files.length}個のファイルに古い目印が残っていない`);
 }
 
+/* 採点できなかったレースの扱い
+   ------------------------------------------------------------------
+   「まるごと1日そろった日だけで見る」は、選り好みの入っていない唯一の数字。
+   その判定を「12レース全部そろっているか」でやっていたため、
+   欠場で5艇になったレースが1本あるだけで、残り11レースごとその日が
+   捨てられていた（2026-10-26 の常滑と福岡、10/28 の常滑）。
+   29場日348レース → 37場日441レースに増えた。捨てていた量が大きい。
+
+   直したあとに新しく危ないのは、この「除いてよい」の口が広がること。
+   data/unscorable.js に何でも書けば、都合の悪いレースを外せてしまう。
+   ・手で書けないよう、自動生成であること
+   ・理由が欠場（オッズ60通り）だけであること
+   を見る。 */
+console.log('\n=== 採点できなかったレースの一覧が、都合よく使われていないか ===');
+{
+  const up=path.join(DIR,'data','unscorable.js');
+  if(!fs.existsSync(up)){
+    ok(true, 'data/unscorable.js は無い（まだ欠場レースに当たっていない）');
+  }else{
+    const list=require(up);
+    ok(Array.isArray(list), 'data/unscorable.js は配列を返す');
+    /* 除いてよい理由は3つだけ。ここを広げると、都合の悪いレースを
+       「採点できなかった」として外せるようになる。
+         欠場   … 5艇になった。6艇前提のモデルでは採点できない
+         不成立 … レースが成立せず、着順も払戻も出ない
+         中止   … 荒天などでレースを行わなかった
+       どれも「こちらが選んだのではなく、レースが無い」ものだけ。
+       「結果まだ」は取り直せば入るので、ここには来てはいけない。 */
+    const ALLOWED = /^(オッズ\d+通り（欠場）|不成立（レースが行われなかった）|中止（レースが行われなかった）)$/;
+    const bad=list.filter(r=>!ALLOWED.test(r.why||''));
+    ok(bad.length===0,
+       `除いている理由が「欠場・不成立・中止」の3つだけ`
+       + (bad.length?'（ほかの理由: '+bad.map(r=>r.date+' '+r.jcd+' R'+r.rno+' '+r.why).join(' / ')+'）':''));
+    const notYet=list.filter(r=>/結果まだ/.test(r.why||''));
+    ok(notYet.length===0,
+       `「結果まだ」が混ざっていない（混ざっていたら node wholeday.js で取り直す）`
+       + (notYet.length?'（: '+notYet.map(r=>r.date+' '+r.jcd+' R'+r.rno).join(' / ')+'）':''));
+    /* 除いたレースが本当に記録に入っていないこと。
+       入っているのに「除いた」と書いてあれば、二重に数えている。 */
+    const recorded=require(RACES_FILE);
+    const inRaces=list.filter(r=>
+      recorded.some(x=>x.date===r.date && x.jcd===r.jcd && x.rno===r.rno));
+    ok(inRaces.length===0,
+       `除いたレースはどれも記録に入っていない${inRaces.length?'（二重: '+inRaces.map(r=>r.date+' '+r.jcd+' R'+r.rno).join(' / ')+'）':''}`);
+    /* 生成元があること。無いと手で書いたものと区別がつかない。 */
+    ok(fs.existsSync(path.join(DIR,'unscorable.js')),
+       'unscorable.js（一覧を作り直すスクリプト）がある');
+    const src=fs.readFileSync(up,'utf8');
+    ok(/自動生成/.test(src) && /手で書かないこと/.test(src),
+       'data/unscorable.js の先頭に「自動生成・手で書かない」と書いてある');
+  }
+  /* backtest 側が、この一覧を「無くてよい」として数えていること。 */
+  const bt=fs.readFileSync(path.join(DIR,'backtest.js'),'utf8');
+  ok(/nos\.has\(i\+1\) \|\| skip\.has\(i\+1\)/.test(bt),
+     'backtest.js は「記録にある、または採点できない」で1日ぶんを数えている');
+  ok(/const races=full\.reduce\(\(a,\[,l\]\)=>a\+l\.length,0\)/.test(bt),
+     '合計レース数を 場日×12 ではなく足し算で出している（11本の日があるため）');
+}
+
 /* テストが process.exit() で終わっていないか
    ------------------------------------------------------------------
    stdout が配管のとき Node の書き出しは非同期で、process.exit() は

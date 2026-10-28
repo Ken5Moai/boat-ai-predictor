@@ -38,9 +38,56 @@ const DIR=path.join(__dirname,'tmp','wholeday',HD);
 fs.mkdirSync(DIR,{recursive:true});
 
 /* ---- 取ってくる（1場ずつ。すでにある場は飛ばす） -------------------- */
+/* 取れなかった理由のうち、あとで取れば入るもの（一時的なもの）を見分ける。
+   昼に走らせると夕方のレースはまだ終わっていないので「結果なし」になる。
+   欠場（5艇）はあとで取っても5艇のままなので、一時的ではない。
+
+   以前は「ファイルがあれば読むだけ」で、ここを取りに行かなかった。
+   そのため 2026-10-28 の江戸川は R1〜5 しか入らず（昼に捕獲した）、
+   桐生12R も落ちたまま、12レースそろった日から外れていた。
+   取り直せるものだけを埋める。すでに取れている分はもう触らない。 */
+/* 理由は「あとで取れば入るもの」と「何度取っても入らないもの」に分かれる。
+   以前は不成立と中止と『まだ走っていない』を「結果なし/不成立」という
+   1つの文字列にしていたため、見分けられなかった。
+   その結果、2026-10-28 江戸川の中止7レースと桐生12Rの不成立が
+   毎回取り直しの対象になり、永久に埋まらない穴として残っていた。
+   理由を分けて書くようにしたので、ここで見分けられる。 */
+const WHY_NOT_YET = '結果まだ（走っていない）';
+/* '結果なし/不成立' は理由を分ける前に書いた古い文字列。
+   そのままでは不成立・中止・まだ走っていない のどれか分からないので、
+   1度だけ取り直して正しい理由に書き換える。
+   取り直せば中止・不成立になり、以降は取り直しの対象から外れる。 */
+const LEGACY = '結果なし/不成立';
+const RETRYABLE = why =>
+  why === WHY_NOT_YET || why === LEGACY || /取得|timeout|ENOTFOUND|ECONN/i.test(why);
+
 async function grab(jcd){
   const f=path.join(DIR,`${jcd}.json`);
-  if(fs.existsSync(f)) return JSON.parse(fs.readFileSync(f,'utf8'));
+  if(fs.existsSync(f)){
+    const had=JSON.parse(fs.readFileSync(f,'utf8'));
+    const retry=(had.skipped||[]).filter(x=>RETRYABLE(x.why)).map(x=>x.rno);
+    if(!retry.length || CACHE_ONLY) return had;
+    console.log(`  ${VN[jcd]||jcd}: 前に取れなかった ${retry.length}レース`
+              + `（${retry.join(',')}R）を取り直します`);
+    const keep=(had.skipped||[]).filter(x=>!RETRYABLE(x.why));
+    for(const rno of retry){
+      try{
+        const r=await F.fetchRace(jcd, rno, HD);
+        if(!r.result || r.result.void || r.result.result==null){
+          keep.push({rno, why: r.result && r.result.void
+            ? `${r.result.voidReason||'不成立'}（レースが行われなかった）` : WHY_NOT_YET});
+          continue; }
+        if(Object.keys(r.odds).length!==120){ keep.push({rno,why:`オッズ${Object.keys(r.odds).length}通り（欠場）`}); continue; }
+        had.races.push(r);
+      }catch(e){ keep.push({rno,why:String(e.message).slice(0,60)}); }
+    }
+    had.races.sort((a,b)=>a.rno-b.rno);
+    had.skipped=keep;
+    fs.writeFileSync(f,JSON.stringify(had));
+    console.log(`  ${VN[jcd]||jcd}: ${had.races.length}レースになりました`
+              + (keep.length?`（まだ取れないのは ${keep.map(x=>x.rno+'R:'+x.why).join(' / ')}）`:''));
+    return had;
+  }
   if(CACHE_ONLY) return null;
   const races=[], skipped=[];
   for(let rno=1; rno<=12; rno++){
@@ -48,7 +95,10 @@ async function grab(jcd){
       const r=await F.fetchRace(jcd, rno, HD);
       /* 結果が出ていない・不成立・欠場（オッズが120通りでない）は数に入れない。
          入れると「買えなかったレース」を買ったことにしてしまう。 */
-      if(!r.result || r.result.void || r.result.result==null){ skipped.push({rno,why:'結果なし/不成立'}); continue; }
+      if(!r.result || r.result.void || r.result.result==null){
+        skipped.push({rno, why: r.result && r.result.void
+          ? `${r.result.voidReason||'不成立'}（レースが行われなかった）` : WHY_NOT_YET});
+        continue; }
       if(Object.keys(r.odds).length!==120){ skipped.push({rno,why:`オッズ${Object.keys(r.odds).length}通り（欠場）`}); continue; }
       races.push(r);
     }catch(e){ skipped.push({rno,why:String(e.message).slice(0,60)}); }
@@ -76,9 +126,39 @@ const toRace=r=>({
 const pct=(b,i)=>i?Math.round(b/i*100):0;
 const yen=v=>`${v>=0?'+':'-'}¥${Math.abs(v).toLocaleString()}`;
 
+/* その日に開催していた場だけを公式の一覧から取る。
+   ここは以前 24場を総当たりしていた。開催の無い場はファイルを作らない作りなので
+   （--cache-only で「0本の場」として残るのを避けるため）、
+   走らせ直すたびに、開催していない13場ぶん・1場12レース・1レース4ページ＝
+   150回以上を毎回取りに行っていた。2026-10-28 の取り直しで34分かかり、
+   止めるまで気づかなかった。公式には開催場の一覧が1ページで出ているので、
+   そこを1回だけ見る。
+   一覧が読めなければ、これまでどおり総当たりに戻す（取りこぼさないため）。 */
+async function racingVenues(){
+  const all=Object.keys(VN).sort();
+  if(CACHE_ONLY){
+    /* 取りに行かない指定のときは、すでにあるファイルだけを見る。 */
+    return fs.existsSync(DIR)
+      ? fs.readdirSync(DIR).filter(x=>/^\d\d\.json$/.test(x)).map(x=>x.slice(0,2)).sort()
+      : [];
+  }
+  try{
+    const html=await F.getPage(`https://www.boatrace.jp/owpc/pc/race/index?hd=${HD}`);
+    const found=[...new Set((html.match(/jcd=(\d\d)/g)||[]).map(x=>x.slice(4)))]
+                  .filter(j=>all.includes(j)).sort();
+    if(!found.length) throw new Error('開催場が読み取れない');
+    console.log(`${HD} の開催は ${found.length}場（${found.map(j=>VN[j]).join('・')}）`);
+    return found;
+  }catch(e){
+    console.log(`開催場の一覧が読めませんでした（${e.message}）。24場すべてを見ます。`);
+    return all;
+  }
+}
+
 (async()=>{
   const packs=[];
-  for(const jcd of ALL_JCD){
+  const JCDS = await racingVenues();
+  for(const jcd of JCDS){
     const p=await grab(jcd);
     if(p && p.races.length){ packs.push(p); process.stderr.write(`${VN[jcd]} ${p.races.length}本\n`); }
   }

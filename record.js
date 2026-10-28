@@ -58,8 +58,19 @@ for(const R of targets){
     }
     console.log(`  ${R.name}: 返還艇 ${refunded.join('・')} あり。払戻とオッズの一致は求めません。`);
   } else {
-    const calc = Math.round(odds[res.result]*100);
-    if(calc !== res.pay){ hold(`払戻が合いません（オッズから ¥${calc} / 画面 ¥${res.pay}）`); continue; }
+    const o = odds[res.result];
+    const calc = Math.round(o*100);
+    /* 公式のオッズ画面は1000倍以上を整数にして出すので、小数が落ちる。
+       2026-10-27 唐津8R は画面1893・払戻¥189,370（真の値1893.7）だった。
+       ぴったり一致を求めると、1000倍以上のレースが永久に記録できない。
+       落ちた小数で説明がつく範囲（切り捨て/四捨五入のどちらか）だけ許す。
+       1000倍未満は小数が出るので、ぴったり一致を求め続ける。 */
+    const lostDecimal = o>=1000 && (Math.floor(res.pay/100)===o || Math.round(res.pay/100)===o);
+    if(calc !== res.pay && !lostDecimal){
+      hold(`払戻が合いません（オッズから ¥${calc} / 画面 ¥${res.pay}）`); continue; }
+    if(lostDecimal && calc!==res.pay)
+      console.log(`  ${R.name}: オッズ表示が整数（${o}倍）で小数が落ちています。`
+                + `払戻¥${res.pay} から真の値は ${(res.pay/100).toFixed(1)}倍。表示どおり ${o} で記録します。`);
   }
 
   /* --- pending から取り出す --- */

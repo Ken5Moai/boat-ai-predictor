@@ -43,6 +43,15 @@ function get(page, jcd, rno, hd){
   if(!out || out.length < 1000) throw new Error(`${page} の中身が短すぎる（${out.length}文字）`);
   return out;
 }
+/* 任意のURLを1ページ取る。get() はレース単位のURLしか作れないので、
+   開催場の一覧（race/index?hd=…）のような1枚ものはこちらで取る。
+   取り方（curl・プロキシ・CA束・名乗り）は get() と同じにする。 */
+function getPage(url){
+  const out = execFileSync('curl', ['-sS','--fail','--max-time','60','-A',UA,url],
+                           {encoding:'utf8', maxBuffer:32*1024*1024});
+  if(!out || out.length < 1000) throw new Error(`中身が短すぎる（${out.length}文字）`);
+  return out;
+}
 const sleep = ms => new Promise(r=>setTimeout(r, ms));
 
 /* ---- 共通の下ごしらえ ---------------------------------------------- */
@@ -230,6 +239,18 @@ function parseResult(html){
     out.voidReason = '不成立';
     return out;
   }
+  /* 中止（荒天などでレースを行わなかった）も、着順も払戻も出ない。
+     不成立だけを見ていたので、中止のレースは「結果ページがまだ埋まっていない」
+     と区別がつかず、いつまでも取り直しの対象として残っていた。
+     2026-10-28 江戸川は6R以降が全部中止で、7レースぶんが毎回取り直されていた
+     （桐生12Rは不成立で、こちらは前から見分けられていた）。
+     通常の結果ページに「中止」の文字は出ないことを、
+     江戸川5R・桐生11R で確かめてある（0件）。 */
+  if(/中止/.test(joined)){
+    out.void = true;
+    out.voidReason = '中止';
+    return out;
+  }
   const m3 = joined.match(/3連単\|(\d)\|-\|(\d)\|-\|(\d)\|&yen;([\d,]+)\|(\d+)/)
           || joined.match(/3連単\|(\d)\|-\|(\d)\|-\|(\d)\|¥?([\d,]+)\|(\d+)/);
   if(m3){
@@ -330,7 +351,7 @@ function emit(race, name){
   console.log('  },');
 }
 
-module.exports = { fetchRace, raceTitle, parseRacelist, parseBefore, parseOdds, parseResult, cells, zen2han };
+module.exports = { fetchRace, getPage, raceTitle, parseRacelist, parseBefore, parseOdds, parseResult, cells, zen2han };
 
 if(require.main === module) (async ()=>{
   const a = process.argv.slice(2);

@@ -63,8 +63,16 @@ for(const r of RACES){
   if(typeof r.pay==='number'){
     const want=Math.round(o[r.result]*100);
     if(!ref.length){
-      ok(Math.abs(want-r.pay)<=10,
-         `${r.name} 払戻 ${r.result} = ${o[r.result]}倍 → ¥${want}（結果画面 ¥${r.pay}）`);
+      /* 1000倍以上は公式のオッズ画面が整数にして出すので、小数が落ちる。
+         唐津8R(10/27) は画面1893・払戻¥189,370（真の値1893.7）で、差は¥70。
+         許容10円では落ちるが、取り込みは画面どおりで正しい。
+         落ちた小数で説明がつく範囲だけ広げる（1000倍未満は10円のまま）。 */
+      const v=o[r.result];
+      const lost = v>=1000 && (Math.floor(r.pay/100)===v || Math.round(r.pay/100)===v);
+      ok(Math.abs(want-r.pay)<=10 || lost,
+         `${r.name} 払戻 ${r.result} = ${o[r.result]}倍 → ¥${want}（結果画面 ¥${r.pay}）`
+         + (lost && Math.abs(want-r.pay)>10
+            ? `  ※オッズ表示が整数で小数が落ちている（真の値 ${(r.pay/100).toFixed(1)}倍）` : ''));
     }else{
       const share = 1 - r.pay/want;
       ok(r.pay < want && share > 0 && share < 1,
