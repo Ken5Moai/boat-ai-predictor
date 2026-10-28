@@ -342,9 +342,7 @@ async function gotoRace(page, rno){
 }
 
 async function fill(ctx, plan, ask){
-  console.log(TERMS_BLOCK);
-  throw termsForbid('投票画面への打ち込み');
-  /* eslint-disable no-unreachable */
+  showTermsNotice();
   const page = await findVotePage(ctx);
   if(!page) throw new Error('投票画面が見つかりません（艇番のボタンがある画面を開いてください）');
   console.log(`\n  投票画面を見つけました: ${page.url().slice(0,80)}`);
@@ -539,9 +537,7 @@ async function readConfirm(page){
 
 /* 実際に買う。ここだけが金を動かす。 */
 async function buy(ctx, plan, opt){
-  console.log(TERMS_BLOCK);
-  throw termsForbid('自動での投票');
-  /* eslint-disable no-unreachable */
+  showTermsNotice();
   opt = opt || {};
   const pass = process.env.BOAT_BET_PASSWORD;
   if(!pass) throw new Error('投票用パスワードがありません（環境変数 BOAT_BET_PASSWORD）');
@@ -662,37 +658,41 @@ async function buy(ctx, plan, opt){
    なぜ止めたかを次に読む人（自分を含む）に残すため。
    予想を出すところ（auto.js の買い目づくり）は投票システムを触らないので、
    第25条の対象ではない。そちらは今までどおり使える。 */
-const TERMS_BLOCK =
-  '\n  ✗ テレボート会員規約 第25条（禁止事項）に当たるため、動かしません。\n'
+const TERMS_NOTICE =
+  '\n  ──────── テレボート会員規約 第25条（禁止事項）────────'
++ '\n    (2) 極めて短時間に機械的に反復して投票、照会等する行為'
 + '\n    (4) 振興会が提供するアプリケーションツール、ソフトウェア等以外のものを'
 + '\n        用いるなど、振興会のシステムの意図から外れた方法で'
 + '\n        インターネット投票を利用する行為'
-+ '\n    (2) 極めて短時間に機械的に反復して投票、照会等する行為'
 + '\n    (6) 前各号に掲げる行為の準備とみられる行為又は、該当するおそれのある行為'
 + '\n'
-+ '\n    このスクリプトで投票画面を操作することが、そのまま (4) に当たります。'
-+ '\n    買うところだけでなく、打ち込むところも同じです。'
-+ '\n'
-+ '\n    買い目を出すところは投票システムを触らないので、今までどおり使えます。'
-+ '\n      node auto.js --max 10          その日の買い目を順に出す'
-+ '\n      node predict.js <場> <R>       1レースだけ'
-+ '\n    出た買い目は、ご自身で投票画面に入れてください。\n';
++ '\n    このスクリプトは Playwright で投票画面を操作します。'
++ '\n    (3)（公式画面を介さずに投票）には当たりませんが、'
++ '\n    (4)（公式以外のソフトで操作）に当たる可能性があります。'
++ '\n    使うかどうかは本人の判断。リスクは口座の停止です。'
++ '\n  ────────────────────────────────────────────\n';
 
-function termsForbid(what){
-  const e = new Error('会員規約 第25条で禁止されている操作です（' + what + '）');
-  e.termsBlocked = true;
-  return e;
+/* 一度だけ出す。毎レース出すとうるさくて読まれなくなる。 */
+let noticeShown = false;
+function showTermsNotice(){
+  if(noticeShown) return;
+  noticeShown = true;
+  console.log(TERMS_NOTICE);
 }
 
 function buyReadiness(){
-  return ['会員規約 第25条(4) により、このスクリプトでの投票は行えません'];
+  const miss=[];
+  if(!process.env.BOAT_BET_PASSWORD) miss.push('投票用パスワード（環境変数 BOAT_BET_PASSWORD）');
+  if(process.env.BOAT_TERMS_OK !== 'yes')
+    miss.push('会員規約を読んだうえでの同意（BOAT_TERMS_OK=yes）');
+  return miss;
 }
 
 /* ---- 本体 ----------------------------------------------------------- */
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
 module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
                    readRaceOnScreen, venueName, gotoRace, buyReadiness,
-                   buy, readConfirm, amountUnit, readBalance, TERMS_BLOCK,
+                   buy, readConfirm, amountUnit, readBalance, TERMS_NOTICE,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
                    MAX_YEN_PER_RACE, MAX_YEN_PER_POINT, MAX_POINTS };
 if(require.main !== module) return;

@@ -184,15 +184,14 @@ function makePlan(r){
   for(const r of queue)
     console.log(`    ${r.close}  ${r.venue.padEnd(4)}${String(r.rno).padStart(2)}R  ${r.title||''}`);
 
-  /* ★ 2026-10-28、テレボート会員規約 第25条(4) により、
-     このスクリプトで投票画面を操作すること自体が禁止されていると分かった。
-     --fill も --buy も動かさない。買い目を出すところはそのまま使える。 */
+  /* 会員規約 第25条(4)（公式以外のソフトで投票画面を操作）に当たる可能性がある。
+     2026-10-28 に本人へ条文を示し、本人の判断で使うことになった。
+     黙って動かさないよう、起動時に必ず条文を出す。 */
   if(FILL || BUY || BUY_DRY){
     const V=require('./vote-assist.js');
-    console.log(V.TERMS_BLOCK);
-    return;
+    console.log(V.TERMS_NOTICE);
   }
-  if(false){
+  if(BUY || BUY_DRY){
     const V=require('./vote-assist.js');
     const miss=V.buyReadiness();
     if(miss.length){
@@ -303,7 +302,10 @@ async function runLoop(queue, ctx, ask, V){
     let ready=false;
     while((left=r.closeMin-nowMin()) >= 10){
       if(exhibitionReady(r.jcd, r.rno)){ ready=true; break; }
-      sleep(30);
+      /* 30秒おきに見ていたが、第25条(2)「極めて短時間に機械的に反復」に
+         寄せたくないのと、公式に無駄な負荷をかけないため間隔を空ける。
+         展示は締切12〜17分前に出るので、3分おきでも取り逃さない。 */
+      sleep(180);
     }
     if(!ready){ log(`${label} 展示が出ないまま10分前になったので飛ばします`); continue; }
 
