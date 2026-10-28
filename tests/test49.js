@@ -154,7 +154,7 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
     ok_(!(await pg.evaluate(()=>window.__bought)), '「投票する」を押していない');
     /* --buy-dry はパスワードを入れない。人が打つほうが確実だと分かったため
        （こちらから入れるのは実機で2回とも弾かれた）。 */
-    ok_((await pg.inputValue('#c_pw')).length===0, 'パスワードは入れない（人が打つ）');
+    ok_((await pg.inputValue('#pass')).length===0, 'パスワードは入れない（人が打つ）');
     ok_(out && out.waitingHuman===true, '人の入力待ちだと返す');
     await ctx.close();
   }
@@ -165,8 +165,14 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
     const {err}=await quiet(()=>V.buy(ctx, PLAN, {}));
     ok_(!err, `最後まで通る（${err?err.message.slice(0,50):'エラーなし'}）`);
     ok_(!(await pg.evaluate(()=>window.__rejected)), '弾かれていない');
-    ok_((await pg.inputValue('#c_pw'))==='abc1234', '見えている「投票用パスワード」の欄に入っている');
+    ok_((await pg.inputValue('#pass'))==='abc1234', '見えている「投票用パスワード」の欄に入っている');
     ok_((await pg.inputValue('#hiddenpw'))==='', '見えない欄には入れていない');
+    /* ★ 実機にあったおとり。本物より前にあり、どれも見えている。 */
+    const dummies=await pg.evaluate(()=>
+      [...document.querySelectorAll('input[type=password]')]
+        .filter(e=>/^dummy/i.test(e.name||'')).map(e=>({n:e.name,len:e.value.length})));
+    ok_(dummies.length===2, `おとりの欄が2つある（${dummies.length}）＝実機と同じ形`);
+    ok_(dummies.every(d=>d.len===0), `おとりに入れていない（${dummies.map(d=>d.n+':'+d.len).join(' ')}）`);
     const b=await pg.evaluate(()=>window.__bought);
     ok_(b && b.pw==='abc1234', '送られたパスワードが正しい');
     await ctx.close();
@@ -175,7 +181,7 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
     /* 弾かれたときに、買えていないことをはっきり伝える */
     const {ctx,pg}=await prep();
     await pg.evaluate(()=>{ /* 見える欄を読み取り専用にして入らなくする */
-      const e=document.getElementById('c_pw'); e.readOnly=true; });
+      const e=document.getElementById('pass'); e.readOnly=true; });
     const {err,said}=await quiet(()=>V.buy(ctx, PLAN, {}));
     ok_(!!err, `入らなければ止まる（${err?err.message.slice(0,40):'止まらなかった'}）`);
     ok_(!(await pg.evaluate(()=>window.__bought)), 'そのとき買っていない');

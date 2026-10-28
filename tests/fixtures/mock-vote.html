@@ -34,8 +34,18 @@
   <div>合計ベット数 <span id="c_cnt">0</span> 件</div>
   <div>購入金額 <span id="c_sum">0</span> 円</div>
   <div>購入金額と投票用パスワードを入力し、「投票する」ボタンを押下してください。</div>
-  <div>購入金額 <input id="c_amount" type="tel"><span id="c_unit"> 円</span></div>
-  <div>投票用パスワード <input id="c_pw" type="password"></div>
+  <!-- 実機の構成（2026-10-28の診断そのまま）。
+       おとりのパスワード欄が本物より前にあり、どれも見えている。
+       ラベル「投票用パスワード」は隣のセルで、入力欄の親には無い。 -->
+  <input type="password" name="dummyA">
+  <input type="password" name="dummyB">
+  <table><tr>
+    <td>購入金額</td>
+    <td><input id="c_amount" type="tel" name="betAmount" class="inputAmount"><span id="c_unit"> 円</span></td>
+  </tr><tr>
+    <td>投票用パスワード</td>
+    <td><input id="pass" type="password" name="betPassword" class="inputPass"></td>
+  </tr></table>
   <a href="#" id="c_back">投票内容を修正する</a>
   <a href="#" id="c_go">投票する</a>
 </div>
@@ -92,7 +102,7 @@ document.getElementById('done').onclick=()=>{
 document.getElementById('c_go').onclick=()=>{
   const v=Number(document.getElementById('c_amount').value||0);
   const mult=/00円/.test(document.getElementById('c_unit').textContent)?100:1;
-  const vis=document.getElementById('c_pw').value;
+  const vis=document.getElementById('pass').value;
   if(!vis){ window.__rejected=true;
             document.body.insertAdjacentHTML('beforeend',
               '<div id="pwerr">エラー 投票用パスワードの入力に誤りがあります。</div>');

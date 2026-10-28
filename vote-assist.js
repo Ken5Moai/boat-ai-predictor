@@ -613,35 +613,43 @@ async function buy(ctx, plan, opt){
     throw new Error(`購入金額が入っていません（入れた ${put} / 画面 ${got}）`);
 
   /* 投票用パスワード。
-     はじめは input[type=password] の最初の1つを取っていた。
-     実機では画面に見えていない別のパスワード欄がDOMの先にあり、
-     そちらに入れてしまって「投票用パスワードの入力に誤りがあります」で
-     弾かれた（2026-10-28 丸亀10R）。画面の欄は空のままだった。
-     こちらの確認（入れた値を読み返す）は、入れた先が間違っていると通ってしまう。
+     ★ 実機にはおとりのパスワード欄がある（2026-10-28に判明）。
+       password name="dummyA" 見える
+       password name="dummyB" 見える
+       password name="betPassword" id="pass" class="inputPass" 見える ← 本物
+     おとりが本物より前にあるので、「見えている最初のパスワード欄」を取ると
+     おとりに入る。丸亀10R・11R はこれで弾かれた。
+     ラベルで探す手も効かない。「投票用パスワード」の文字は親ではなく
+     隣のセルにあるため。
 
-     見えている欄だけを見て、そのうち「投票用パスワード」と書いてある
-     ところに近いものを選ぶ。見つからなければ入れずに止める。 */
-  const pwAll = page.locator('input[type=password]');
-  const nPw = await pwAll.count();
+     名前で直に指定する。おとり（dummy で始まる名前）には絶対に入れない。
+     どれも見つからなければ、入れずに止める。推測で入れない。 */
+  const PW_SEL = ['#pass', 'input[name="betPassword"]', 'input.inputPass'];
   let pw=null, pwWhy='';
-  for(let i=0;i<nPw;i++){
-    const h=pwAll.nth(i);
+  for(const sel of PW_SEL){
+    const h = page.locator(sel).first();
+    if(!await h.count()) continue;
     if(!await h.isVisible().catch(()=>false)) continue;
-    const near = await h.evaluate(el=>{
-      /* 親をたどって「投票用パスワード」と書いてある箱を探す */
-      let e=el, hop=0;
-      while(e && hop<4){
-        const t=(e.innerText||e.textContent||'');
-        if(t.includes('投票用パスワード')) return true;
-        e=e.parentElement; hop++;
-      }
-      return false;
-    }).catch(()=>false);
-    if(near){ pw=h; pwWhy='「投票用パスワード」の欄'; break; }
-    if(!pw){ pw=h; pwWhy='見えているパスワード欄（ラベルは確かめられず）'; }
+    const nm = (await h.getAttribute('name')) || '';
+    if(/^dummy/i.test(nm)) continue;          /* おとり */
+    pw=h; pwWhy=sel; break;
   }
-  if(!pw) throw new Error(`投票用パスワードの欄が見つかりません`
-    + `（パスワード欄は${nPw}個あるが、見えているものが無い）`);
+  if(!pw){
+    /* 名前で見つからないときだけ、見える欄の中から探す。
+       そのときも、おとりと「金額」は除く。 */
+    const all = page.locator('input[type=password]');
+    const n = await all.count();
+    for(let i=0;i<n;i++){
+      const h=all.nth(i);
+      if(!await h.isVisible().catch(()=>false)) continue;
+      const nm=(await h.getAttribute('name'))||'';
+      if(/^dummy/i.test(nm)) continue;
+      pw=h; pwWhy=`見えているパスワード欄（name=${nm||'なし'}）`; break;
+    }
+  }
+  if(!pw) throw new Error('投票用パスワードの欄が見つかりません'
+    + '（おとりの欄しか無いか、画面が想定と違います）');
+
   /* --buy-dry のときは、パスワードを入れずに欄を選んだ状態で止める。
      こちらから打つのが2回とも弾かれているので、人が打つほうが確実。
      2026-10-28 丸亀9R は、この形（こちらが全部入れて人が打って押す）で
@@ -667,6 +675,14 @@ async function buy(ctx, plan, opt){
   if(!pwGot) throw new Error('投票用パスワードが入っていません');
   if(pwGot.length !== pass.length)
     throw new Error(`投票用パスワードが途中までしか入っていません（${pwGot.length}/${pass.length}文字）`);
+  /* おとりに入っていないことも確かめる。入っていたら押さない。 */
+  const decoy = await page.evaluate(()=>
+    [...document.querySelectorAll('input[type=password]')]
+      .filter(e=>/^dummy/i.test(e.name||''))
+      .map(e=>({name:e.name, len:(e.value||'').length}))
+      .filter(x=>x.len>0));
+  if(decoy.length)
+    throw new Error(`おとりの欄に入っています（${decoy.map(d=>d.name).join(',')}）。押さずに止めます`);
   console.log(`  投票用パスワードを打ちました（${pwWhy}。画面には出しません）。`);
 
   /* それでも弾かれるときのために、押す前の状態を書き出しておく。
