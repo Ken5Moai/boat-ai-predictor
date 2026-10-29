@@ -97,15 +97,27 @@ console.log('\n=== 今日の若松12R（この判定では拾えなかった実�
   }
 }
 
-console.log('\n=== 買い目カード（至極1点 / 本線10点 / 波乱8点）===');
+/* 買う点数は index.html の BUY_POINTS が持っている。
+   ここに書き写すと、点数を変えた日にテストだけが古い値を見て落ちる
+   （2026-10-29 に実際に落ちた）。本体から読む。 */
+const PTS = (()=>{
+  const m=HTML.match(/const BUY_POINTS = \{\s*main:\s*(\d+),\s*ana:\s*(\d+)\s*\}/);
+  if(!m) throw new Error('index.html の BUY_POINTS が読めません');
+  return {main:Number(m[1]), ana:Number(m[2])};
+})();
+const PTS_ALL = PTS.main + PTS.ana;
+
+console.log(`\n=== 買い目カード（至極1点 / 本線${PTS.main}点 / 波乱${PTS.ana}点）===`);
 /* 買い目の形を決めるのは buyPlan() 一箇所だけ、という約束を守れているか。
    backtest.js と index.html の両方に点数を書くと、片方だけ直したときに静かにずれる。 */
 {
   const r = report(RACES[RACES.length-1]);
-  ok(/買い目 18点/.test(r.text), '18点の買い目カードが描画される');
-  ok(/至極の一点/.test(r.text) && /本線 10点/.test(r.text) && /波乱 8点/.test(r.text),
-     '3段（至極1点 / 本線10点 / 波乱8点）が出ている');
-  ok(/本線10点の中に入っています（別枠ではありません）/.test(r.text),
+  ok(new RegExp(`買い目 ${PTS_ALL}点`).test(r.text), `${PTS_ALL}点の買い目カードが描画される`);
+  ok(/至極の一点/.test(r.text)
+     && new RegExp(`本線 ${PTS.main}点`).test(r.text)
+     && new RegExp(`波乱 ${PTS.ana}点`).test(r.text),
+     `3段（至極1点 / 本線${PTS.main}点 / 波乱${PTS.ana}点）が出ている`);
+  ok(new RegExp(`本線${PTS.main}点の中に入っています（別枠ではありません）`).test(r.text),
      '至極の一点が本線に含まれることを明記している');
   ok(/回収率は\d+%→\d+%に落ちます/.test(r.text),
      '波乱を足すと回収率が落ちることを買う前に出している');
@@ -123,26 +135,32 @@ console.log('\n=== 買い目カード（至極1点 / 本線10点 / 波乱8点）
       if(c===a||c===b)continue; combos.push({combo:`${a}-${b}-${c}`, p:Math.exp(-(i++)/30)});}}
     const t=combos.reduce((s,c)=>s+c.p,0); combos.forEach(c=>c.p/=t);
     for(const mode of ['cond','prob']){
-      const pl=W.buyPlan(combos,{main:10, ana:8, anaMode:mode});
-      if(pl.main.length!==10) wrongMain++;
-      if(pl.ana.length!==8) wrongAna++;
+      const pl=W.buyPlan(combos,{anaMode:mode});   /* 点数は BUY_POINTS */
+      if(pl.main.length!==PTS.main) wrongMain++;
+      if(pl.ana.length!==PTS.ana) wrongAna++;
       if(pl.main.some(k=>pl.ana.includes(k))) overlap++;
       if(pl.ana.some(k=>Number(k[0])===pl.favourite)) favIn++;
     }
   }
   ok(overlap===0, '本線と波乱が重ならない（同じ組を二重に買わない）');
-  ok(wrongMain===0, '本線はいつも10点ちょうど');
-  ok(wrongAna===0, '波乱はいつも8点ちょうど');
+  ok(wrongMain===0, `本線はいつも${PTS.main}点ちょうど`);
+  ok(wrongAna===0, `波乱はいつも${PTS.ana}点ちょうど`);
   ok(favIn===0, '波乱に本命が1着の組は入らない');
 }
 
 console.log('\n=== 点数と実測が backtest.js と食い違っていないか ===');
 /* 画面に書いた実測値が、backtest.js の計算結果と別物になっていないか。
    数字をベタ書きしている以上、ここがずれると画面が嘘をつく。 */
-ok(/本線10点\d+% ／ 波乱8点だけ\d+% ／ 18点まとめて\d+%/.test(BT),
+/* backtest.js 側は見出しを ${L_MAIN} のような式で書いている（点数を
+   書き写さないため）。ソースを見るこのテストでは式の形で照合する。 */
+ok(/実測 \$\{L_MAIN\}\d+% ／ \$\{L_ANA\}だけ\d+% ／ \$\{PTS_ALL\}点まとめて\d+%/.test(BT),
    'backtest.js の結果まち出力にも同じ実測値が入っている');
-ok(/main:10, ana:8/.test(BT) && /main:10, ana:8/.test(HTML),
-   '点数(10/8)は両方で同じ値を buyPlan に渡している');
+/* 点数は index.html の BUY_POINTS だけで決める。
+   以前は {main:10, ana:8} を両方に書いて「同じ値か」を見ていたが、
+   2箇所に書く形そのものがずれの元だった。いまは直書きが無いことを見る
+   （どこに残っているかは test52 が場所つきで出す）。 */
+ok(!/buyPlan\([^;]*\bmain\s*:\s*\d/.test(BT) && !/buyPlan\([^;]*\bmain\s*:\s*\d/.test(HTML),
+   '点数は BUY_POINTS だけで決めている（呼ぶ側に直書きが無い）');
 console.log('\n=== 当地勝率0.00の艇がいるレースでも描けるか ===');
 /* 当地勝率0.00は「当地で走っていない」であって「当地で勝てない」ではない。
    値として入れると勝率0の選手になってしまうので、localNone で欠測として扱う。
@@ -157,7 +175,7 @@ console.log('\n=== 当地勝率0.00の艇がいるレースでも描けるか ==
     const r = report(z);
     console.log(`  （${z.name}）`);
     ok(r.text.length > 500, 'レポートが空にならない');
-    ok(/買い目 18点/.test(r.text), '買い目カードが出る');
+    ok(new RegExp(`買い目 ${PTS_ALL}点`).test(r.text), '買い目カードが出る');
   }
   const n = RACES.filter(r=>r.B.some(b=>b.loc===0)).length;
   console.log(`  当地勝率0.00を含むレースは ${n}/${RACES.length} 件あります。`);

@@ -21,6 +21,17 @@
    ここがやるのは、取得と pending.js への書き込みと、出力の抜き出しだけ。 */
 const fs=require('fs'), path=require('path'), {execFileSync}=require('child_process');
 const F=require('./fetch.js');
+/* 買う点数は index.html の BUY_POINTS が持っている。
+   ここは backtest.js の出力を文字で探しているので、「本線10点」と
+   書き写すと点数を変えた日に黙って空振りする（何も出なくなる）。
+   見出しを点数から組み立てる。 */
+const PTS = (()=>{
+  const h=require('fs').readFileSync(require('path').join(__dirname,'index.html'),'utf8');
+  const m=h.match(/const BUY_POINTS = \{\s*main:\s*(\d+),\s*ana:\s*(\d+)\s*\}/);
+  if(!m) throw new Error('index.html の BUY_POINTS が読めません');
+  return {main:Number(m[1]), ana:Number(m[2])};
+})();
+const L_MAIN = `本線${PTS.main}点`;
 const PLAN=require('./plan.js');
 const ROOT=__dirname;
 
@@ -202,9 +213,11 @@ const show = (label, provisional, odds) => {
 
      実測（77レース・締切時オッズ）
        本線10点が当たったうち、当たっても赤字だったのは13/33（39%）
-       10倍未満が0点  15レース ／ 1点 12 ／ 2点 19 ／ 3点 11 ／ 4点 6 */
+       10倍未満が0点  15レース ／ 1点 12 ／ 2点 19 ／ 3点 11 ／ 4点 6
+     （これは本線10点だったときの実測。点数は BUY_POINTS で変わるので、
+      いまの点数での数字は backtest.js の「当たっても負けたレース」の節を見る） */
   {
-    const m = odds ? out.slice(i, j).match(/本線10点\s+(.+)/) : null;
+    const m = odds ? out.slice(i, j).match(new RegExp(`本線${PTS.main}点\\s+(.+)`)) : null;
     if(m){
       const list = PLAN.expand(m[1]);
       const cost = list.length*100;
@@ -212,7 +225,7 @@ const show = (label, provisional, odds) => {
       log('');
       log(`  ── 当たっても元が取れるか（本線${list.length}点＝¥${cost.toLocaleString()}）──`);
       if(!cheap.length){
-        log(`     10倍未満は0点。どれが来ても投資は回収できます。`);
+        log(`     ${PTS.main}倍未満は0点。どれが来ても投資は回収できます。`);
       } else {
         log(`     当たっても¥${cost.toLocaleString()}に届かない組が ${cheap.length}点あります:`);
         log(`       ${cheap.map(k=>`${k} ${odds[k]}倍（¥${Math.round(odds[k]*100).toLocaleString()}）`).join(' / ')}`);
@@ -244,16 +257,16 @@ const show = (label, provisional, odds) => {
   if(!provisional) return;
   /* 暫定がどれだけ悪いかは、backtest.js の節から読む（固定値で書かない）。 */
   const g = re => (out.match(re)||[])[1];
-  const exPct = g(/確定（展示あり）本線10点\s+回収率\s*(\d+)%/);
-  const noPct = g(/暫定（展示なし）本線10点\s+回収率\s*(\d+)%/);
+  const exPct = g(new RegExp(`確定（展示あり）${L_MAIN}\\s+回収率\\s*(\\d+)%`));
+  const noPct = g(new RegExp(`暫定（展示なし）${L_MAIN}\\s+回収率\\s*(\\d+)%`));
   const headSame = (out.match(/1着に選ぶ艇が同じ\s+(\d+\/\d+)レース/)||[])[1];
   const topSame  = (out.match(/至極の一点が同じ\s+(\d+\/\d+)レース/)||[])[1];
-  const lap      = (out.match(/本線10点の重なり\s+平均([\d.]+)\/10点/)||[])[1];
+  const lap      = (out.match(new RegExp(`${L_MAIN}の重なり\\s+平均([\\d.]+)\\/${PTS.main}点`))||[])[1];
   if(exPct && noPct){
     log('  ※ これは展示の前に出した暫定です。実測では確定版よりはっきり悪くなります。');
-    log(`     本線10点の回収率  確定${exPct}%  →  暫定${noPct}%`);
+    log(`     ${L_MAIN}の回収率  確定${exPct}%  →  暫定${noPct}%`);
     if(headSame) log(`     1着に選ぶ艇は ${headSame} レースで同じ。至極の一点が同じなのは ${topSame}。`);
-    if(lap)      log(`     本線10点の重なりは平均 ${lap}/10点。変わるのは2着3着の並びです。`);
+    if(lap)      log(`     ${L_MAIN}の重なりは平均 ${lap}/${PTS.main}点。変わるのは2着3着の並びです。`);
     log('     買うなら展示を待ってください。暫定は下見用です。');
   }
 };

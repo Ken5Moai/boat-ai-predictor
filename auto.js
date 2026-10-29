@@ -18,7 +18,8 @@
    打ち込みは vote-assist.js、押すのは人。
 
    ★ 上限を必ず置く理由
-     実測の回収率は 本線10点 86% / 18点 108%（最大1件除くと96%）。
+     回収率はここに書き写さない（レースが増えるたびに古くなる）。
+     選り好みのない実測を画面と同じところから出す。
      100%を安定して超えてはいない。回せば回すほど減る形なので、
      「残高がある限り」ではなく「1日◯レースまで」で止める。
      レース数が決まれば、その日の最大の持ち出しが先に分かる。 */
@@ -49,8 +50,18 @@ const STOP_LOSS = flag('stop-loss', null);
 const BUY = args.includes('--buy');
 const BUY_DRY = args.includes('--buy-dry');
 
-/* 1点100円・18点で計算する。vote-assist.js と同じ前提。 */
-const YEN_PER_RACE = 1800;
+/* 1レースいくら持ち出すか。買う点数は index.html の BUY_POINTS が持っている。
+   ここに 1800 と書き写していたので、点数を 本線6＋波乱4（10点）に変えたあとも
+   「1レース¥1,800」「最大¥36,000」と出し続ける状態だった。
+   残高の見積りと損切りの判断に使う数字なので、本体から取る。 */
+const PTS = (()=>{
+  const h=require('fs').readFileSync(require('path').join(__dirname,'index.html'),'utf8');
+  const m=h.match(/const BUY_POINTS = \{\s*main:\s*(\d+),\s*ana:\s*(\d+)\s*\}/);
+  if(!m) throw new Error('index.html の BUY_POINTS が読めません（1レースの金額が分かりません）');
+  return {main:Number(m[1]), ana:Number(m[2])};
+})();
+const PTS_ALL = PTS.main + PTS.ana;
+const YEN_PER_RACE = PTS_ALL * 100;
 /* 締切までこれ以上ないレースは拾わない（展示を待つ時間がいる）。
    runLoop() を切り出したときに main() の中に置いたままにしてしまい、
    実機で「MIN_LEAD is not defined」で落ちた（2026-10-28 丸亀9R）。
@@ -147,10 +158,14 @@ function makePlan(r){
     + `\n  買いません。買い目を出すところまでです。`);
   if(BUY) console.log('  ★ --buy なので、最後まで自動で押します。');
   if(BUY_DRY) console.log('  ★ --buy-dry なので、押す直前で止まります。');
-  console.log(`  1レース¥${YEN_PER_RACE.toLocaleString()}（18点×100円）`
+  console.log(`  1レース¥${YEN_PER_RACE.toLocaleString()}（本線${PTS.main}＋波乱${PTS.ana}＝${PTS_ALL}点×100円）`
     + ` → 上限まで回ると最大 ¥${(YEN_PER_RACE*MAX).toLocaleString()} の持ち出し`);
-  console.log(`  実測の回収率は 本線10点86% / 18点108%（最大1件除くと96%）。`);
-  console.log(`  100%を安定して超えてはいないので、上限まで回ると平均では減ります。\n`);
+  /* 回収率は書き写さない。レースが増えるたびに古くなり、
+     「108%」と出しながら実測が91%という状態になる（実際そうなっていた）。
+     選り好みのない数字だけを出す。node sync-figures.js が書き換える。 */
+  console.log(`  選り好みのない457レースの実測では ${PTS_ALL}点で回収率91%`);
+  console.log(`  （最大の払戻1件を除くと80%）。100%を超えていないので、`);
+  console.log(`  上限まで回ると平均では減ります。\n`);
 
   console.log('  開催を調べています…');
   const all=schedule();

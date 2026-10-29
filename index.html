@@ -233,9 +233,9 @@ BOAT RACE公式から取得します。<br>
 </ul>
 
 <div class="notice info" style="margin-top:12px">
-<b>やめどきの目安。</b>510レース時点で、本線10点の回収率は70%です。
-ただし<b>点検は通っていません</b>。いちばん効いた1レースを除くと66%に落ちます。
-さらに、レースを選ばずにまる1日ぶんそろえた<b>39場日（457レース）だけ</b>で見ると63%です。
+<b>やめどきの目安。</b>510レース時点で、本線6点の回収率は71%です。
+ただし<b>点検は通っていません</b>。いちばん効いた1レースを除くと69%に落ちます。
+さらに、レースを選ばずにまる1日ぶんそろえた<b>39場日（457レース）だけ</b>で見ると67%です。
 <b>こちらのほうが実際に近い数字です</b>（「買うレースを選べる」という前提が入っていないため）。
 つまり<b>まだ「勝てる」と言える段階ではありません</b>。
 ここから回収率が100%を割り込んで戻らないなら、
@@ -370,7 +370,7 @@ BOAT RACE公式から取得します。<br>
 払戻¥5,000超のレースで、正解がモデルの何番目にあったかの平均は<b>41.3番目</b>。
 三国6Rの¥27,110は<b>74番目</b>でした。120通り中74番目なので、
 4口どころか74口買わないと届きません。<br><br>
-<b>同じお金を使うなら、本線を10点に増やすほうが実測では上です（510レースで70%）。</b>
+<b>同じお金を使うなら、穴枠に回さず<b>本線に使うほうが実測では上です</b>（510レースで71%）。</b>
 それでも穴枠を使うなら、「当てるため」ではなく
 「たまに大きいのを取れたら面白い」という遊びとして、
 下がるぶんを承知のうえで使ってください。既定は0口です。<br><br>
@@ -3751,12 +3751,32 @@ function upsetView(combos, favourite){
 
    新しい仮定は足していない。並べ替えと重複除きだけ。
    波乱は確率の低い組を買う行為なので、足すほど回収率は下がる。
-   510レースの実測では本線10点70%、波乱を足すと87%だった。
+   510レースの実測では本線だけ71%、波乱を足すと87%だった。
    それでも出すのは、買う人が自分で決められるようにするため。 */
+/* 買う点数は、ここだけで決める。
+   ------------------------------------------------------------------
+   以前は {main:10, ana:8} を呼ぶ側に20箇所以上書いていた。
+   点数を変えるには20箇所を直すことになり、1つ残せば静かにずれる
+   （画面は6点、検証は10点、という形になって気づけない）。
+   既定値をここに1つ置き、呼ぶ側は何も渡さない。
+
+   2026-10-29 に 本線10点＋波乱8点（18点）から 本線6点＋波乱4点（10点）へ変えた。
+   選り好みのない457レースの実測では、
+     18点  回収率 91%（最大1件除くと85%）  的中253/457
+     10点  回収率 91%（最大1件除くと80%）  的中184/457
+   回収率は同じで、1レースあたりの投資が ¥1,800 → ¥1,000 になる。
+   同じ入金で買えるレースが倍になるので、判定も倍の速さで進む。
+   的中は55%→40%に落ちるが、当たる回数は目的ではない。
+
+   表には 本線6＋波乱6（12点）が101%と出ているが、採らない。
+   それは数字を見てから気づいたことで、丸亀10月だけを切り出して107%に
+   見えたのと同じ落とし穴。6＋4 は数字を見る前に決めた配分なので採る。 */
+const BUY_POINTS = { main: 6, ana: 4 };
+
 function buyPlan(combos, opt){
   opt = opt || {};
-  const main = opt.main != null ? opt.main : 10;
-  const ana  = opt.ana  != null ? opt.ana  : 8;
+  const main = opt.main != null ? opt.main : BUY_POINTS.main;
+  const ana  = opt.ana  != null ? opt.ana  : BUY_POINTS.ana;
   const sorted = [...combos].sort((a,b)=>b.p-a.p);
   const mainList = sorted.slice(0, main).map(c=>String(c.combo));
   const best = mainList[0] || null;
@@ -3767,7 +3787,7 @@ function buyPlan(combos, opt){
      両方を残して呼ぶ側に選ばせる。既定は 'cond'（画面の荒れ予想と同じ取り方）。
        'prob' … 本命以外が1着の組を、素の確率順にそのまま取る
        'cond' … 本命が飛んだ場合に限って足し直した確率で、艇ごとにまとめて取る
-     実測（510レース・8点）は prob 105% / cond 114%。どちらも本線10点(70%)より低い。 */
+     実測（510レース）は prob 81% / cond 113%。どちらも本線だけ(71%)より低い。 */
   const mode = opt.anaMode || 'cond';
   let anaList;
   if(mode === 'prob'){
@@ -4876,40 +4896,37 @@ ${(()=>{
 })()}
 
 ${(()=>{
-  /* 買い目を「至極の一点1点 / 本線10点 / 波乱8点」で出す（2026-10-24に決めた形）。
+  /* 買い目を「至極の一点1点 / 本線n点 / 波乱m点」で出す。
+     点数は BUY_POINTS が決める（2026-10-24 に 10+8、2026-10-29 に 6+4 へ）。
      形を決めるのは buyPlan() 一箇所だけ。backtest.js も同じ関数を呼ぶ。
      ここはそれを画面に並べるだけで、選び方の仮定は足さない。
 
-     510レースの実測はこう。買う前に必ず目に入る場所に置く。
-       本線10点だけ   70%（228/510）
-       波乱 8点だけ    114%（ 60/510）
-       18点まとめて    89%（288/510）
-     波乱を足すと当たる回数は228→288に増えるが、回収率は70%→89%に落ちる。
-     これは「増やすと下がる」という、ここまで何度も出ている形と同じ。 */
+     実測は node sync-figures.js が書き換える（ここに書き写さない）。
+     買う前に必ず目に入る場所に置く。 */
   if(!points.length) return '';
-  const plan = buyPlan(combos, {main:10, ana:8});
+  const plan = buyPlan(combos);   /* 点数は BUY_POINTS（1箇所で決めている） */
   if(!plan.best) return '';
   const fc = list => { const r = compressCombos(list);
     return r.ok ? r.terms.map(t=>t.text).join('　') : list.join(' '); };
   const pOf = k => ((plan.pOf[k]||0)*100).toFixed(1);
   const sum = list => list.reduce((t,k)=>t+(plan.pOf[k]||0), 0);
-  return `<div class="card"><div class="chead">買い目 18点<span class="mini">
-    至極の一点 ／ 本線10点 ／ 波乱8点</span></div><div class="cbody">
+  return `<div class="card"><div class="chead">買い目 ${plan.all.length}点<span class="mini">
+    至極の一点 ／ 本線${plan.main.length}点 ／ 波乱${plan.ana.length}点</span></div><div class="cbody">
   <div style="padding:10px;border:1px solid #5a4420;border-radius:6px;background:#1c1710">
     <div class="mini" style="color:#f0c040;margin-bottom:4px">至極の一点</div>
     <div style="font-size:24px;font-weight:700;letter-spacing:2px">${plan.best}</div>
     <div class="mini" style="margin-top:4px">モデルの確率 ${pOf(plan.best)}%
-      ／ <b>本線10点の中に入っています（別枠ではありません）</b></div>
+      ／ <b>本線${plan.main.length}点の中に入っています（別枠ではありません）</b></div>
   </div>
   <div style="margin-top:10px;padding:10px;border:1px solid #2a3550;border-radius:6px">
     <div class="mini" style="margin-bottom:4px">本線 ${plan.main.length}点
-      <span style="color:#6fd08c">実測70%（228/510）</span></div>
+      <span style="color:#6fd08c">実測71%（174/510）</span></div>
     <div style="font-size:17px;letter-spacing:.5px">${fc(plan.main)}</div>
     <div class="mini" style="margin-top:4px">合計的中確率 ${(sum(plan.main)*100).toFixed(1)}%</div>
   </div>
   <div style="margin-top:10px;padding:10px;border:1px solid #5a3030;border-radius:6px">
     <div class="mini" style="margin-bottom:4px">波乱 ${plan.ana.length}点
-      <span style="color:#ef6262">実測114%（60/510）</span></div>
+      <span style="color:#ef6262">実測113%（34/510）</span></div>
     <div style="font-size:17px;letter-spacing:.5px">${fc(plan.ana)}</div>
     <div class="mini" style="margin-top:4px">
       本命 ${plan.favourite}号艇が飛んだ場合に限った確率の上位。本線とは重なりません。
@@ -4919,11 +4936,11 @@ ${(()=>{
     <b>合計 ${plan.all.length}点 ＝ 1点100円で ¥${(plan.all.length*100).toLocaleString()}。</b><br>
     <table class="tbl" style="margin:6px 0">
     <tr><th>賭け方</th><th>1レース</th><th>実測(67R)</th></tr>
-    <tr><td>18点ぜんぶ100円</td><td>¥${(plan.all.length*100).toLocaleString()}</td><td>89%</td></tr>
-    <tr><td>至極¥500／他100円</td><td>¥${(500 + (plan.all.length-1)*100).toLocaleString()}</td><td>86%</td></tr>
-    <tr><td>至極¥1000／他100円</td><td>¥${(1000 + (plan.all.length-1)*100).toLocaleString()}</td><td>82%</td></tr>
-    <tr><td>本線10点ぜんぶ100円</td><td>¥${(plan.main.length*100).toLocaleString()}</td><td><b>70%</b></td></tr>
-    <tr><td>本線・至極¥500／他100円</td><td>¥${(500 + (plan.main.length-1)*100).toLocaleString()}</td><td>69%</td></tr>
+    <tr><td>${plan.all.length}点ぜんぶ100円</td><td>¥${(plan.all.length*100).toLocaleString()}</td><td>88%</td></tr>
+    <tr><td>至極¥500／他100円</td><td>¥${(500 + (plan.all.length-1)*100).toLocaleString()}</td><td>82%</td></tr>
+    <tr><td>至極¥1000／他100円</td><td>¥${(1000 + (plan.all.length-1)*100).toLocaleString()}</td><td>79%</td></tr>
+    <tr><td>本線${plan.main.length}点ぜんぶ100円</td><td>¥${(plan.main.length*100).toLocaleString()}</td><td><b>71%</b></td></tr>
+    <tr><td>本線・至極¥500／他100円</td><td>¥${(500 + (plan.main.length-1)*100).toLocaleString()}</td><td>70%</td></tr>
     <tr><td>本線・至極¥1000／他100円</td><td>¥${(1000 + (plan.main.length-1)*100).toLocaleString()}</td><td>69%</td></tr>
     </table>
     <b>至極を厚くすると、いまの実測では回収率が下がります。</b>
@@ -4932,17 +4949,17 @@ ${(()=>{
     <b>厚くするのが有利になるのは、至極だけの回収率が100%を超えてからです。</b><br>
     ただしこれは的中5件だけの数字で、1件の高配当でひっくり返ります。
     実際に2026-10-24の若松12レースだけで見ると、至極が2回当たったので
-    <b>厚くしたほうが良く（18点100円83% → 至極¥1000で99%）なっています。</b>
+    <b>厚くしたほうが良く（${plan.all.length}点100円83% → 至極¥1000で99%）なっています。</b>
     1日ぶんの数字で決めないでください。<br>
     <table class="tbl" style="margin:6px 0"><tr><th>買い方</th><th>回収率</th><th>的中</th></tr>
-    <tr><td>本線10点だけ</td><td><b>70%</b></td><td>228/510</td></tr>
-    <tr><td>波乱8点だけ</td><td>114%</td><td>60/510</td></tr>
-    <tr><td>18点まとめて</td><td>89%</td><td>288/510</td></tr>
+    <tr><td>本線${plan.main.length}点だけ</td><td><b>71%</b></td><td>174/510</td></tr>
+    <tr><td>波乱${plan.ana.length}点だけ</td><td>113%</td><td>34/510</td></tr>
+    <tr><td>${plan.all.length}点まとめて</td><td>88%</td><td>208/510</td></tr>
     </table>
-    <b>波乱を足すと、当たる回数は228→288に増えますが、回収率は70%→89%に落ちます。</b>
+    <b>波乱を足すと、当たる回数は174→208に増えますが、回収率は71%→88%に落ちます。</b>
     投資が¥67,000から¥120,600へ1.8倍になるのに対し、増えた払戻が追いついていません。<br>
-    波乱8点の取り方を変えても（素の確率順にしても）結果は同じ105%でした。
-    510レースで買い目は毎回違ったのに、当たったのは同じ53レースだけです。
+    波乱${plan.ana.length}点の取り方を変えても（素の確率順にしても）結果は同じ81%でした。
+    510レースで買い目は毎回違ったのに、当たったのは同じ24レースだけです。
     <b>つまり「取り方が悪いから当たらない」のではありません。</b><br>
     至極の一点だけで買うと<b>68%（48/510）</b>です。頭に立てる印であって、1点勝負する券ではありません。
   </div>
@@ -5124,7 +5141,7 @@ ${anaPoints.length ? `
     <b>この枠は実測で回収率を下げます。</b>28レースでは100倍以上の穴は0/28、
     50倍以上でも1/28でした。モデルは高配当がいちばん苦手で、
     払戻¥5,000超のレースでは正解が平均41.3番目にあります。
-    同じ金額なら本線を10点にするほうが上でした（106% 対 77%）。
+    同じ金額なら穴枠に回さず本線に使うほうが上でした（106% 対 77%。本線10点だったときの28レース）。
     <b>当てるための枠ではなく、下がるぶんを承知で遊ぶ枠です。</b>
   </div>
 </div>` : ''}
@@ -5844,7 +5861,7 @@ function perRace(){
 /* 穴枠の金額。本線とは別に上乗せする（本線を削らない）。
    ------------------------------------------------------------------
    穴を本線の予算の中から取ると、本線の点数が減る。
-   実測でいちばん良かったのは本線10点なので、そこを削ると
+   実測でいちばん良かったのは本線なので、そこを削ると
    成績が下がったときに「穴のせい」か「本線を減らしたせい」か分からなくなる。
    なので上乗せにする。ただし上乗せぶんも必ず1日の上限から引く。
    ここを引き忘れると、穴枠を使うほど上限を黙って超えることになる。 */
@@ -5922,7 +5939,7 @@ function choosePoints(combos, want){
      下限 50倍   穴 1/28 的中 回収 60%  合計 77%
      下限100倍   穴 0/28 的中 回収  0%  合計 53%
      本線10口のみ                        合計106%
-   穴枠を足すほど下がり、同じ金額なら本線を10点にするほうが上だった。
+   穴枠を足すほど下がり、同じ金額なら本線に使うほうが上だった（本線10点だったときの28レース）。
 
    理由ははっきりしている。モデルは高配当のレースがいちばん苦手で、
    払戻¥5,000超のレースでは正解がモデルの平均41.3番目にある

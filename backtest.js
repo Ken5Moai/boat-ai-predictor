@@ -10,6 +10,18 @@ const PENDING=require('./data/pending.js'); /* まだ結果の出ていないレ
 
 const HTML_PATH=path.join(__dirname,'index.html');
 const HTML=fs.readFileSync(HTML_PATH,'utf8');
+/* 買う点数は index.html の BUY_POINTS が持っている。ここでも文字から読む。
+   数字を書き写すと本体とずれ、「本線10点 91%」と出しながら中身は6点、
+   という状態になる。読む人がいちばん信じる数字なので、必ず本体から取る。 */
+const PTS = (()=>{
+  const m = HTML.match(/const BUY_POINTS = \{\s*main:\s*(\d+),\s*ana:\s*(\d+)\s*\}/);
+  if(!m) throw new Error('index.html の BUY_POINTS が読めません（買う点数が分かりません）');
+  return { main:Number(m[1]), ana:Number(m[2]) };
+})();
+const PTS_ALL = PTS.main + PTS.ana;
+const L_MAIN = `本線${PTS.main}点`;
+const L_ANA  = `波乱${PTS.ana}点`;
+const L_ALL  = `本線${PTS.main}＋波乱${PTS.ana}（${PTS_ALL}点）`;
 /* 競艇場ごとの公表イン率（1コース1着率）。index.html の VENUES から読む。
    17レースの勝率よりずっと確かな物差しとして、採点の校正に使う。 */
 const VENUE_IN_RATE = (()=>{
@@ -326,19 +338,20 @@ if(require.main===module){
     }
   }
 
-  /* 「至極の一点1点 / 本線10点 / 波乱8点」で買ったら
+  /* 「至極の一点1点 / 本線n点 / 波乱m点」で買ったら
      ==================================================================
      2026-10-24に本人から出た買い方。index.html の buyPlan() がその形を決める。
      ここは同じ関数を呼んで、57レースで実際にいくらになるかを測るだけ。
 
      至極の一点は本線の中に入っている（1位の組だから）。別枠ではない。
-     なので買う組は 10+8=18点。至極に厚く賭けるかどうかは、点数とは別の話。 */
+     なので買う組は main+ana 点。至極に厚く賭けるかどうかは、点数とは別の話。
+     点数は index.html の BUY_POINTS で決まる（ここには書き写さない）。 */
   {
     const toC = r => Object.entries(r.probOf).map(([combo,p])=>({combo,p}));
     const done = base.map((r,i)=>({r, R:RACES[i]})).filter(x=>x.R && x.R.pay!=null);
-    const plan = (x, m) => WIN.buyPlan(toC(x.r), {main:10, ana:8, anaMode:m});
+    const plan = (x, m) => WIN.buyPlan(toC(x.r), {anaMode:m});
 
-    console.log('\n=== 「至極の一点 / 本線10点 / 波乱8点」で買ったら ===');
+    console.log(`\n=== 「至極の一点 / ${L_MAIN} / ${L_ANA}」で買ったら ===`);
     console.log(`  対象 ${done.length}レース。1点100円で統一。`);
     const run = (label, pick, mode) => {
       let inv=0, hits=[];
@@ -355,13 +368,13 @@ if(require.main===module){
         `的中${String(hits.length).padStart(2)}/${done.length}`);
     };
     run('至極の一点だけ（1点）', p=>[p.best]);
-    run('本線だけ（10点）',      p=>p.main);
+    run(`本線だけ（${PTS.main}点）`,      p=>p.main);
     console.log('  ─ 波乱の取り方① 荒れ予想と同じ（本命が飛んだ場合に限った確率）─');
-    run('  波乱だけ（8点）',       p=>p.ana, 'cond');
-    run('  本線10＋波乱8（18点）', p=>p.all, 'cond');
+    run(`  波乱だけ（${PTS.ana}点）`,       p=>p.ana, 'cond');
+    run(`  ${L_ALL}`, p=>p.all, 'cond');
     console.log('  ─ 波乱の取り方② 素の確率順で本命以外を取る ─');
-    run('  波乱だけ（8点）',       p=>p.ana, 'prob');
-    run('  本線10＋波乱8（18点）', p=>p.all, 'prob');
+    run(`  波乱だけ（${PTS.ana}点）`,       p=>p.ana, 'prob');
+    run(`  ${L_ALL}`, p=>p.all, 'prob');
     /* 2つの取り方が同じ数字になったので、本当に同じ買い目なのかを数えて確かめる。
        同じに見えて実はモードが渡っていない、という間違いを防ぐため。 */
     {
@@ -375,7 +388,7 @@ if(require.main===module){
       console.log(`  ※ 2つの取り方で買い目が違ったのは ${diff}/${done.length}レース。`);
       console.log(`    的中の内訳 両方${bothHit}件 / ①だけ${onlyCond}件 / ②だけ${onlyProb}件。`);
     }
-    console.log('  ※ 波乱8点は本線と重ならない組だけを取っている（重複買いはしない）。');
+    console.log(`  ※ ${L_ANA}は本線と重ならない組だけを取っている（重複買いはしない）。`);
     console.log('  ※ 波乱を足すと的中は増えるが、増えた分の払戻が投資に追いついていない。');
     console.log('    足すかどうかは「当たる回数を増やしたいか」と「回収率を守りたいか」の選択。');
   }
@@ -460,7 +473,7 @@ if(require.main===module){
       const avg   = ranks.reduce((a,c)=>a+c,0)/ranks.length;
       let inv=0, pays=[];
       for(const x of set){
-        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        const pl = WIN.buyPlan(toC(x.r));
         inv += pl.main.length*100;
         if(pl.main.includes(x.R.result)) pays.push(x.R.pay);
       }
@@ -470,7 +483,7 @@ if(require.main===module){
         `1号艇1着 ${String(Math.round(lane1/set.length*100)).padStart(3)}%  `+
         `高配当 ${String(Math.round(big/set.length*100)).padStart(3)}%  `+
         `正解の順位 平均${avg.toFixed(1).padStart(5)}  `+
-        `本線10点 ${String(Math.round(back/inv*100)).padStart(4)}%`+
+        `${L_MAIN} ${String(Math.round(back/inv*100)).padStart(4)}%`+
         `（最大1件除くと${String(Math.round(cut/inv*100)).padStart(4)}%）  `+
         `的中${pays.length}/${set.length}`);
     };
@@ -479,16 +492,18 @@ if(require.main===module){
     console.log('  ※ 件数が少ないので、ここの数字で買い方を決めないこと。');
     console.log('    言えるのは「1号艇が絶対ではなくなる傾向が、手元でも同じ向きに出ている」まで。');
   }
-  /* 当たっても負けるレース（ガチガチのとき10点買いは成立しない）
+  /* 当たっても負けるレース（ガチガチのとき本線買いは成立しない）
      ==================================================================
      2026-10-25 若松8R を見て本人が「ガチガチだね」と言った。そのとおりで、
      至極の一点 1-2-3 がそのまま当たったのに払戻は ¥320。
-     本線10点は1点100円＝¥1,000なので、当たっても -¥680 になる。
+     当時は本線10点＝¥1,000だったので、当たっても -¥680 だった。
+     （点数は BUY_POINTS で変わる。下の計算は pl.main.length から出しているので
+      書き写した数字ではない。本線が6点なら境目は6倍、10点なら10倍になる）
      7R も同じで、至極の一点 1-3-2 が当たって ¥490（-¥510）。
 
      つまり買う前に分かることがある。
-     本線10点の中に、オッズ10倍未満の組がどれだけあるか。
-     正解がそこに入ると、当たっても投資¥1,000を下回る。
+     本線の中に、オッズが「本線の点数」倍を下回る組がどれだけあるか。
+     正解がそこに入ると、当たっても投資額を下回る。
      これは予想の当たり外れとは別の、買い方の問題。
 
      ここでは、それが実際にどれだけ起きているかを数える。 */
@@ -499,7 +514,7 @@ if(require.main===module){
     let hit=0, lost=0, lostYen=0, wonYen=0;
     const rows=[];
     for(const x of done){
-      const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+      const pl = WIN.buyPlan(toC(x.r));
       if(!pl.main.includes(x.R.result)) continue;
       hit++;
       const cost = pl.main.length*100;
@@ -507,7 +522,7 @@ if(require.main===module){
         rows.push({name:x.R.name, res:x.R.result, pay:x.R.pay, diff:cost-x.R.pay}); }
       else wonYen += x.R.pay - cost;
     }
-    console.log(`  本線10点が当たったのは ${hit}/${done.length}レース。`);
+    console.log(`  ${L_MAIN}が当たったのは ${hit}/${done.length}レース。`);
     console.log(`  そのうち、当たったのに赤字だったのは ${lost}レース（${Math.round(lost/hit*100)}%）。`);
     console.log(`  当たって負けた分の合計 -¥${lostYen.toLocaleString()} ／ 当たって勝った分 +¥${wonYen.toLocaleString()}`);
     rows.sort((a,b)=>b.diff-a.diff);
@@ -515,27 +530,27 @@ if(require.main===module){
     for(const r of rows.slice(0,8))
       console.log(`    -¥${String(r.diff).padStart(4)}  ${r.res}  払戻¥${String(r.pay).padStart(5)}  ${r.name}`);
 
-    /* 買う前に分かるか。本線10点のオッズを見れば分かる。 */
+    /* 買う前に分かるか。本線のオッズを見れば分かる。 */
     console.log('');
-    console.log('  本線10点のうち「当たっても¥1,000に届かない組」が何点あるか');
+    console.log(`  ${L_MAIN}のうち「当たっても¥${(PTS.main*100).toLocaleString()}に届かない組」が何点あるか`);
     const buckets = {};
     for(const x of done){
-      const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+      const pl = WIN.buyPlan(toC(x.r));
       const o = ODDS[x.R.name];
       const cheap = pl.main.filter(k=>o[k]!=null && o[k]*100 < pl.main.length*100).length;
       buckets[cheap] = (buckets[cheap]||0) + 1;
     }
     for(const k of Object.keys(buckets).map(Number).sort((a,b)=>a-b))
-      console.log(`    ${String(k).padStart(2)}点が10倍未満  ${buckets[k]}レース`);
+      console.log(`    ${String(k).padStart(2)}点が${PTS.main}倍未満  ${buckets[k]}レース`);
     /* では「安い組が多いレースは買わない」としたら、通算は良くなるのか。
        当たって負けた合計は -¥4,270、当たって勝った合計は +¥44,650 なので、
        見送りが勝ちも一緒に切ってしまうなら意味が無い。実際に数える。 */
     console.log('');
-    console.log('  「10倍未満がN点以上なら買わない」としたら');
+    console.log(`  「${PTS.main}倍未満がN点以上なら買わない」としたら`);
     for(const cut of [1,2,3,4]){
       let inv=0, back=0, hits=0, skipped=0;
       for(const x of done){
-        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        const pl = WIN.buyPlan(toC(x.r));
         const o = ODDS[x.R.name];
         const cheap = pl.main.filter(k=>o[k]!=null && o[k]*100 < pl.main.length*100).length;
         if(cheap >= cut){ skipped++; continue; }
@@ -549,7 +564,7 @@ if(require.main===module){
     {
       let inv=0, back=0, hits=0;
       for(const x of done){
-        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        const pl = WIN.buyPlan(toC(x.r));
         inv += pl.main.length*100;
         if(pl.main.includes(x.R.result)){ back += x.R.pay; hits++; }
       }
@@ -655,12 +670,21 @@ if(require.main===module){
         console.log(`    いま ${fwd.length}/${need} 件。たまったら判定する。`);
       } else {
         const use = fwd.slice(0, need);
+        /* 判定⑦は 2026-10-25 に「本線10点のうち10倍未満が2点以上」と書いて凍結した。
+           そのあと 2026-10-29 に買う点数を 本線6点＋波乱4点 に変えたが、
+           ここで BUY_POINTS を使うと、凍結した条件の意味そのものが変わる
+           （6点で6倍未満を数えることになり、書いた条件とは別の判定になる）。
+           事前登録は「結果を見てから条件を動かさない」ためにあるので、
+           判定⑦だけは書いた日の10点・10倍に固定する。
+           いまの買い方での同じ検査は、上の「当たっても負けたレース」の節が
+           BUY_POINTS に追従して出している。 */
+        const PREREG7_MAIN = 10;
         const run = skip => {
           const pays=[]; let inv=0;
           for(const x of use){
-            const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+            const pl = WIN.buyPlan(toC(x.r), {main:PREREG7_MAIN});
             const o = ODDS[x.R.name];
-            const cheap = pl.main.filter(k=>o[k]!=null && o[k]*100 < pl.main.length*100).length;
+            const cheap = pl.main.filter(k=>o[k]!=null && o[k]*100 < PREREG7_MAIN*100).length;
             if(skip && cheap >= 2) continue;
             inv += pl.main.length*100;
             if(pl.main.includes(x.R.result)) pays.push(x.R.pay);
@@ -702,7 +726,7 @@ if(require.main===module){
     const money = (label, pick, which) => {
       let inv=0, hits=[];
       for(const x of done){
-        const pl = WIN.buyPlan(toC(which==='ex' ? x.r : x.n), {main:10, ana:8});
+        const pl = WIN.buyPlan(toC(which==='ex' ? x.r : x.n));
         const ks = [...new Set(pick(pl))];
         inv += ks.length*100;
         if(ks.includes(x.R.result)) hits.push(x.R.pay);
@@ -713,17 +737,17 @@ if(require.main===module){
         `最大1件除くと${String(Math.round(cut/inv*100)).padStart(4)}%  的中${String(hits.length).padStart(2)}/${done.length}`);
     };
     console.log(`  対象 ${done.length}レース。展示ありが確定版、展示なしが暫定版。`);
-    money('確定（展示あり）本線10点', p=>p.main, 'ex');
-    money('暫定（展示なし）本線10点', p=>p.main, 'no');
-    money('確定（展示あり）18点',     p=>p.all,  'ex');
-    money('暫定（展示なし）18点',     p=>p.all,  'no');
+    money(`確定（展示あり）${L_MAIN}`, p=>p.main, 'ex');
+    money(`暫定（展示なし）${L_MAIN}`, p=>p.main, 'no');
+    money(`確定（展示あり）${PTS_ALL}点`, p=>p.all,  'ex');
+    money(`暫定（展示なし）${PTS_ALL}点`, p=>p.all,  'no');
 
     /* 買い目そのものがどれだけ入れ替わるか。回収率だけだと、
        たまたま同じ回数当たっただけなのか中身が同じなのか分からない。 */
     let same=0, overlap=0, headSame=0, rankDiff=[];
     for(const x of done){
-      const A = WIN.buyPlan(toC(x.r), {main:10, ana:8});
-      const B = WIN.buyPlan(toC(x.n), {main:10, ana:8});
+      const A = WIN.buyPlan(toC(x.r));
+      const B = WIN.buyPlan(toC(x.n));
       if(A.best===B.best) same++;
       overlap += A.main.filter(k=>B.main.includes(k)).length;
       if(String(A.best)[0]===String(B.best)[0]) headSame++;
@@ -731,7 +755,7 @@ if(require.main===module){
     }
     console.log(`  至極の一点が同じ      ${same}/${done.length}レース`);
     console.log(`  1着に選ぶ艇が同じ     ${headSame}/${done.length}レース`);
-    console.log(`  本線10点の重なり      平均${(overlap/done.length).toFixed(1)}/10点`);
+    console.log(`  ${L_MAIN}の重なり      平均${(overlap/done.length).toFixed(1)}/${PTS.main}点`);
     const rd = rankDiff.reduce((a,c)=>a+c,0)/rankDiff.length;
     console.log(`  正解の順位の動き      平均${rd.toFixed(1)}番（120通り中）`);
     console.log('  ※ 暫定でも1着に選ぶ艇はあまり変わらない。変わるのは2着3着の並び。');
@@ -806,7 +830,7 @@ if(require.main===module){
     const run = (label, topYen, use) => {
       let inv=0, back=0, hits=0, topHits=0;
       for(const x of done){
-        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        const pl = WIN.buyPlan(toC(x.r));
         const ks = [...new Set(use(pl))];
         for(const k of ks) inv += (k===pl.best ? topYen : 100);
         if(ks.includes(x.R.result)){
@@ -822,16 +846,16 @@ if(require.main===module){
         `回収率${String(Math.round(back/inv*100)).padStart(4)}%  的中${hits}（うち至極${topHits}）`);
     };
 
-    console.log('  ── 本線10点だけ ──');
-    for(const y of [100,500,1000]) run(`至極¥${y} ＋ 残り9点¥100`, y, p=>p.main);
-    console.log('  ── 本線10点＋波乱8点（18点）──');
-    for(const y of [100,500,1000]) run(`至極¥${y} ＋ 残り17点¥100`, y, p=>p.all);
+    console.log(`  ── ${L_MAIN}だけ ──`);
+    for(const y of [100,500,1000]) run(`至極¥${y} ＋ 残り${PTS.main-1}点¥100`, y, p=>p.main);
+    console.log(`  ── ${L_MAIN}＋${L_ANA}（${PTS_ALL}点）──`);
+    for(const y of [100,500,1000]) run(`至極¥${y} ＋ 残り${PTS_ALL-1}点¥100`, y, p=>p.all);
 
     /* なぜ下がるのかを、数字で示しておく。 */
     {
       let n=0, back=0;
       for(const x of done){
-        const pl = WIN.buyPlan(toC(x.r), {main:10, ana:8});
+        const pl = WIN.buyPlan(toC(x.r));
         if(x.R.result===pl.best){ n++; back += x.R.pay; }
       }
       const pct = back/(done.length*100)*100;
@@ -1898,7 +1922,7 @@ if(require.main===module){
             let inv=0, hits=[];
             for(const x of sub){
               const info = payOfDay[x.name]; if(!info || info.pay==null) continue;
-              const ks=[...new Set(pick(WIN.buyPlan(toC(x), {main:10, ana:8})))];
+              const ks=[...new Set(pick(WIN.buyPlan(toC(x))))];
               inv += ks.length*100;
               if(ks.includes(info.result)) hits.push(info.pay);
             }
@@ -1910,13 +1934,13 @@ if(require.main===module){
           };
           /* レースごとに、どこで当たってどこで外したかを並べる。
              合計だけ見ると「惜しかった」のか「全然ちがった」のかが分からない。 */
-          console.log('    レースごと（本線10点 / 波乱8点）');
+          console.log(`    レースごと（${L_MAIN} / ${L_ANA}）`);
           console.log('      R   正解      払戻  人気  モデル順位  本線  波乱');
           for(const x of [...sub].sort((a,b)=>{
                 const ra=list.find(r=>r.name===a.name).rno, rb=list.find(r=>r.name===b.name).rno;
                 return ra-rb; })){
             const r = list.find(y=>y.name===x.name);
-            const pl = WIN.buyPlan(toC(x), {main:10, ana:8});
+            const pl = WIN.buyPlan(toC(x));
             const res = String(r.result);
             const inMain = pl.main.includes(res), inAna = pl.ana.includes(res);
             console.log(`      ${String(r.rno).padStart(2)}  ${res.padEnd(8)}`+
@@ -1926,15 +1950,15 @@ if(require.main===module){
           }
           console.log('    この日を1日まるごと買ったら（1点100円）');
           money('至極の一点（1点）', p=>[p.best]);
-          money('本線（10点）',      p=>p.main);
-          money('波乱（8点）',       p=>p.ana);
-          money('本線＋波乱（18点）', p=>p.all);
+          money(`本線（${PTS.main}点）`,      p=>p.main);
+          money(`波乱（${PTS.ana}点）`,       p=>p.ana);
+          money(`本線＋波乱（${PTS_ALL}点）`, p=>p.all);
           /* 至極を厚くした場合も同じ日で出す。払戻は100円あたりなので X/100 倍する。 */
           const weighted = (label, topYen, use) => {
             let inv=0, won=[];
             for(const x of sub){
               const info = payOfDay[x.name]; if(!info || info.pay==null) continue;
-              const pl = WIN.buyPlan(toC(x), {main:10, ana:8});
+              const pl = WIN.buyPlan(toC(x));
               const ks = [...new Set(use(pl))];
               for(const k of ks) inv += (k===pl.best ? topYen : 100);
               if(ks.includes(info.result)){
@@ -1950,8 +1974,8 @@ if(require.main===module){
           };
           console.log('    至極を厚くしたら（ほかは100円のまま）');
           for(const y of [500,1000]){
-            weighted(`本線10点・至極¥${y}`, y, p=>p.main);
-            weighted(`18点・至極¥${y}`,     y, p=>p.all);
+            weighted(`${L_MAIN}・至極¥${y}`, y, p=>p.main);
+            weighted(`${PTS_ALL}点・至極¥${y}`, y, p=>p.all);
           }
         }
         /* 1着の対数スコアを、この日のオッズがある分だけで比べる。
@@ -2030,7 +2054,11 @@ if(require.main===module){
            必要数は15場日（180レース）。波乱8点の的中はおよそ7レースに1本で、
            180レースなら25本前後たまる。⑤⑥（20件・12件）より厚めにしたのは、
            波乱の払戻が大きく散らばり、少ない本数では当たり外れで決まるため。 */
-        console.log('\n  【判定⑧・2026-10-28に先に書いた】波乱8点だけを買うか');
+        /* 判定⑧は 2026-10-28 に「波乱8点だけ」と書いて凍結した。
+           翌日に買う点数を 本線6点＋波乱4点 に変えたが、判定⑧の問いは
+           「波乱だけを買う形にするか」であって、今回の変更とは別の話。
+           条件を書いた日の8点に固定する（BUY_POINTS を使うと意味が変わる）。 */
+        console.log('\n  【判定⑧・2026-10-28に先に書いた】波乱8点だけを買うか（8点に固定）');
         {
           const NEED_DAYS = 15;
           const fresh = full.filter(([k])=>k.split('|')[0] > PREREG_ANA_AFTER);
@@ -2058,7 +2086,9 @@ if(require.main===module){
             console.log(`    → ${a>=100&&b>=100 ? '波乱8点を採る。' : '欠けたので捨てる。採らない。'}`);
           }
         }
-        console.log('      ※ 判定が済むまで、買い方は本線10点のまま変えない。');
+        console.log('      ※ 判定が済むまで「波乱だけを買う」形にはしない。');
+        console.log(`         いまの買い方は ${L_MAIN}＋${L_ANA}（${PTS_ALL}点）で、`
+                  + `波乱だけを買っているわけではない。`);
       }
     }
   }
@@ -2096,23 +2126,26 @@ if(require.main===module){
         if(!sub.length) continue;
         const rowOf = new Map(sub.map(x=>[x.name, x]));
         console.log(`\n  ${date} ${VENUE_NAME[jcd] ?? '場コード'+jcd}  ${list.length}レース`);
-        /* 10倍未満 = 本線10点のうち「当たっても¥1,000に届かない組」の数。
+        /* 「安い組」= 本線のうち「当たっても投資額に届かない組」の数。
+           境目は本線の点数で決まる（6点なら6倍、10点なら10倍）。
+           ここは買う点数に追従させる。固定の10倍にしておくと、
+           6点買いなのに10倍を基準にして、当たるのに赤字かどうかを取り違える。
            配信時に警告として出している数字そのもの。ここに並べておけば、
            警告が当たっていたかを毎回手で数えなくてよい。
            オッズを記録していないレースは — にする（0と区別する）。 */
-        console.log('      R   正解      払戻  人気  モデル順位  至極  本線  波乱  10倍未満');
+        console.log(`      R   正解      払戻  人気  モデル順位  至極  本線  波乱  ${PTS.main}倍未満`);
         let invM=0, backM=0, hitM=0, invA=0, backA=0, hitA=0, invB=0, backB=0, hitB=0;
         const warnD=[], okD=[];   /* 警告ありのレースと、そうでないレース */
         for(const r of list){
           const x = rowOf.get(r.name); if(!x) continue;
-          const pl = WIN.buyPlan(toC(x), {main:10, ana:8});
+          const pl = WIN.buyPlan(toC(x));
           const res = String(r.result);
           const inB = res===pl.best, inM = pl.main.includes(res), inA = pl.ana.includes(res);
           invB += 100; if(inB){ backB += r.pay; hitB++; }
           invM += pl.main.length*100; if(inM){ backM += r.pay; hitM++; }
           invA += pl.ana.length*100;  if(inA){ backA += r.pay; hitA++; }
           const o = ODDS[r.name];
-          const cheap = o ? pl.main.filter(c=>o[c]!=null && o[c]<10).length : null;
+          const cheap = o ? pl.main.filter(c=>o[c]!=null && o[c]<pl.main.length).length : null;
           if(cheap!=null){ if(cheap>=2) warnD.push({r,inM,pay:r.pay,n:pl.main.length});
                            else okD.push({r,inM,pay:r.pay,n:pl.main.length}); }
           console.log(`      ${String(r.rno).padStart(2)}  ${res.padEnd(8)}`+
@@ -2131,10 +2164,10 @@ if(require.main===module){
         const n = list.length;
         console.log('    この日の収支（1点100円）');
         line('至極の一点（1点）', invB, backB, hitB, n);
-        line('本線（10点）',      invM, backM, hitM, n);
-        line('波乱（8点）',       invA, backA, hitA, n);
-        line('本線＋波乱（18点）', invM+invA, backM+backA, hitM+hitA, n);
-        /* 警告あり／なしで、その日の本線10点がどうだったか。
+        line(`本線（${PTS.main}点）`,      invM, backM, hitM, n);
+        line(`波乱（${PTS.ana}点）`,       invA, backA, hitA, n);
+        line(`本線＋波乱（${PTS_ALL}点）`, invM+invA, backM+backA, hitM+hitA, n);
+        /* 警告あり／なしで、その日の本線がどうだったか。
            手で分けていた作業をここに寄せる。件数が少ないので回収率は参考値。 */
         const split = (label, arr) => {
           if(!arr.length) return;
@@ -2146,7 +2179,7 @@ if(require.main===module){
             `的中${arr.filter(c=>c.inM).length}/${arr.length}`);
         };
         if(warnD.length || okD.length){
-          console.log('    警告（10倍未満が2点以上）で分けた本線10点');
+          console.log(`    警告（${PTS.main}倍未満が2点以上）で分けた${L_MAIN}`);
           split('警告あり', warnD);
           split('警告なし', okD);
         }
@@ -2159,7 +2192,7 @@ if(require.main===module){
         byDate.get(t.date).push(t);
       }
       console.log('\n  日ごとの合計（複数場まわった日はまとめ）');
-      console.log('      日付         場                 R   本線10点            18点');
+      console.log(`      日付         場                 R   ${L_MAIN}             ${PTS_ALL}点`);
       for(const [date, ts] of [...byDate].sort()){
         const n   = ts.reduce((a,c)=>a+c.n,0);
         const iM  = ts.reduce((a,c)=>a+c.invM,0),  bM = ts.reduce((a,c)=>a+c.backM,0);
@@ -2188,7 +2221,7 @@ if(require.main===module){
             `最大1件除くと${String(Math.round((back-top)/inv*100)).padStart(4)}%  `+
             `的中${hits.length}/${arr.length}`);
         };
-        console.log('\n  警告（10倍未満が2点以上）で分けた本線10点・通し');
+        console.log(`\n  警告（${PTS.main}倍未満が2点以上）で分けた${L_MAIN}・通し`);
         row('警告あり', allW);
         row('警告なし', allO);
         console.log('      ※ これは配信時に警告を出したかどうかで分けただけ。');
@@ -2837,22 +2870,28 @@ if(require.main===module){
         console.log('  確率順  ' + sorted.slice(0,19).map(([k,v],i)=>(i+1)+'.'+k+' '+(v*100).toFixed(1)+'%').join('  '));
         /* 2026-10-24に決めた買い方。至極の一点 / 本線10点 / 波乱8点 の3段で出す。
            形を決めるのは index.html の buyPlan() 一箇所だけ。ここでは呼ぶだけにする。
-           57レースの実測は 本線10点130% / 波乱8点だけ26% / 合わせて18点84%。
+           57レースだったころの実測は 本線10点130% / 波乱8点だけ26% / 合わせて18点84%
+           （当時の点数。いまの数字は下の行が出す）。
            波乱を足すと回収率は下がる。それを承知で買う形なので、毎回ここに書く。 */
         const plan = WIN.buyPlan(Object.entries(r.probOf).map(([combo,p])=>({combo,p})),
-                                 {main:10, ana:8});
+                                 );
         const fmt = list => { const c = WIN.compressCombos(list);
           return (c && c.ok) ? c.terms.map(t=>t.text).join(' / ') : list.join(' '); };
         const pc = k => ((r.probOf[k]||0)*100).toFixed(1) + '%';
         console.log('  ── 買い目 ──');
         console.log(`  至極の一点  ${plan.best}（${pc(plan.best)}）`);
-        console.log(`  本線10点    ${fmt(plan.main)}`);
-        console.log(`  波乱 8点    ${fmt(plan.ana)}`);
+        console.log(`  本線${plan.main.length}点    ${fmt(plan.main)}`);
+        console.log(`  波乱 ${plan.ana.length}点    ${fmt(plan.ana)}`);
         console.log(`              （${plan.favourite}号艇が飛んだ場合に限った確率の上位。`+
                     `本線とは重ならない）`);
         console.log(`  合計 ${plan.all.length}点＝1点100円で ¥${(plan.all.length*100).toLocaleString()}。`+
-                    `至極の一点は本線10点の中に入っている（別枠ではない）。`);
-        console.log('  実測 本線10点70% ／ 波乱8点だけ114% ／ 18点まとめて89%（510レース）。');
+                    `至極の一点は本線${plan.main.length}点の中に入っている（別枠ではない）。`);
+        /* 数字は node sync-figures.js が書き換える（下の規則が見ている）。
+           見出しは点数から作る。両方を書き写すと、点数を変えた日に
+           「本線10点 71%」と出しながら中身は6点、という状態になる。
+           PCT_MAIN のような変数にしようとして未定義のまま置いてしまい、
+           結果待ちのレースがある日に落ちる状態を作った（ここで気づいた）。 */
+        console.log(`  実測 ${L_MAIN}71% ／ ${L_ANA}だけ113% ／ ${PTS_ALL}点まとめて88%（510レース）。`);
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

@@ -47,22 +47,36 @@ for(const n of Object.keys(table)){
 }
 
 console.log('\n=== 至極 / 本線 / 波乱 の実測が最新か ===');
-const s2=out.split('=== 「至極の一点 / 本線10点 / 波乱8点」で買ったら ===')[1]||'';
+/* 買う点数は index.html の BUY_POINTS が持っている。
+   節の名前も行の見出しも点数を含むので、ここに書き写すと
+   点数を変えた日にテストだけが古い見出しを探して落ちる
+   （2026-10-29 に実際に落ちた）。本体から読む。 */
+const PTS = (()=>{
+  const m=HTML.match(/const BUY_POINTS = \{\s*main:\s*(\d+),\s*ana:\s*(\d+)\s*\}/);
+  if(!m) throw new Error('index.html の BUY_POINTS が読めません');
+  return {main:Number(m[1]), ana:Number(m[2])};
+})();
+const PTS_ALL = PTS.main + PTS.ana;
+const s2=out.split(`=== 「至極の一点 / 本線${PTS.main}点 / 波乱${PTS.ana}点」で買ったら ===`)[1]||'';
 const grab=re=>{ const m=s2.match(re); return m?m.slice(1):null; };
 const top =grab(/至極の一点だけ（1点）\s+投資¥\s*\d+\s+回収率\s*(\d+)%\s+最大1件除くと\s*\d+%\s+的中\s*(\d+)\/(\d+)/);
-const main=grab(/本線だけ（10点）\s+投資¥\s*\d+\s+回収率\s*(\d+)%\s+最大1件除くと\s*\d+%\s+的中\s*(\d+)\/(\d+)/);
-const ana =grab(/波乱だけ（8点）\s+投資¥\s*\d+\s+回収率\s*(\d+)%\s+最大1件除くと\s*\d+%\s+的中\s*(\d+)\/(\d+)/);
-const all =grab(/本線10＋波乱8（18点）\s+投資¥\s*\d+\s+回収率\s*(\d+)%\s+最大1件除くと\s*\d+%\s+的中\s*(\d+)\/(\d+)/);
-ok(!!(top&&main&&ana&&all), '至極 / 本線 / 波乱 / 18点 の実測を読めた');
+const TAIL = String.raw`\s+投資¥\s*\d+\s+回収率\s*(\d+)%\s+最大1件除くと\s*\d+%\s+的中\s*(\d+)\/(\d+)`;
+const main=grab(new RegExp(`本線だけ（${PTS.main}点）`+TAIL));
+const ana =grab(new RegExp(`波乱だけ（${PTS.ana}点）`+TAIL));
+const all =grab(new RegExp(`本線${PTS.main}＋波乱${PTS.ana}（${PTS_ALL}点）`+TAIL));
+ok(!!(top&&main&&ana&&all), `至極 / 本線 / 波乱 / ${PTS_ALL}点 の実測を読めた`);
 if(top&&main&&ana&&all){
   ok(HTML.includes(`実測${main[0]}%（${main[1]}/${main[2]}）`), `本線の実測 ${main[0]}%（${main[1]}/${main[2]}）が載っている`);
   ok(HTML.includes(`実測${ana[0]}%（${ana[1]}/${ana[2]}）`),   `波乱の実測 ${ana[0]}%（${ana[1]}/${ana[2]}）が載っている`);
-  ok(flat.includes(`<td>本線10点だけ</td><td><b>${main[0]}%</b></td><td>${main[1]}/${main[2]}</td>`),
-     '買い方の表の「本線10点だけ」が最新');
-  ok(flat.includes(`<td>波乱8点だけ</td><td>${ana[0]}%</td><td>${ana[1]}/${ana[2]}</td>`),
-     '買い方の表の「波乱8点だけ」が最新');
-  ok(flat.includes(`<td>18点まとめて</td><td>${all[0]}%</td><td>${all[1]}/${all[2]}</td>`),
-     '買い方の表の「18点まとめて」が最新');
+  /* 表の見出しは index.html の中で ${plan.main.length} のような式になった
+     （点数を書き写すとずれるため）。ソースを見るこのテストでは、
+     式の部分は当てにせず、回収率と的中だけを突き合わせる。 */
+  ok(flat.includes(`点だけ</td><td><b>${main[0]}%</b></td><td>${main[1]}/${main[2]}</td>`),
+     `買い方の表の「本線${PTS.main}点だけ」が最新（${main[0]}% ${main[1]}/${main[2]}）`);
+  ok(flat.includes(`点だけ</td><td>${ana[0]}%</td><td>${ana[1]}/${ana[2]}</td>`),
+     `買い方の表の「波乱${PTS.ana}点だけ」が最新（${ana[0]}% ${ana[1]}/${ana[2]}）`);
+  ok(flat.includes(`点まとめて</td><td>${all[0]}%</td><td>${all[1]}/${all[2]}</td>`),
+     `買い方の表の「${PTS_ALL}点まとめて」が最新（${all[0]}% ${all[1]}/${all[2]}）`);
   ok(HTML.includes(`当たる回数は${main[1]}→${all[1]}に増えますが、回収率は${main[0]}%→${all[0]}%に落ちます`),
      '波乱を足したときの増減が最新');
   ok(HTML.includes(`この1点だけで買うと実測${top[0]}%（${top[2]}レース・${top[1]}/${top[2]}）`),
@@ -75,19 +89,29 @@ console.log('\n=== 賭け金を変えたときの実測が最新か ===');
 const s3=out.split('=== 至極の一点だけ厚く賭けたら ===')[1]||'';
 const w=(label)=>{ const m=s3.match(new RegExp(label+'\\s+投資¥\\s*\\d+\\s+払戻¥\\s*\\d+\\s+収支[+-]¥\\s*[\\d,]+\\s+回収率\\s*(\\d+)%')); return m?m[1]:null; };
 const rows={
-  '18点ぜんぶ100円':      w('至極¥100 ＋ 残り17点¥100'),
-  '至極¥500／他100円':    w('至極¥500 ＋ 残り17点¥100'),
-  '至極¥1000／他100円':   w('至極¥1000 ＋ 残り17点¥100'),
-  '本線10点ぜんぶ100円':  w('至極¥100 ＋ 残り9点¥100'),
-  '本線・至極¥500／他100円':  w('至極¥500 ＋ 残り9点¥100'),
-  '本線・至極¥1000／他100円': w('至極¥1000 ＋ 残り9点¥100'),
+  /* 画面側の見出しは ${plan.all.length} のような式になっている（点数を
+     書き写さないため）。ソースを見るこのテストでは、式の部分は当てにせず
+     「…点ぜんぶ100円」のうしろの回収率だけを突き合わせる。 */
+  ['点ぜんぶ100円（合計）']:  w(`至極¥100 ＋ 残り${PTS_ALL-1}点¥100`),
+  '至極¥500／他100円':    w(`至極¥500 ＋ 残り${PTS_ALL-1}点¥100`),
+  '至極¥1000／他100円':   w(`至極¥1000 ＋ 残り${PTS_ALL-1}点¥100`),
+  ['点ぜんぶ100円（本線）']:  w(`至極¥100 ＋ 残り${PTS.main-1}点¥100`),
+  '本線・至極¥500／他100円':  w(`至極¥500 ＋ 残り${PTS.main-1}点¥100`),
+  '本線・至極¥1000／他100円': w(`至極¥1000 ＋ 残り${PTS.main-1}点¥100`),
 };
 ok(Object.values(rows).every(v=>v!=null), '賭け金ごとの回収率を6通りとも読めた');
 for(const [label,pct] of Object.entries(rows)){
   if(pct==null) continue;
-  ok(flat.includes(`<td>${label}</td>`) &&
-     new RegExp(`<td>${label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}</td><td>[^<]*</td><td>(<b>)?${pct}%(</b>)?</td>`).test(flat),
-     `${label} が ${pct}% で載っている`);
+  /* 「点ぜんぶ100円（合計）」「（本線）」は、画面側が式になっている行。
+     合計のほうは <td>88%</td>、本線のほうは <td><b>71%</b></td> と
+     強調の有無が違うので、そこで見分ける。 */
+  const ok2 = label==='点ぜんぶ100円（合計）'
+      ? new RegExp(`点ぜんぶ100円</td><td>[^<]*</td><td>${pct}%</td>`).test(flat)
+    : label==='点ぜんぶ100円（本線）'
+      ? new RegExp(`点ぜんぶ100円</td><td>[^<]*</td><td><b>${pct}%</b></td>`).test(flat)
+    : flat.includes(`<td>${label}</td>`) &&
+      new RegExp(`<td>${label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}</td><td>[^<]*</td><td>(<b>)?${pct}%(</b>)?</td>`).test(flat);
+  ok(ok2, `${label} が ${pct}% で載っている`);
 }
 
 console.log('\n=== 「全体で何レース」の表記が最新か ===');
