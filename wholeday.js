@@ -37,6 +37,17 @@ const CACHE_ONLY=process.argv.includes('--cache-only');
 const DIR=path.join(__dirname,'tmp','wholeday',HD);
 fs.mkdirSync(DIR,{recursive:true});
 
+/* 捕獲ぶんは tmp/ にしか無く、tmp/ は git に入れていない。
+   このコンテナは使い終わると片付けられるので、そのままでは消える。
+   1日ぶんは公式サイトを500回ほど見に行くので、消えると取り直しになる。
+   非公開リポジトリ側（data/wholeday）に固めてあるぶんを、
+   走り始めに静かに戻す。すでに tmp にある場は触らない。 */
+{
+  const CAP=require('./captures.js');
+  const r=CAP.restoreQuiet(HD);
+  if(r && r.wrote) console.log(`保存してあった ${r.wrote}場を戻しました（data/wholeday/${HD}.json.gz）`);
+}
+
 /* ---- 取ってくる（1場ずつ。すでにある場は飛ばす） -------------------- */
 /* 取れなかった理由のうち、あとで取れば入るもの（一時的なもの）を見分ける。
    昼に走らせると夕方のレースはまだ終わっていないので「結果なし」になる。
@@ -163,6 +174,16 @@ async function racingVenues(){
     if(p && p.races.length){ packs.push(p); process.stderr.write(`${VN[jcd]} ${p.races.length}本\n`); }
   }
   if(!packs.length){ console.log('この日のデータがありません。'); return; }
+  /* 取れたぶんをすぐ固める。採点の途中で落ちても、捕獲は残る。
+     （採点は何度でもやり直せるが、捕獲のやり直しは公式サイトに負荷をかける） */
+  if(!CACHE_ONLY){
+    try{
+      const r=require('./captures.js').save(HD);
+      if(r) console.log(`data/wholeday/${HD}.json.gz に残しました`
+                      + `（${r.venues}場 ${r.races}レース / ${(r.bytes/1024).toFixed(0)}KB）。`
+                      + `非公開リポジトリ側でコミットしてください。`);
+    }catch(e){ console.log(`※ 捕獲ぶんを残せませんでした（${e.message}）。tmp/ にはあります。`); }
+  }
 
   const all=[], oddsOf={};
   for(const p of packs) for(const r of p.races){ const R=toRace(r); all.push(R); oddsOf[R.name]=r.odds; }
