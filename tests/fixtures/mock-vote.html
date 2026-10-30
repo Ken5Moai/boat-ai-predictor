@@ -57,8 +57,13 @@
   <a href="#" id="cb_ok">OK</a>
   <a href="#" id="cb_cancel">キャンセル</a>
 </div>
+<!-- 投票が成立すると出る画面（betcomp）。艇番のボタンは無い。
+     ここから投票画面に戻る道が2つ並んでいる。実機どおり。 -->
 <div id="donescreen" style="display:none">投票結果
-ご投票ありがとうございました。以下の内容で投票が完了しました。</div>
+ご投票ありがとうございました。以下の内容で投票が完了しました。
+  <a href="#" id="again">同じ場で投票する</a>
+  <a href="#" id="changeplace">場を変更して投票する</a>
+</div>
 <script>
 /* レースタブ。実機と同じく id も class も無い <a> で、文字は「7R\n11:22」。 */
 {
@@ -131,6 +136,19 @@ document.getElementById('cb_ok').onclick=()=>{
   document.title='★買ってしまった★';
   document.getElementById('confirmbox').style.display='none';
   document.getElementById('donescreen').style.display='';
+  /* 実機と同じく、投票結果の画面では艇番のボタンが消える。
+     ここを残していると「戻れていなくても次を打ち込めてしまう」ので、
+     戻す処理が効いているかを確かめられない。 */
+  document.getElementById('entry').style.display='none';
+  document.getElementById('confirm').style.display='none';
+  return false;
+};
+/* 「同じ場で投票する」→ 投票画面（艇番のボタンがある画面）に戻る。
+   何も買わない。画面が移るだけ。 */
+document.getElementById('again').onclick=()=>{
+  document.getElementById('donescreen').style.display='none';
+  document.getElementById('entry').style.display='';
+  window.__backToEntry=(window.__backToEntry||0)+1;
   return false;
 };
 document.getElementById('cb_cancel').onclick=()=>{

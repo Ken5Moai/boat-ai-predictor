@@ -11,8 +11,25 @@ const SRC=fs.readFileSync(path.join(DIR,'auto.js'),'utf8');
 
 console.log('\n=== auto.js が必ず持っていること ===');
 ok_(/買いません/.test(SRC), '「買いません」と書いてある（買う処理を入れない目印）');
-ok_(!/投票入力完了|投票する/.test(SRC.replace(/\/\*[\s\S]*?\*\//g,'')),
-    'コード本体に「投票入力完了」「投票する」を押す処理が無い');
+/* 「auto.js が自分で投票ボタンを押さない」ことを見る検査。
+   以前は「投票入力完了」「投票する」という文字があるだけで落としていたが、
+   2026-10-30 に「同じ場で投票する」を押して投票画面に戻す処理を足したとき、
+   画面に出すメッセージの中の文字で落ちた。押す処理は入っていないのに。
+   文字ではなく、押す動き（その文字を含む要素を click する）を見る。 */
+{
+  const body = SRC.replace(/\/\*[\s\S]*?\*\//g,'');
+  /* click の近くに「投票する」「投票入力完了」があるか。
+     「同じ場で投票する」は投票ではなく画面を戻すだけなので除く。 */
+  const press = [...body.matchAll(/[^\n]*\.click\s*\([^\n]*/g)]
+    .map(m=>m[0])
+    .filter(L=>/投票入力完了|投票する/.test(L) && !/同じ場で投票する/.test(L));
+  ok_(press.length===0,
+      'コード本体に「投票入力完了」「投票する」を押す処理が無い'
+      + (press.length?`（${press[0].trim().slice(0,50)}）`:''));
+  /* 押す処理は vote-assist.js 側にある、という形が崩れていないか。 */
+  const VA=fs.readFileSync(path.join(DIR,'vote-assist.js'),'utf8');
+  ok_(/投票する/.test(VA), '押す処理は vote-assist.js 側にある');
+}
 ok_(/const MAX\s*=\s*Number\(flag\('max'/.test(SRC), '上限レース数を引数で受ける');
 ok_(/YEN_PER_RACE/.test(SRC) && /最大 ¥/.test(SRC), '上限まで回ったときの持ち出しを先に出す');
 /* 以前は「86%」という数字そのものを探していた。

@@ -314,10 +314,55 @@ async function readTotals(page){
 async function findVotePage(ctx){
   for(const pg of ctx.pages()){
     try{
-      if(await pg.$('#regbtn_1_1')) return pg;
+      /* 「ある」だけでなく「見えている」ことを見る。
+         隠れている入力欄を投票画面と見なすと、
+         買ったあと（投票結果の画面）でも「投票画面にいる」と判断してしまい、
+         戻す処理が動かない。実機では別URLなので要素ごと無くなるが、
+         画面を隠すだけの作りに変わっても気づけるようにしておく。 */
+      const el = await pg.$('#regbtn_1_1');
+      if(el && await el.isVisible().catch(()=>false)) return pg;
     }catch(e){}
   }
   return null;
+}
+
+/* 投票が成立したあと、投票画面（艇番のボタンがある画面）に戻す。
+   ------------------------------------------------------------------
+   投票が完了すると betcomp（投票結果）に移る。そこには艇番のボタンが無いので、
+   次のレースを打ち込もうとすると「投票画面が見つかりません」で止まる。
+   2026-10-30、児島1Rは買えたのに2Rで止まったのがこれ。
+
+   投票結果の画面には戻る道が2つ並んでいる。
+     「同じ場で投票する」      … 直前の場の投票画面に戻る
+     「場を変更して投票する」  … 場の選び直しから
+   1場で回すので前者を押す。押しても何も買わない（画面が移るだけ）。
+
+   場をまたぐほうは別ウィンドウを開く作りで、中を見ていないので触らない。
+   場を変えるときは人に頼む。 */
+async function backToEntry(ctx){
+  /* すでに投票画面にいるなら何もしない。 */
+  if(await findVotePage(ctx)) return {ok:true, moved:false};
+
+  for(const pg of ctx.pages()){
+    let hit=null;
+    for(const fr of pg.frames()){
+      try{
+        const n = await fr.locator('a,button,input[type=button],input[type=submit]')
+                          .filter({hasText:'同じ場で投票する'}).count();
+        if(n>0){ hit={pg, fr}; break; }
+      }catch(e){}
+    }
+    if(!hit) continue;
+    await hit.fr.locator('a,button,input[type=button],input[type=submit]')
+               .filter({hasText:'同じ場で投票する'}).first().click();
+    /* 艇番のボタンが出るまで待つ。出なければ戻れていない。 */
+    for(let i=0;i<20;i++){
+      if(await findVotePage(ctx)) return {ok:true, moved:true};
+      await hit.pg.waitForTimeout(500);
+    }
+    return {ok:false, why:'「同じ場で投票する」を押しましたが、投票画面に戻れませんでした'};
+  }
+  return {ok:false, why:'「同じ場で投票する」が見つかりません'};
 }
 
 /* 画面のレースを切り替える（同じ場の中だけ）。
@@ -837,7 +882,15 @@ async function buy(ctx, plan, opt){
   const okWord = /投票が完了しました|投票を受け付けました|投票結果|受付|完了/.test(after2);
   if(okWord){
     console.log(`  ✓ 買いました（¥${plan.total.toLocaleString()}）。画面は tmp/vote-bought.png に残しました。`);
-    return {bought:true, yen:plan.total, confirmed:true};
+    /* 買ったあとは投票結果の画面にいる。そのままでは次のレースを打ち込めないので、
+       「同じ場で投票する」を押して投票画面に戻しておく。
+       ここをやっていなかったので、2026-10-30 児島は1Rで買えて2Rで止まった。 */
+    const back = await backToEntry(ctx);
+    if(back.ok) console.log(back.moved ? '  投票画面に戻しました（同じ場で投票する）。'
+                                       : '  すでに投票画面にいます。');
+    else console.log(`  ※ 投票画面に戻せませんでした（${back.why}）。`
+                   + `\n     次のレースの前に、画面で「同じ場で投票する」を押してください。`);
+    return {bought:true, yen:plan.total, confirmed:true, backToEntry:back.ok};
   }
   /* 受付の文字が出ていない。弾かれてもいない。
      2026-10-29 の報告どおり、もう1画面あるとみられる。
@@ -914,7 +967,7 @@ async function voteAccepted(ctx){
   return /投票を受け付けました|受付|完了/.test(t);
 }
 
-module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage, voteAccepted,
+module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage, voteAccepted, backToEntry,
                    readRaceOnScreen, venueName, gotoRace, buyReadiness,
                    buy, readConfirm, amountUnit, readBalance, TERMS_NOTICE,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,

@@ -231,13 +231,43 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
     ok_(!(await pg.evaluate(()=>window.__bought)), 'そのとき買っていない');
     await ctx.close();
   }
+  /* 買ったあと、投票画面に戻れているか
+     ------------------------------------------------------------------
+     投票が成立すると betcomp（投票結果）に移り、艇番のボタンが消える。
+     そのままでは次のレースを打ち込めない。
+     2026-10-30、児島は1Rで買えて2Rで「投票画面が見つかりません」で止まった。
+     投票結果の画面にある「同じ場で投票する」を押して戻す。押しても何も買わない。 */
+  console.log('\n  買ったあと、投票画面に戻っているか');
+  {
+    const {ctx,pg}=await prep('円');
+    const {out}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(out && out.bought===true, '買えている');
+    ok_(!!(await pg.evaluate(()=>window.__backToEntry)), '「同じ場で投票する」を押している');
+    ok_(!!(await V.findVotePage(ctx)), '艇番のボタンがある画面に戻っている（次のレースを打ち込める）');
+    ok_(out && out.backToEntry===true, '戻れたことを返り値でも伝えている');
+    await ctx.close();
+  }
+  /* 戻る道が無いときは、黙って進まずに知らせること。 */
+  console.log('\n  戻る道が無ければ、黙って進まない');
+  {
+    const {ctx,pg}=await prep('円');
+    await pg.evaluate(()=>{ const a=document.getElementById('again'); if(a) a.remove(); });
+    const {out,said}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(out && out.bought===true, '買えてはいる（買えたことは変わらない）');
+    ok_(out && out.backToEntry===false, '戻れなかったことを返り値で伝えている');
+    ok_(/戻せませんでした/.test(said), '戻れなかったと画面に出している');
+    await ctx.close();
+  }
+
   console.log('\n  確認の窓：OK を押すまで買っていない');
   {
     const {ctx,pg}=await prep('円');
-    await quiet(()=>V.buy(ctx, PLAN, {}));
+    const {out}=await quiet(()=>V.buy(ctx, PLAN, {}));
     ok_(!!(await pg.evaluate(()=>window.__bought)), 'OK を押して成立している');
-    const t=await pg.evaluate(()=>document.body.innerText);
-    ok_(/投票が完了しました/.test(t), '「投票が完了しました」まで進んでいる');
+    /* 本文で「投票が完了しました」を探していたが、buy() が投票画面に戻すように
+       なったので、戻ったあとの本文にはもう出ていない。
+       buy() は戻す前に完了を確かめているので、その結果を見る。 */
+    ok_(out && out.confirmed===true, '「投票が完了しました」を確かめてから戻している');
     await ctx.close();
   }
 

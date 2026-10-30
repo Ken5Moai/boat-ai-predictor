@@ -351,6 +351,13 @@ async function runLoop(queue, ctx, ask, V){
       let plan; try{ plan=V.loadPlan(path.join(ROOT,'tmp','plan.json')); }
       catch(e){ console.log(`  買い目を読めませんでした: ${e.message}`); continue; }
       try{
+        /* 打ち込む前に、投票画面（艇番のボタンがある画面）にいるか確かめる。
+           買ったあとは投票結果の画面に移るので、そのままでは打ち込めない。
+           buy() が戻しているが、人が手で押した回や、戻しに失敗した回のために
+           ここでももう一度見る。戻すだけで何も買わない。 */
+        const back = await V.backToEntry(ctx);
+        if(!back.ok) throw new Error(`投票画面に戻れません（${back.why}）`);
+        if(back.moved) console.log('  投票画面に戻しました（同じ場で投票する）。');
         await V.fill(ctx, plan, null);
         if(BUY || BUY_DRY){
           const res = await V.buy(ctx, plan, {dryRun: BUY_DRY});
