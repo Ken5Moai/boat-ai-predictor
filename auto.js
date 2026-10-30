@@ -169,7 +169,26 @@ function makePlan(r){
 
   console.log('  開催を調べています…');
   const all=schedule();
-  if(!all.length){ console.log('  この日に開催している場が見つかりません。'); return; }
+  if(!all.length){
+    /* 「開催が無い」と「--venues の書き方が違う」は別の話。
+       2026-10-30、--venues 15/07/24 と書いて（正しくは 15,07,24）
+       どの場にも一致せず、「開催している場が見つかりません」とだけ出た。
+       開催はしていたので、読んだほうは何が悪いのか分からない。 */
+    if(ONLY.length){
+      const known = ONLY.filter(j=>VN[j]);
+      if(!known.length){
+        console.log(`  --venues に渡した「${flag('venues','')}」が場コードとして読めません。`);
+        console.log('    カンマで区切ってください（例: --venues 24 / --venues 15,24）。');
+        console.log('    場コード: ' + Object.keys(VN).sort().map(j=>`${j}=${VN[j]}`).join(' '));
+      }else{
+        console.log(`  ${known.map(j=>VN[j]).join('・')} は、この日は開催していません。`);
+        console.log('    （開催している場だけが対象になります）');
+      }
+    }else{
+      console.log('  この日に開催している場が見つかりません。');
+    }
+    return;
+  }
 
   /* まだ間に合うレースだけ。展示を待つ時間がいるので12分前より手前は捨てる。 */
   const ok = all.filter(r => r.closeMin - nowMin() >= MIN_LEAD);
