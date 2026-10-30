@@ -66,6 +66,38 @@ const YEN_PER_RACE = PTS_ALL * 100;
    runLoop() を切り出したときに main() の中に置いたままにしてしまい、
    実機で「MIN_LEAD is not defined」で落ちた（2026-10-28 丸亀9R）。
    両方から使うのでトップレベルに置く。 */
+/* 買った買い目をその場で残す。
+   ------------------------------------------------------------------
+   2026-10-30、大村12Rが当たったかどうかを確かめようとして、
+   レース後に取り直したデータで採点し直した。それで出た10点は
+   実際に買った10点と違っていて、「外れた」と誤って伝えた。
+   実際は 1-2-4 が的中していた。
+
+   買い目はレースの直前に作ったもので、あとから作り直しても同じにはならない
+   （出走表の今節成績などが更新されるため）。
+   「何を買ったか」は、買った時点のものを残しておくしかない。
+
+   tmp/plan-<場>-<R>-<日付>.json には1レースぶんが残るが、
+   買ったかどうかは入っていない。買えたものだけを1日1ファイルに積む。 */
+function recordBought(r, plan){
+  try{
+    const f = path.join(ROOT,'tmp',`bought-${HD}.json`);
+    let all=[]; try{ all=JSON.parse(fs.readFileSync(f,'utf8')); }catch(e){}
+    all.push({
+      at: new Date().toISOString(),
+      jcd: r.jcd, venue: r.venue, rno: r.rno, close: r.close, title: r.title,
+      race: plan.race || null,
+      best: plan.best || null,
+      main: plan.main || [], ana: plan.ana || [],
+      picks: [...new Set([...(plan.main||[]), ...(plan.ana||[])])],
+      unitYen: plan.unitYen || 100,
+      total: plan.total,
+    });
+    fs.writeFileSync(f, JSON.stringify(all,null,1));
+    console.log(`  買った内容を tmp/bought-${HD}.json に残しました（${all.length}本目）。`);
+  }catch(e){ console.log(`  ※ 買った内容を残せませんでした（${e.message}）。`); }
+}
+
 const MIN_LEAD = 12;
 /* 同じ時間に2レース進められないので、締切がこれより近いものは足さない。 */
 const MIN_GAP = 14;
@@ -384,7 +416,7 @@ async function runLoop(queue, ctx, ask, V){
         await V.fill(ctx, plan, null);
         if(BUY || BUY_DRY){
           const res = await V.buy(ctx, plan, {dryRun: BUY_DRY});
-          if(res.bought){ spent += plan.total; waiting.push({r, plan}); bought++; }
+          if(res.bought){ spent += plan.total; waiting.push({r, plan}); bought++; recordBought(r, plan); }
           else if(res.needsLastPress){
             /* 2026-10-30 に実物を見て、確認の窓（「投票します。よろしいですか？」の
                OK）は自動で押せるようにした。ふだんここには来ない。
@@ -400,7 +432,7 @@ async function runLoop(queue, ctx, ask, V){
             if(String(a).toLowerCase()!=='y'){ console.log('  やめました。'); break; }
             /* 押したと言われても、受け付けられたかは画面で確かめる。 */
             const okNow = await V.voteAccepted(ctx);
-            if(okNow){ spent += plan.total; waiting.push({r, plan}); bought++;
+            if(okNow){ spent += plan.total; waiting.push({r, plan}); bought++; recordBought(r, plan);
                        console.log('    受付を確認しました。'); }
             else {
               console.log('    受付の表示が見つかりません。買えていない可能性があります。');
