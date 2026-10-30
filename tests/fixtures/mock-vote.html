@@ -49,7 +49,16 @@
   <a href="#" id="c_back">投票内容を修正する</a>
   <a href="#" id="c_go">投票する</a>
 </div>
-<div id="donescreen" style="display:none">投票を受け付けました</div>
+<!-- 「投票する」を押すと出る確認の窓。ブラウザの confirm ではなく画面の中の窓。
+     2026-10-30 に実機で見たとおりに作る。OK を押すまで投票は成立しない。 -->
+<div id="confirmbox" style="display:none">
+  <div>確認</div>
+  <div>投票します。よろしいですか？</div>
+  <a href="#" id="cb_ok">OK</a>
+  <a href="#" id="cb_cancel">キャンセル</a>
+</div>
+<div id="donescreen" style="display:none">投票結果
+ご投票ありがとうございました。以下の内容で投票が完了しました。</div>
 <script>
 /* レースタブ。実機と同じく id も class も無い <a> で、文字は「7R\n11:22」。 */
 {
@@ -92,7 +101,11 @@ document.getElementById('add').onclick=()=>{
 };
 /* 投票入力完了 → 確定画面へ。ここではまだ買っていない。 */
 document.getElementById('done').onclick=()=>{
-  document.getElementById('c_cnt').textContent=n;
+  /* __cntOffset はテスト用のつまみ。
+     「画面の件数が買い目と食い違う」状況を作って、
+     そのとき買わずに止まることを確かめるために使う。
+     既定は0なので、ふだんの動きは変わらない。 */
+  document.getElementById('c_cnt').textContent=n+(window.__cntOffset||0);
   document.getElementById('c_sum').textContent=yen.toLocaleString();
   document.getElementById('confirm').style.display='';
   document.getElementById('entry').style.display='none';   /* 実機は画面が切り替わる */
@@ -107,9 +120,22 @@ document.getElementById('c_go').onclick=()=>{
             document.body.insertAdjacentHTML('beforeend',
               '<div id="pwerr">エラー 投票用パスワードの入力に誤りがあります。</div>');
             return false; }
-  window.__bought = {yen: v*mult, pw: vis};
+  /* ここではまだ買わない。実機と同じく確認の窓を出すだけ。
+     OK を押してはじめて成立する。 */
+  window.__pending = {yen: v*mult, pw: vis};
+  document.getElementById('confirmbox').style.display='';
+  return false;
+};
+document.getElementById('cb_ok').onclick=()=>{
+  window.__bought = window.__pending;
   document.title='★買ってしまった★';
+  document.getElementById('confirmbox').style.display='none';
   document.getElementById('donescreen').style.display='';
+  return false;
+};
+document.getElementById('cb_cancel').onclick=()=>{
+  document.getElementById('confirmbox').style.display='none';
+  window.__cancelled=true;
   return false;
 };
 document.getElementById('c_back').onclick=()=>{

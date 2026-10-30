@@ -209,6 +209,38 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
   }
 
   setEnv(OLD.pw ?? null, OLD.ok ?? null);
+  /* 確認の窓（2026-10-30に実機で見た「投票します。よろしいですか？」）
+     ------------------------------------------------------------------
+     「投票する」を押すと画面の中に窓が出て、OK を押すまで成立しない。
+     ブラウザの confirm ではなく、ページの中に描かれた窓。
+     ここを自動で押すようにしたので、
+       ・ちゃんと押して最後まで行くこと（上の「ふつうに買えるか」で見ている）
+       ・窓の向こうの件数や金額が買い目と違うときは押さないこと
+     の2つを見る。後者が効かないと、別のレースの買い目を確定しかねない。 */
+  console.log('\n  確認の窓：数が合わないときは押さない');
+  setEnv('abc1234','yes');   /* 前の検査で消しているので、ここで入れ直す */
+  {
+    const {ctx,pg}=await prep('円');
+    /* 画面側の「合計ベット数」を1件多く見せる（取り違えの再現）。
+       最初は buy() を呼ぶ前に書き換えたが、buy() 自身が「投票入力完了」を
+       押し直すところで件数が入れ直され、細工が消えて素通りした。
+       模擬ページ側につまみを置いて、確定画面に移るたびにずれるようにする。 */
+    await pg.evaluate(()=>{ window.__cntOffset = 1; });
+    const {err}=await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(!!err, `件数が違えば押さずに止まる（${err?err.message.slice(0,50):'止まらなかった'}）`);
+    ok_(!(await pg.evaluate(()=>window.__bought)), 'そのとき買っていない');
+    await ctx.close();
+  }
+  console.log('\n  確認の窓：OK を押すまで買っていない');
+  {
+    const {ctx,pg}=await prep('円');
+    await quiet(()=>V.buy(ctx, PLAN, {}));
+    ok_(!!(await pg.evaluate(()=>window.__bought)), 'OK を押して成立している');
+    const t=await pg.evaluate(()=>document.body.innerText);
+    ok_(/投票が完了しました/.test(t), '「投票が完了しました」まで進んでいる');
+    await ctx.close();
+  }
+
   await browser.close();
   console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
   process.exitCode = ng ? 1 : 0;

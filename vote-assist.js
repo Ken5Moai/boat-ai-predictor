@@ -727,13 +727,73 @@ async function buy(ctx, plan, opt){
   try{ await page.screenshot({path:path.join(__dirname,'tmp','vote-bought.png'), fullPage:true}); }catch(e){}
   const after = await page.evaluate(()=>document.body?document.body.innerText:'');
 
-  /* 2026-10-29、本人から「投票するは通ったが、そのあとの確認画面は
-     自分で押さないとダメだった」と報告があった。つまり押したあとに
-     もう1画面ある。そこを当てずっぽうで押すのは、投票用パスワードで
-     3回外したのと同じ間違いなので、まず実物を書き出す。
+  /* 「投票する」を押すと、画面の中に確認の窓が出る。
+     ブラウザの confirm ではなく、ページの中に描かれた窓。
+     2026-10-30 に実物を見て確かめた。
 
-     パスワードの値は絶対に出さない（長さだけ）。
-     押せるもの（a / button / input）の文字と、画面の文字を残す。 */
+       確認
+       投票します。よろしいですか？
+         [OK]  [キャンセル]
+
+     OK を押すと betcomp に移って「投票が完了しました」と出る。
+     押さないと投票は成立しない。2026-10-29 はここを人が押していた。
+
+     DOM の要素なので押せる。ただし「OK」という字だけを頼りに押すと、
+     別の窓が出ているときに取り違える。窓の文面を確かめてから押す。 */
+  const confirmBox = async () => {
+    for(const fr of page.frames()){
+      try{
+        const found = await fr.evaluate(()=>{
+          const vis = e => { const r=e.getBoundingClientRect(); return !!(r.width||r.height); };
+          const t = document.body ? document.body.innerText : '';
+          if(!/投票します。?\s*よろしいですか/.test(t)) return null;
+          const btns=[...document.querySelectorAll('a,button,input[type=button],input[type=submit]')]
+            .filter(vis)
+            .map(e=>({text:(e.innerText||e.value||'').trim(), id:e.id||'', cls:(e.className||'').toString().slice(0,40)}));
+          return {text:t.slice(0,300), btns};
+        });
+        if(found) return {frame:fr, ...found};
+      }catch(e){}
+    }
+    return null;
+  };
+
+  /* 押せる状態になるまで少し待つ（窓が出るのに一拍ある） */
+  let box=null;
+  for(let i=0;i<16 && !box;i++){ box=await confirmBox(); if(!box) await page.waitForTimeout(500); }
+
+  if(box){
+    const okNames = box.btns.filter(b=>/^(OK|ＯＫ)$/i.test(b.text));
+    console.log(`  確認の窓が出ました: ${box.text.split('\n').filter(Boolean).slice(0,2).join(' / ')}`);
+    if(okNames.length!==1){
+      throw new Error(`確認の窓の「OK」が ${okNames.length} 個見つかりました（1個でないので押しません）。`
+        + `画面を見て、ご自身で押してください。`);
+    }
+    /* 押す前にもう一度、件数と金額が買い目と合っているかを見る。
+       窓の向こう側に出ているので読める。ここが合わなければ押さない。 */
+    const back = await page.evaluate(()=>{
+      const t = document.body ? document.body.innerText : '';
+      const n = (t.match(/合計ベット数\s*([\d,]+)\s*件/)||[])[1];
+      const y = (t.match(/購入金額\s*([\d,]+)\s*円/)||[])[1];
+      return {n: n?Number(n.replace(/,/g,'')):null, y: y?Number(y.replace(/,/g,'')):null};
+    });
+    /* 件数は plan.rows から出す（buy() の他の検算と同じ出どころ）。
+       plan.all を使って 0点 になり、自分で作ったテストで落ちた。
+       同じ数を2通りで出すと必ずずれるので、1つに寄せる。 */
+    const wantN = plan.rows.length;
+    if(back.n!=null && back.n!==wantN)
+      throw new Error(`確認の窓の向こうの件数が合いません（画面${back.n}件 / 買い目${wantN}点）。押しません。`);
+    if(back.y!=null && back.y!==plan.total)
+      throw new Error(`確認の窓の向こうの金額が合いません（画面¥${back.y} / 買い目¥${plan.total}）。押しません。`);
+    console.log(`  件数と金額を確かめました（${wantN}点 ¥${plan.total.toLocaleString()}）。OK を押します…`);
+    await box.frame.locator('a,button,input[type=button],input[type=submit]')
+            .filter({hasText:/^(OK|ＯＫ)$/i}).first().click();
+    await page.waitForTimeout(2500);
+    try{ await page.screenshot({path:path.join(__dirname,'tmp','vote-bought.png'), fullPage:true}); }catch(e){}
+  }
+
+  /* 押したあとの画面を書き出す。どこで止まっても原因が見えるようにしておく。
+     パスワードの値は絶対に出さない（長さだけ）。 */
   try{
     const stage = await page.evaluate(()=>{
       const vis = e => { const r=e.getBoundingClientRect(); return !!(r.width||r.height); };
@@ -772,7 +832,9 @@ async function buy(ctx, plan, opt){
     console.log('    買えていません。画面の「投票内容を修正する」で戻れます。');
     throw e;
   }
-  const okWord = /投票を受け付けました|受付|完了/.test(after);
+  /* OK を押したあとは本文が変わっているので読み直す。 */
+  const after2 = await page.evaluate(()=>document.body?document.body.innerText:'');
+  const okWord = /投票が完了しました|投票を受け付けました|投票結果|受付|完了/.test(after2);
   if(okWord){
     console.log(`  ✓ 買いました（¥${plan.total.toLocaleString()}）。画面は tmp/vote-bought.png に残しました。`);
     return {bought:true, yen:plan.total, confirmed:true};
