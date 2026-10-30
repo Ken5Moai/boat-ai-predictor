@@ -153,18 +153,22 @@ function makePlan(r){
 /* ---- 本体 ------------------------------------------------------- */
 (async function main(){
   console.log(`\n=== 複数場の自動ループ（${HD}） ===`);
+  /* ここは「買いません」を必ず出していた。--buy のときも出るので、
+     そのあとの「★--buy なので押します」と矛盾していた。
+     2026-10-30、本人が「自動で買わないバージョンのままみたい」と判断した。
+     いちばん大事な一行なので、どれか1つだけを出す。 */
   console.log(`  上限 ${MAX}レース`
-    + (ONLY.length?` / 場を ${ONLY.map(j=>VN[j]||j).join('・')} に限定`:' / 全場')
-    + `\n  買いません。買い目を出すところまでです。`);
-  if(BUY) console.log('  ★ --buy なので、最後まで自動で押します。');
-  if(BUY_DRY) console.log('  ★ --buy-dry なので、押す直前で止まります。');
+    + (ONLY.length?` / 場を ${ONLY.map(j=>VN[j]||j).join('・')} に限定`:' / 全場'));
+  if(BUY)          console.log('  ★ 買います。--buy なので、確認の窓まで自動で押します。');
+  else if(BUY_DRY) console.log('  ★ 買い目を入れて、押す直前で止まります（--buy-dry）。');
+  else             console.log('  買いません。買い目を出すところまでです。');
   console.log(`  1レース¥${YEN_PER_RACE.toLocaleString()}（本線${PTS.main}＋波乱${PTS.ana}＝${PTS_ALL}点×100円）`
     + ` → 上限まで回ると最大 ¥${(YEN_PER_RACE*MAX).toLocaleString()} の持ち出し`);
   /* 回収率は書き写さない。レースが増えるたびに古くなり、
      「108%」と出しながら実測が91%という状態になる（実際そうなっていた）。
      選り好みのない数字だけを出す。node sync-figures.js が書き換える。 */
-  console.log(`  選り好みのない457レースの実測では ${PTS_ALL}点で回収率91%`);
-  console.log(`  （最大の払戻1件を除くと80%）。100%を超えていないので、`);
+  console.log(`  選り好みのない575レースの実測では ${PTS_ALL}点で回収率93%`);
+  console.log(`  （最大の払戻1件を除くと85%）。100%を超えていないので、`);
   console.log(`  上限まで回ると平均では減ります。\n`);
 
   console.log('  開催を調べています…');

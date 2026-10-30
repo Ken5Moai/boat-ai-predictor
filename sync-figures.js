@@ -128,6 +128,12 @@ const V = {};
     const r = s2.match(RX(`本線（${PTS.main}点）`+String.raw`\s+投資¥\s*\d+\s+払戻¥\s*\d+\s+収支[+-]¥[\d,]+\s+回収率\s*(\d+)%\s+最大1件除くと\s*(\d+)%\s+的中(\d+)\/(\d+)`));
     if(!r){ V.fair=null; console.log(`  ※ 選り好みなしの合計から${L_MAIN}の行を取り出せませんでした。関係する数字は触りません。`); }
     else V.fair = {days:m[1], n:m[2], pct:r[1], cut:r[2], hit:r[3]};
+    /* 本線だけの行とは別に、実際に買う点数（本線＋波乱）の行も取る。
+       auto.js は「10点で回収率」と出すので、本線6点の71%を入れると嘘になる
+       （2026-10-30 に入れてしまい、ここで気づいた）。 */
+    const ra = s2.match(RX(`本線＋波乱（${PTS_ALL}点）`+String.raw`\s+投資¥\s*\d+\s+払戻¥\s*\d+\s+収支[+-]¥[\d,]+\s+回収率\s*(\d+)%\s+最大1件除くと\s*(\d+)%\s+的中(\d+)\/(\d+)`));
+    V.fairAll = ra ? {pct:ra[1], cut:ra[2], hit:ra[3]} : null;
+    if(!ra) console.log(`  ※ 選り好みなしの合計から${PTS_ALL}点の行を取り出せませんでした。auto.js の数字は触りません。`);
   }
 }
 {
@@ -296,6 +302,19 @@ if(missed.length){
 /* backtest.js の結果まち出力にも同じ値を書いている */
 let bt = fs.readFileSync(path.join(ROOT,'backtest.js'),'utf8');
 const btBefore = bt;
+/* auto.js が走り始めに出す実測も書き換える。
+   「数字は sync-figures が書き換える1箇所に寄せた」と書いておきながら、
+   規則を足し忘れていた（2026-10-30に気づいた）。
+   457レース91% のまま止まっていて、実際は575レース93%。
+   見出しは点数から作っているので、数字とレース数だけを当てる。 */
+let au = fs.readFileSync(path.join(ROOT,'auto.js'),'utf8');
+const auBefore = au;
+if(V.fair && V.fairAll){
+  au = au.replace(/(選り好みのない)\d+(レースの実測では \$\{PTS_ALL\}点で回収率)\d+(%`\);)/,
+                  `$1${V.fair.n}$2${V.fairAll.pct}$3`);
+  au = au.replace(/(（最大の払戻1件を除くと)\d+(%）。)/, `$1${V.fairAll.cut}$2`);
+}
+
 /* 見出しは backtest.js 側が点数から組み立てているので、
    ここでは数字の部分だけを当てる（見出しの点数は当てにしない）。 */
 bt = bt.replace(/(実測 \$\{L_MAIN\})\d+(% ／ \$\{L_ANA\}だけ)\d+(% ／ \$\{PTS_ALL\}点まとめて)\d+(%（)\d+(レース）。)/,
@@ -304,9 +323,11 @@ bt = bt.replace(/(実測 \$\{L_MAIN\})\d+(% ／ \$\{L_ANA\}だけ)\d+(% ／ \$\{
 if(CHECK){
   console.log(html===before ? 'index.html は最新です' : `index.html に ${changed} 箇所の書き換えが必要です`);
   console.log(bt===btBefore ? 'backtest.js は最新です' : 'backtest.js に書き換えが必要です');
-  process.exit((html===before && bt===btBefore) ? 0 : 1);
+  console.log(au===auBefore ? 'auto.js は最新です' : 'auto.js に書き換えが必要です');
+  process.exit((html===before && bt===btBefore && au===auBefore) ? 0 : 1);
 }
 fs.writeFileSync(path.join(ROOT,'index.html'), html);
 fs.writeFileSync(path.join(ROOT,'backtest.js'), bt);
+fs.writeFileSync(path.join(ROOT,'auto.js'), au);
 console.log(`${V.n}レースの実測に合わせて書き直した（index.html ${changed}箇所`+
             `${bt===btBefore?'':' / backtest.js 1箇所'}）`);
