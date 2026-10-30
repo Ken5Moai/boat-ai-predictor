@@ -69,8 +69,23 @@ const WHY_NOT_YET = '結果まだ（走っていない）';
    1度だけ取り直して正しい理由に書き換える。
    取り直せば中止・不成立になり、以降は取り直しの対象から外れる。 */
 const LEGACY = '結果なし/不成立';
-const RETRYABLE = why =>
-  why === WHY_NOT_YET || why === LEGACY || /取得|timeout|ENOTFOUND|ECONN/i.test(why);
+/* 取り直せるかの判定は「知っている永久の理由かどうか」で決める。
+   以前は取り直せる側を並べていたが（/取得|timeout|ENOTFOUND|ECONN/）、
+   2026-10-30 の児島10Rは "Command failed: curl -sS --fail ..." で落ちていて、
+   どれにも当たらず永久に取り直されない状態だった。
+   知らない失敗を「永久」と決めつけるのは危ない。並びを逆にする。
+
+   永久なのは、何度取っても同じになるものだけ。
+     欠場   … 5艇のまま（6艇前提のモデルでは採点できない）
+     不成立 … 着順も払戻も出ない
+     中止   … レースが行われなかった
+   それ以外は全部取り直す（通信の失敗も、まだ走っていないのも）。
+   data/unscorable.js の PERMANENT と同じ並び。片方だけ直すとずれる。 */
+const PERMANENT = why => /欠場|不成立|中止/.test(why);
+/* LEGACY（'結果なし/不成立'）は「不成立」を含むので PERMANENT に当たってしまうが、
+   これは理由を分ける前の古い文字列で、中身が不成立なのか中止なのか
+   まだ走っていないのか分からない。1度取り直して分類し直す。 */
+const RETRYABLE = why => why === LEGACY || !PERMANENT(why);
 
 async function grab(jcd){
   const f=path.join(DIR,`${jcd}.json`);

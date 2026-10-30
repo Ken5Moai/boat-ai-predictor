@@ -202,6 +202,51 @@ console.log('\n=== RACES の目印を古いまま探していないか ===');
    ・手で書けないよう、自動生成であること
    ・理由が欠場（オッズ60通り）だけであること
    を見る。 */
+/* 取り直せる理由と、永久にあきらめる理由の線引き
+   ------------------------------------------------------------------
+   wholeday.js は、取れなかったレースを理由つきで残し、
+   次に走らせたとき「取り直せるもの」だけを取りに行く。
+   ここを間違えると、取れるはずのレースが永久に欠けたままになる。
+
+   2026-10-30、児島10Rが "Command failed: curl -sS --fail ..." で落ちた。
+   当時の判定は取り直せる側を並べる書き方（/取得|timeout|ENOTFOUND|ECONN/）で、
+   この文面はどれにも当たらず、何度走らせても取りに行かなかった。
+   知らない失敗を「永久」と決めつけるのが危ない。並びを逆にしてある。
+
+   永久は3つだけ。それ以外は全部取り直す。 */
+console.log('\n=== 取り直せる理由の線引き ===');
+{
+  const src=fs.readFileSync(path.join(DIR,'wholeday.js'),'utf8');
+  ok(/const PERMANENT = why => \/欠場\|不成立\|中止\/\.test\(why\);/.test(src),
+     'wholeday.js は「永久」を 欠場・不成立・中止 の3つで決めている');
+  ok(/const RETRYABLE = why => why === LEGACY \|\| !PERMANENT\(why\)/.test(src),
+     '取り直せるかは「永久でなければ取り直す」で決めている（並べ上げていない）');
+  /* 実際に判定を動かして確かめる。書き方を見るだけでは、
+     正規表現が意図どおり効いているかは分からない。 */
+  const PERMANENT = why => /欠場|不成立|中止/.test(why);
+  const LEGACY = '結果なし/不成立';
+  const RETRYABLE = why => why === LEGACY || !PERMANENT(why);
+  const cases = [
+    ['オッズ60通り（欠場）', false, '欠場は何度取っても5艇'],
+    ['不成立（レースが行われなかった）', false, '不成立は着順が出ない'],
+    ['中止（レースが行われなかった）', false, '中止はレースが無い'],
+    ['結果まだ（走っていない）', true, 'あとで走れば取れる'],
+    ['結果なし/不成立', true, '理由を分ける前の古い文字列。1度取り直して分類し直す'],
+    ['Command failed: curl -sS --fail --max-time 60', true, '通信の失敗。児島10Rで実際に起きた'],
+    ['racelist の中身が短すぎる（0文字）', true, '取得の失敗'],
+  ];
+  let bad=0;
+  for(const [why, want, note] of cases){
+    const got = RETRYABLE(why);
+    if(got!==want){ bad++; console.log(`  ✗ FAIL: 「${why.slice(0,36)}」は${want?'取り直す':'永久'}はず（${note}）`); }
+  }
+  ok(bad===0, `${cases.length}通りの理由が、すべて意図どおりに分かれている`);
+  /* unscorable.js の「永久」と同じでなければ、片方だけ直したときにずれる。 */
+  const un=fs.readFileSync(path.join(DIR,'unscorable.js'),'utf8');
+  ok(/const PERMANENT = why => \/欠場\|不成立\|中止\/\.test\(why\);/.test(un),
+     'unscorable.js の「永久」も同じ3つ（2箇所でずれていない）');
+}
+
 console.log('\n=== 採点できなかったレースの一覧が、都合よく使われていないか ===');
 {
   const up=path.join(DIR,'data','unscorable.js');
