@@ -352,10 +352,34 @@ async function runLoop(queue, ctx, ask, V){
       catch(e){ console.log(`  買い目を読めませんでした: ${e.message}`); continue; }
       try{
         await V.fill(ctx, plan, null);
-        spent += plan.total;
         if(BUY || BUY_DRY){
           const res = await V.buy(ctx, plan, {dryRun: BUY_DRY});
-          if(res.bought){ waiting.push({r, plan}); bought++; }
+          if(res.bought){ spent += plan.total; waiting.push({r, plan}); bought++; }
+          else if(res.needsLastPress){
+            /* 2026-10-29、「投票するは通ったが、そのあとの確認画面は
+               自分で押さないとダメだった」と報告があった。
+               そこを押さずに次のレースへ進むと、
+                 ・確定していない画面を残したまま次を打ち込もうとして失敗する
+                 ・買っていないのに投資額に足してしまう（残高の見積りがずれる）
+               の2つが起きる。ここは人が押すまで待つ。
+               どのボタンかが分かれば、この待ちは外せる
+               （tmp/vote-after-submit.json を見て決める）。 */
+            console.log('\n  ★ 画面に出ている確認を、ご自身で押して確定してください。');
+            const a = await ask('    確定したら y、やめるなら それ以外 > ');
+            if(String(a).toLowerCase()!=='y'){ console.log('  やめました。'); break; }
+            /* 押したと言われても、受け付けられたかは画面で確かめる。 */
+            const okNow = await V.voteAccepted(ctx);
+            if(okNow){ spent += plan.total; waiting.push({r, plan}); bought++;
+                       console.log('    受付を確認しました。'); }
+            else {
+              console.log('    受付の表示が見つかりません。買えていない可能性があります。');
+              const b = await ask('    それでも続けますか（y で次へ / それ以外でやめる）> ');
+              if(String(b).toLowerCase()!=='y'){ console.log('  やめました。'); break; }
+            }
+          }
+          else if(BUY_DRY){ spent += plan.total; }   /* 押す直前で止める指定 */
+        } else {
+          spent += plan.total;
         }
       }catch(e){
         if(e.outOfMoney){

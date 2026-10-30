@@ -705,6 +705,20 @@ async function buy(ctx, plan, opt){
                      JSON.stringify(diag,null,1));
   }catch(e){}
 
+  /* ブラウザが出す確認（window.confirm / alert）が挟まることがある。
+     Playwright は既定でこれを黙って閉じる（＝キャンセル扱いになりうる）。
+     何が出たのか分からないまま進むのが怖いので、出たら書き出して受ける。
+     ここを入れずに「押したのに買えていない」が起きると、原因が見えない。 */
+  const dialogs=[];
+  page.on('dialog', async d => {
+    dialogs.push({type:d.type(), message:d.message().slice(0,200)});
+    console.log(`  ブラウザの確認が出ました（${d.type()}）: ${d.message().slice(0,120)}`);
+    /* 中身が分かるまで、こちらからは受けない（キャンセルする）。
+       受けると買ってしまうので、分からないものは押さない。 */
+    try{ await d.dismiss(); }catch(e){}
+    console.log('    中身が分からないので、いったん閉じました（買っていません）。');
+  });
+
   console.log('\n  「投票する」を押します…');
   const go = page.locator('a:text-is("投票する"), button:text-is("投票する"), input[value="投票する"]').first();
   if(!await go.count()) throw new Error('「投票する」が見つかりません');
@@ -712,6 +726,37 @@ async function buy(ctx, plan, opt){
   await page.waitForTimeout(3000);
   try{ await page.screenshot({path:path.join(__dirname,'tmp','vote-bought.png'), fullPage:true}); }catch(e){}
   const after = await page.evaluate(()=>document.body?document.body.innerText:'');
+
+  /* 2026-10-29、本人から「投票するは通ったが、そのあとの確認画面は
+     自分で押さないとダメだった」と報告があった。つまり押したあとに
+     もう1画面ある。そこを当てずっぽうで押すのは、投票用パスワードで
+     3回外したのと同じ間違いなので、まず実物を書き出す。
+
+     パスワードの値は絶対に出さない（長さだけ）。
+     押せるもの（a / button / input）の文字と、画面の文字を残す。 */
+  try{
+    const stage = await page.evaluate(()=>{
+      const vis = e => { const r=e.getBoundingClientRect(); return !!(r.width||r.height); };
+      const label = e => (e.innerText || e.value || e.getAttribute('alt') || '').trim().slice(0,40);
+      const out = {url:location.href, title:document.title, buttons:[], inputs:[]};
+      for(const e of document.querySelectorAll('a,button,input[type=submit],input[type=button],input[type=image]'))
+        if(vis(e)) out.buttons.push({tag:e.tagName.toLowerCase(), type:e.type||'',
+                                     id:e.id||'', name:e.name||'', cls:(e.className||'').toString().slice(0,40),
+                                     text:label(e)});
+      for(const e of document.querySelectorAll('input'))
+        if(vis(e)) out.inputs.push({type:e.type||'', id:e.id||'', name:e.name||'',
+                                    len:(e.value||'').length});
+      out.text = (document.body?document.body.innerText:'').slice(0,1500);
+      return out;
+    });
+    stage.dialogs = dialogs;
+    stage.frames = page.frames().length;
+    fs.writeFileSync(path.join(__dirname,'tmp','vote-after-submit.json'),
+                     JSON.stringify(stage,null,1));
+    console.log('  押したあとの画面を tmp/vote-after-submit.json に書き出しました。');
+    const names = stage.buttons.map(b=>b.text).filter(Boolean);
+    if(names.length) console.log(`    押せるもの: ${[...new Set(names)].slice(0,12).join(' / ')}`);
+  }catch(e){ console.log(`  ※ 押したあとの画面を書き出せませんでした（${e.message}）。`); }
   /* 弾かれたときは、受付の文字より先にエラーを見る。
      「完了」は画面のどこかに残っていることがあるので、順番が大事。 */
   const ng = after.match(/(投票用パスワード[^\n]{0,24}誤り[^\n]*|エラー[^\n]{0,40})/);
@@ -728,10 +773,20 @@ async function buy(ctx, plan, opt){
     throw e;
   }
   const okWord = /投票を受け付けました|受付|完了/.test(after);
-  console.log(okWord ? `  ✓ 買いました（¥${plan.total.toLocaleString()}）。画面は tmp/vote-bought.png に残しました。`
-                     : `  ※ 「投票する」は押しましたが、受付の表示を確かめられませんでした。`
-                       + `\n     tmp/vote-bought.png と画面を必ず見てください。`);
-  return {bought:true, yen:plan.total, confirmed:okWord};
+  if(okWord){
+    console.log(`  ✓ 買いました（¥${plan.total.toLocaleString()}）。画面は tmp/vote-bought.png に残しました。`);
+    return {bought:true, yen:plan.total, confirmed:true};
+  }
+  /* 受付の文字が出ていない。弾かれてもいない。
+     2026-10-29 の報告どおり、もう1画面あるとみられる。
+     ここで何かを押すと買ってしまうので、押さずに人に渡す。
+     どのボタンを押せばいいかは tmp/vote-after-submit.json を見て決める。 */
+  console.log('\n  ※ 「投票する」は押しましたが、受付の表示が出ていません。');
+  console.log('     もう1画面あるとみられます。こちらからは押しません（買ってしまうため）。');
+  console.log('     画面を見て、ご自身で確定してください。');
+  console.log('     そのうえで tmp/vote-after-submit.json と tmp/vote-bought.png を送ってください。');
+  console.log('     次からその画面も自動で進めるようにします。');
+  return {bought:false, yen:0, waitingHuman:true, needsLastPress:true};
 }
 
 /* ③に何が足りないかを名前で返す。 */
@@ -785,7 +840,19 @@ function buyReadiness(){
 
 /* ---- 本体 ----------------------------------------------------------- */
 /* require されたときは走らせない（テストから probe だけ呼べるように） */
-module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage,
+/* いま開いている画面が「投票を受け付けた」状態かを見る。
+   人が確認画面を押したあとに、本当に通ったのかを確かめるために使う。
+   押したと言われても画面で確かめる（言葉を信じて集計すると、
+   買っていないのに投資額に足してしまう）。 */
+async function voteAccepted(ctx){
+  const page = await findVotePage(ctx);
+  if(!page) return false;
+  const t = await page.evaluate(()=>document.body?document.body.innerText:'');
+  if(/誤り|エラー/.test(t)) return false;
+  return /投票を受け付けました|受付|完了/.test(t);
+}
+
+module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage, voteAccepted,
                    readRaceOnScreen, venueName, gotoRace, buyReadiness,
                    buy, readConfirm, amountUnit, readBalance, TERMS_NOTICE,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
