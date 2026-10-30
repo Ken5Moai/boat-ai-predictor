@@ -1871,6 +1871,18 @@ if(require.main===module){
        一覧で凍結する限り、同じことが毎回起きる。
        日付で区切れば、あとから何本足しても破れない。 */
     const PREREG_ANA_AFTER = '2026-10-28';   /* この日までは判定に使わない */
+    /* 【判定⑧】は「波乱8点だけ」で凍結してある。
+       いまの買い方は 本線6点＋波乱4点 なので、上の積み上げ（FRESH_TOTAL）には
+       波乱4点しか入らない。2026-10-30、判定⑧が波乱（8点）を探して
+       undefined を読み、落ちた。
+
+       凍結した条件は、いまの点数が何であっても同じものを測らなければ
+       意味がない。判定⑧ぶんは、ここで別に積む。 */
+    /* 判定⑦の PREREG7_MAIN と同じ扱い。凍結した点数は名前を付けて置く。
+       直書きの 8 にすると、点数の直書きを見張る検査（test52）に当たるうえ、
+       「なぜ8なのか」が読めなくなる。 */
+    const PREREG8_ANA = 8;
+    const ANA8 = {inv:0, races:0, won:[]};
     const FRESH_TOTAL = new Map();
     let FRESH_FLAG = false;      /* いま足している場日が凍結後かどうか */
     const addTotal = (label, inv, won, races) => {
@@ -1947,6 +1959,16 @@ if(require.main===module){
               `¥${String(r.pay).padStart(6)}  ${String(r.pop).padStart(3)}  `+
               `${String(x.rank).padStart(8)}番目  `+
               `${inMain?'○ ':'× '}  ${inAna?'○':'×'}`);
+          }
+          /* 判定⑧ぶん（波乱8点だけ）。凍結の線より後の日だけ積む。
+             買い方を変えても測るものが変わらないよう、ここで8点を指定する。 */
+          if(FRESH_FLAG){
+            for(const x of sub){
+              const info = payOfDay[x.name]; if(!info || info.pay==null) continue;
+              const ks = [...new Set(WIN.buyPlan(toC(x), {ana:PREREG8_ANA}).ana)];
+              ANA8.inv += ks.length*100; ANA8.races++;
+              if(ks.includes(info.result)) ANA8.won.push(info.pay);
+            }
           }
           console.log('    この日を1日まるごと買ったら（1点100円）');
           money('至極の一点（1点）', p=>[p.best]);
@@ -2066,18 +2088,15 @@ if(require.main===module){
             console.log(`    いま ${fresh.length}/${NEED_DAYS} 場日。たまったら判定する。`);
             console.log(`    （${PREREG_ANA_AFTER} までの場日は判定に使わない。`
                       + `それより後の日だけで判定する）`);
-            if(fresh.length){
-              const t = FRESH_TOTAL.get('波乱（8点）');
-              if(t){
-                const back=t.won.reduce((a,c)=>a+c,0), top=t.won.length?Math.max(...t.won):0;
-                console.log(`    （参考 回収率${Math.round(back/t.inv*100)}% / `
-                          + `最大1件除くと${Math.round((back-top)/t.inv*100)}% / `
-                          + `的中${t.won.length}件。場日が足りないので根拠にしない）`);
-              }
+            if(fresh.length && ANA8.inv){
+              const back=ANA8.won.reduce((a,c)=>a+c,0), top=ANA8.won.length?Math.max(...ANA8.won):0;
+              console.log(`    （参考 回収率${Math.round(back/ANA8.inv*100)}% / `
+                        + `最大1件除くと${Math.round((back-top)/ANA8.inv*100)}% / `
+                        + `的中${ANA8.won.length}件。場日が足りないので根拠にしない）`);
             }
           }else{
-            const t = FRESH_TOTAL.get('波乱（8点）');
-            const back=t.won.reduce((a,c)=>a+c,0), top=Math.max(...t.won);
+            const t = ANA8;
+            const back=t.won.reduce((a,c)=>a+c,0), top=t.won.length?Math.max(...t.won):0;
             const a=back/t.inv*100, b=(back-top)/t.inv*100;
             console.log(`    対象 ${fresh.length}場日 = `
               + `${fresh.reduce((a,[,l])=>a+l.length,0)}レース（凍結分は除く）`);
@@ -2891,7 +2910,7 @@ if(require.main===module){
            「本線10点 71%」と出しながら中身は6点、という状態になる。
            PCT_MAIN のような変数にしようとして未定義のまま置いてしまい、
            結果待ちのレースがある日に落ちる状態を作った（ここで気づいた）。 */
-        console.log(`  実測 ${L_MAIN}74% ／ ${L_ANA}だけ116% ／ ${PTS_ALL}点まとめて91%（628レース）。`);
+        console.log(`  実測 ${L_MAIN}82% ／ ${L_ANA}だけ132% ／ ${PTS_ALL}点まとめて102%（769レース）。`);
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

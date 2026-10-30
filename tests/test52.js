@@ -67,6 +67,14 @@ ok(/const PREREG7_MAIN = 10;/.test(read('backtest.js')),
    '判定⑦ は書いた日の10点に固定されている（凍結した条件の意味を変えない）');
 ok(/buyPlan\(toC\(x\.r\), \{main:PREREG7_MAIN\}\)/.test(read('backtest.js')),
    '判定⑦ の計算が PREREG7_MAIN を使っている');
+/* 判定⑧も同じ。2026-10-29 に買う点数を 本線6＋波乱4 にしたとき、
+   判定⑧が見ていた「波乱（8点）」の集計が作られなくなり、
+   判定しようとして undefined を読んで落ちた（2026-10-30）。
+   凍結した条件は、いまの点数が何であっても同じものを測る。 */
+ok(/const PREREG8_ANA = 8;/.test(read('backtest.js')),
+   '判定⑧ は書いた日の波乱8点に固定されている');
+ok(/buyPlan\(toC\(x\), \{ana:PREREG8_ANA\}\)/.test(read('backtest.js')),
+   '判定⑧ の計算が PREREG8_ANA を使っている（いまの点数に引きずられない）');
 
 console.log('\n=== 金額が点数から出ているか（残高の見積りに使う） ===');
 const AUTO=read('auto.js');
