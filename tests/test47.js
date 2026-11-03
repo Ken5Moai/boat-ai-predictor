@@ -120,6 +120,51 @@ PLAN.total = PLAN.rows.reduce((a,r)=>a+r.yen,0);
     await ctx.close();
   }
   {
+    /* 締切が近いと行末が「まもなく締切」に変わる。それでも R を読めること。
+       2026-11-03 大村5R、画面が締切済みの4Rのままで
+       「4R 一般 1800m まもなく締切」と出ていて、R が読めず打ち込めなかった。 */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    await pg.evaluate(()=>{ document.getElementById('raceline').textContent=
+      '4R 一般 1800m まもなく締切'; });
+    const r=await V.readRaceOnScreen(pg);
+    ok_(r.rno===4, `「まもなく締切」でも R を読める（${r.rno}R）`);
+    await ctx.close();
+  }
+  {
+    /* R がまったく読めない画面でも、場が合っていればタブを押してみる。
+       押したあとに読み返して、買い目と同じレースになったときだけ進む。 */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    await pg.evaluate(()=>{ document.getElementById('raceline').textContent=
+      'ただいま締切処理中です'; });
+    ok_((await V.readRaceOnScreen(pg)).rno===null, 'この画面では R が読めない（前提の確認）');
+    const real=console.log; const said=[]; console.log=(...a)=>said.push(a.join(' '));
+    let err=null; try{ await V.fill(ctx, {...PLAN, rno:9}, null); }catch(e){ err=e; }
+    console.log=real;
+    ok_(!err, `R が読めなくてもタブで合わせて進む（${err?err.message.slice(0,40):'エラーなし'}）`);
+    ok_((await V.readRaceOnScreen(pg)).rno===9, '画面が9Rに変わっている');
+    ok_((await pg.textContent('#cnt'))==='5', '切り替えたうえで5点入っている');
+    ok_(said.join('\n').includes('Rの読めない画面'), '何が起きたかを画面に出す');
+    await ctx.close();
+  }
+  {
+    /* R が読めず、切り替えてもそのレースにならない（タブが無い）なら止まる。
+       「たぶん合っている」で金は賭けない。 */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    await pg.evaluate(()=>{ document.getElementById('raceline').textContent=
+      'ただいま締切処理中です';
+      document.getElementById('tabs').textContent=''; });
+    const real=console.log; console.log=()=>{};
+    let err=null; try{ await V.fill(ctx, {...PLAN, rno:9}, null); }catch(e){ err=e; }
+    console.log=real;
+    ok_(!!err && /読めません/.test(err.message),
+        `切り替えられなければ止まる（${err?err.message.slice(0,30):'止まらなかった'}）`);
+    ok_((await pg.textContent('#cnt'))==='0', '止まったので1点も入っていない');
+    await ctx.close();
+  }
+  {
     /* 同じ場で R だけ違う → 切り替えて進む */
     const ctx=await browser.newContext();
     const pg=await ctx.newPage(); await pg.goto(MOCK);

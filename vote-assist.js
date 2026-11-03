@@ -292,10 +292,16 @@ const venueName = jcd => {
 
 /* いま画面に出ている場とレース番号を読む。
    画面にはこう出ている:  唐津 … 場変更・複数場選択 … 6R予選 1800m 電話投票締切予定時刻まで 9分
-   読めなければ null を返す。推測しない。 */
+   読めなければ null を返す。推測しない。
+
+   締切が近づくと、この行の末尾が「電話投票締切予定時刻まで N分」から
+   「まもなく締切」に変わる。2026-11-03 大村5R で、画面が締切済みの4Rのまま
+   「4R 一般 1800m まもなく締切」と出ていて、Rが読めずに打ち込めなかった。
+   「電話投票締切」だけを探していたのが狭すぎた。
+   締切まわりの言い方は変わるので、「締切」の2文字までで見る。 */
 async function readRaceOnScreen(page){
   const t = await page.evaluate(()=>document.body ? document.body.innerText : '');
-  const rno = (t.match(/(\d{1,2})R[^\n]*?\d+m[^\n]*?電話投票締切/)||[])[1];
+  const rno = (t.match(/(\d{1,2})R[^\n]*?\d+m[^\n]*?締切/)||[])[1];
   const venue = (t.match(/([^\s\n]+)\s*\n\s*場変更・複数場選択/)||[])[1];
   return { venue: venue||null, rno: rno==null ? null : Number(rno) };
 }
@@ -401,8 +407,14 @@ async function fill(ctx, plan, ask){
      合わなければ下の照合で止まる。 */
   let on = await readRaceOnScreen(page);
   const want = venueName(plan.jcd);
-  if(on.rno != null && on.rno !== plan.rno && (!want || on.venue === want)){
-    console.log(`  画面が ${on.rno}R なので ${plan.rno}R に切り替えます…`);
+  /* R が読めないときも、場さえ合っていればタブを押してみる。
+     2026-11-03 大村5R、画面が締切済みの4Rのままで R が読めず、
+     切り替えを試す前にここで止まっていた（切り替えれば読めたはずだった）。
+     押したあとに読み返して、買い目と同じレースになったときだけ進む。
+     「読めないまま打ち込む」はしない。 */
+  if(on.rno !== plan.rno && (!want || on.venue === want)){
+    console.log(`  画面が ${on.rno!=null ? on.rno+'R' : 'Rの読めない画面'} なので`
+              + ` ${plan.rno}R に切り替えます…`);
     await gotoRace(page, plan.rno);
     on = await readRaceOnScreen(page);
   }
