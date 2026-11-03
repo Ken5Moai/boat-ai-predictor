@@ -3413,7 +3413,45 @@ function scoreBoat(b, ctx){
 
     if(finished.length){
       const avg = finished.reduce((a,c)=>a+c,0)/finished.length;
-      add('今節着順', clamp((6-avg)/5*100, 0, 100), W.recentForm * ratio);
+      /* 【判定⑨・2026-11-03に先に書いた】今節着順をコース別で見るか
+         ------------------------------------------------------------
+         いまは着順だけを平均している。1コースの4着と6コースの4着が同じ扱い。
+         これは明らかにおかしい。記録には進入コースも入っているのに使っていない。
+
+         きっかけは 2026-11-02 下関12R。本人が出走表を見て
+         「1号艇は調子が悪い、4号艇が良さそう」と読み、正解は 4-6-2 だった。
+         1号艇の今節は 3→3着 / 1→4着 / 4→4着 で、今日と同じ1コースから4着。
+         4号艇は 1→1着 / 3→2着 / 6→5着 で、1コースから勝っている。
+         平均着順で見ると 3.67 対 2.67 の1.00差だが、
+         コース別の平均と比べると 1.36差になる。
+
+         コース別の平均着順は、記録18,600本から数えた事実
+         （当てはめて決めた補正ではないので、つまみは増えない）。
+           1コース 2.08 / 2コース 3.18 / 3コース 3.10
+           4コース 3.55 / 5コース 3.92 / 6コース 4.63
+
+         ただし、これは1レースを見てから思いついたこと。
+         そのまま採ると、丸亀10月だけを切り出して107%に見えたのと同じになる。
+         採否は判定⑨で決める。それまで既定は「使わない」。 */
+      const byCourse = (typeof window!=='undefined' && window.__RECENT_BY_COURSE)
+        || (typeof globalThis!=='undefined' && globalThis.__RECENT_BY_COURSE);
+      const COURSE_AVG = {1:2.08, 2:3.18, 3:3.10, 4:3.55, 5:3.92, 6:4.63};
+      const withCourse = races.filter(r=>typeof r.result==='number'
+        && r.course>=1 && r.course<=6);
+      if(byCourse && withCourse.length === finished.length && withCourse.length){
+        /* 「そのコースなら普通どれくらいか」との差。プラスが良い。
+           点の幅は、いまの採点と同じ「着順1つ = 20点」に揃える
+           （(6-avg)/5*100 は着順が1つ違うと20点動く）。
+           ここを別の値にすると、効き方まで同時に変えることになり、
+           「測る中身を変えたから良くなった」のか「強く効かせたから良くなった」のか
+           分からなくなる。最初 ×14 で書いて、差が20点→19点とほぼ変わらず、
+           何も変えていないのと同じ結果になった。 */
+        const d = withCourse.reduce((a,r)=>a + (COURSE_AVG[r.course] - r.result), 0)
+                  / withCourse.length;
+        add('今節着順(コース別)', clamp(50 + d*20, 0, 100), W.recentForm * ratio);
+      }else{
+        add('今節着順', clamp((6-avg)/5*100, 0, 100), W.recentForm * ratio);
+      }
     }
     /* 今節の平均ST。公式の平均STより新しい情報なので別項目として見る */
     const sts = races.filter(r=>r.st!=null && !r.stFlag).map(r=>r.st);

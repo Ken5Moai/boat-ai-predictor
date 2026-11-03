@@ -54,8 +54,12 @@ let UNSCORABLE=[]; try{ UNSCORABLE=require('./data/unscorable.js'); }catch(e){}
 function runWith(weightPatch, bandPatch, opt){
   opt=opt||{};
   const dom=new JSDOM(opt.html||HTML,{runScripts:'dangerously',url:'https://ken5moai.github.io/',
-   beforeParse(w){w.Tesseract={createWorker:async()=>({})};w.fetch=async()=>{throw new Error('x')};w.alert=()=>{}}});
+   beforeParse(w){w.Tesseract={createWorker:async()=>({})};w.fetch=async()=>{throw new Error('x')};w.alert=()=>{};
+                  /* 判定⑨：今節着順をコース別の差で採点するか。
+                     既定は使わない（判定が済むまで採点は変えない）。 */
+                  w.__RECENT_BY_COURSE = !!(opt.recentByCourse);}});
   const w=dom.window,d=w.document;
+  w.__RECENT_BY_COURSE = !!(opt.recentByCourse);
   w.Element.prototype.scrollIntoView=function(){};
   const W=w.eval('W'); Object.assign(W, weightPatch||{});
   if(bandPatch) Object.assign(w.eval('BAND'), bandPatch);
