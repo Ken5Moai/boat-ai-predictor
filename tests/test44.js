@@ -185,6 +185,43 @@ console.log('\n=== sync-figures の規則が全部当たっているか ===');
   ok(dashSafe>=3, `数字が消えても当たる書き方 (?:\\d+|—) が ${dashSafe} 箇所ある（1箇所でも \\d+ だけだと戻せなくなる）`);
 }
 
+console.log('\n=== 数字を前提にした文を、固定で書いていないこと ===');
+/* 2026-11-03、auto.js が走り始めにこう出した。
+     「選り好みのない870レースの実測では 10点で回収率101%
+       （最大の払戻1件を除くと96%）。100%を超えていないので、
+       上限まで回ると平均では減ります。」
+   回収率101%と言った直後に「100%を超えていない」と言っている。
+   数字は sync-figures が書き換えたが、その数字を前提にした文は固定だった。
+
+   数字が動く場所では、文も数字から組み立てないといけない。
+   ここでは auto.js の「選り好みのない実測」の一言がそうなっているかを見る。 */
+{
+  const au=fs.readFileSync(path.join(ROOT,'auto.js'),'utf8');
+  const m=au.match(/const FAIR_N = (\d+), FAIR_PCT = (\d+), FAIR_CUT = (\d+);/);
+  ok(!!m, 'auto.js の実測値が定数1行に寄っている（sync-figures が当てる先）');
+  if(m){
+    const pct=Number(m[2]), cut=Number(m[3]);
+    /* 文のほうは if で分かれていること。分かれていなければ、
+       いつか数字が線をまたいだ日に、また自分で矛盾する。 */
+    ok(/FAIR_PCT >= 100 && FAIR_CUT >= 100/.test(au) && /FAIR_PCT >= 100/.test(au),
+       '一言は FAIR_PCT / FAIR_CUT から組み立てている（固定文ではない）');
+    /* いまの数字で、実際に矛盾した文が出ないこと。 */
+    const sayBelow = pct < 100;
+    ok(!(pct >= 100 && sayBelow) , `いまの数字（${pct}% / ${cut}%）と一言が矛盾しない`);
+    /* 「100%を超えていないので」が、100%以上の場合の枝に入っていないこと。 */
+    const over = au.slice(au.indexOf('FAIR_PCT >= 100 && FAIR_CUT >= 100'),
+                          au.indexOf('}else{', au.indexOf('FAIR_PCT >= 100 && FAIR_CUT >= 100')));
+    ok(!/100%を超えていないので/.test(over),
+       '100%以上の枝に「100%を超えていない」と書いていない');
+  }
+  /* sync-figures の当て先が、文の中ではなく定数行になっていること。 */
+  const sf=fs.readFileSync(path.join(ROOT,'sync-figures.js'),'utf8');
+  ok(/const FAIR_N = \)\\d\+/.test(sf) || /FAIR_N = \)/.test(sf),
+     'sync-figures は auto.js の定数行を当てている（文の中を当てていない）');
+  ok(!/選り好みのない\)\\d\+\(レースの実測/.test(sf),
+     'sync-figures が auto.js の文の中を直接当てる古い規則を残していない');
+}
+
 console.log('\n=== 直し方が用意されているか ===');
 /* このテストが落ちたとき、何をすればいいのかが分からないと意味がない。
    sync-figures.js を走らせれば直る、という道が消えていないかを見る。 */

@@ -310,9 +310,11 @@ const btBefore = bt;
 let au = fs.readFileSync(path.join(ROOT,'auto.js'),'utf8');
 const auBefore = au;
 if(V.fair && V.fairAll){
-  au = au.replace(/(選り好みのない)\d+(レースの実測では \$\{PTS_ALL\}点で回収率)\d+(%`\);)/,
-                  `$1${V.fair.n}$2${V.fairAll.pct}$3`);
-  au = au.replace(/(（最大の払戻1件を除くと)\d+(%）。)/, `$1${V.fairAll.cut}$2`);
+  /* 数字は定数1行に寄せた（auto.js 側で文を組み立てる）。
+     以前は console.log の文の中を直接当てていて、
+     「回収率101%。100%を超えていないので…」という矛盾が出た。 */
+  au = au.replace(/(const FAIR_N = )\d+(, FAIR_PCT = )\d+(, FAIR_CUT = )\d+(;)/,
+                  `$1${V.fair.n}$2${V.fairAll.pct}$3${V.fairAll.cut}$4`);
 }
 
 /* 見出しは backtest.js 側が点数から組み立てているので、

@@ -63,7 +63,8 @@ ok(/top6/.test(src), 'モデルの上位6点を保持している');
    ここが落ちるときは、書いてある買い目とモデルの出力が食い違っている。 */
 console.log('\nいまのファイルの状態');
 let out='',code=0;
-try{ out=execFileSync(process.execPath,[path.join(DIR,'screen.js')],{encoding:'utf8'}); }
+try{ out=execFileSync(process.execPath,[path.join(DIR,'screen.js')],
+       {encoding:'utf8',maxBuffer:256*1024*1024}); }
 catch(e){ out=(e.stdout||'')+(e.stderr||''); code=1; }
 ok(code===0, 'いまの screened.js は照合を通る');
 ok(!/買い目がモデルの出力と違う/.test(out), '不一致の警告が出ていない');

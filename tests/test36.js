@@ -73,7 +73,8 @@ ok(waka.find(r=>r[0]===12)[1]===1030,
    '若松12Rの払戻¥1,030が一致（1-2-4の10.3倍）');
 
 console.log('\n都合のいい範囲だけを見ない作り');
-const out=execFileSync(process.execPath,[path.join(DIR,'data','payouts.js')],{encoding:'utf8'});
+const out=execFileSync(process.execPath,[path.join(DIR,'data','payouts.js')],
+  {encoding:'utf8',maxBuffer:256*1024*1024});
 ok(okp.filter(x=>x.pop===1).length>=50,
    `1番人気で決まった回が十分ある（${okp.filter(x=>x.pop===1).length}件）`);
 ok(/1〜  1番人気/.test(out) && /61〜120番人気/.test(out),

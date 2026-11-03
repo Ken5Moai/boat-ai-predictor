@@ -53,5 +53,40 @@ console.log('\n=== 外の sleep コマンドを呼んでいないこと ===');
   }
 }
 
+console.log('\n=== node のスクリプトを呼ぶときに maxBuffer を広く取っていること ===');
+{
+  /* execFileSync の maxBuffer の既定は1MBしかない。
+     backtest.js の出力はレースが増えるほど伸びて、2026-11-03 に
+     923レースで1,240,818字になり、1MBを越えた瞬間に
+     tests/test23.js が「backtest.js が落ちた」と出した。
+     落ちていたのは backtest.js ではなくテストのほうだった。
+
+     こういう壊れ方は、データが増えた日に、触っていない場所で起きる。
+     しかも「落ちた」としか出ないので、原因を取り違える。
+     なので「node の自作スクリプトを呼ぶなら maxBuffer を書く」を機械で見張る。 */
+  const dirs=[DIR, path.join(DIR,'tests')];
+  const bad=[];
+  for(const dir of dirs){
+    for(const f of fs.readdirSync(dir).filter(x=>x.endsWith('.js'))){
+      const src=fs.readFileSync(path.join(dir,f),'utf8');
+      /* process.execPath を呼んでいる箇所を1つずつ見る。
+         呼び出しの終わりが分からないので、300字ぶん先まで見て
+         その中に maxBuffer があるかを見る（引数は普通それより短い）。 */
+      let i=-1;
+      while((i=src.indexOf('process.execPath', i+1))>=0){
+        const head=src.lastIndexOf('execFileSync', i);
+        const near=src.slice(i, i+300);
+        if(head<0 || i-head>60) continue;        /* execFileSync の引数ではない */
+        if(!/maxBuffer/.test(near)){
+          const line=src.slice(0,i).split('\n').length;
+          bad.push(`${path.basename(dir)}/${f}:${line}`);
+        }
+      }
+    }
+  }
+  ok_(bad.length===0,
+    `node のスクリプトを呼ぶ箇所すべてに maxBuffer がある（${bad.join(' ')||'なし'}）`);
+}
+
 console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
 process.exitCode = ng ? 1 : 0;

@@ -1875,6 +1875,12 @@ if(require.main===module){
        一覧で凍結する限り、同じことが毎回起きる。
        日付で区切れば、あとから何本足しても破れない。 */
     const PREREG_ANA_AFTER = '2026-10-28';   /* この日までは判定に使わない */
+    /* これから書く判定の必要数（判定⑤〜⑧には後から適用しない）。
+       判定⑧が15場日で裏返ったため、2026-11-03 にここまで引き上げた。
+       場日だけでなく「払戻の偏り」も見る。1本の大穴で結論が変わる本数では、
+       条件を満たしても満たさなくても、それは運を測っているだけだから。 */
+    const PREREG_NEED_DAYS = 40;      /* 約480レース */
+    const PREREG_MAX_SHARE = 0.05;    /* 最大の払戻1件が払戻合計に占める割合の上限 */
     /* 【判定⑧】は「波乱8点だけ」で凍結してある。
        いまの買い方は 本線6点＋波乱4点 なので、上の積み上げ（FRESH_TOTAL）には
        波乱4点しか入らない。2026-10-30、判定⑧が波乱（8点）を探して
@@ -1887,6 +1893,28 @@ if(require.main===module){
        「なぜ8なのか」が読めなくなる。 */
     const PREREG8_ANA = 8;
     const ANA8 = {inv:0, races:0, won:[]};
+    /* 【判定⑩・2026-11-03に先に書いた】波乱4点だけを買うか
+       ------------------------------------------------------------
+       いまの積み上げで 波乱4点だけが 130%（最大1件除いて116%）と出ている。
+       ほかは全部100%前後か下。これは数字を見てから気づいたことで、
+       判定⑧（波乱8点）とまったく同じ入り口に立っている。
+
+       しかも、これは「波乱だけを買う」案の2回目の挑戦になる。
+       8点で落ちたから4点で試す、という形は、点数を取り替えて
+       どれか通るまで引き直しているのと区別がつかない。
+       引き直しの分だけ、通りやすくなっている。
+
+       そこで条件を厳しくする。緩めるのではなく、きつくする側なので
+       後から条件を変えたことにはならない。
+         ・回収率110%以上（2回目の挑戦ぶん、100%ではなく110%）
+         ・最大の払戻1件を除いても110%以上
+         ・場日40以上（判定⑧が15場日で裏返ったため）
+         ・最大の払戻1件が払戻合計の5%未満（1本の大穴で結論が変わらない本数）
+       2026-11-03 までの日は使わない。 */
+    const PREREG10_AFTER = '2026-11-03';
+    const PREREG10_ANA = 4;
+    const PREREG10_PCT = 110;     /* 2回目の挑戦なので100%ではなく110% */
+    const ANA4 = {inv:0, races:0, won:[]};
     const FRESH_TOTAL = new Map();
     let FRESH_FLAG = false;      /* いま足している場日が凍結後かどうか */
     const addTotal = (label, inv, won, races) => {
@@ -1972,6 +2000,15 @@ if(require.main===module){
               const ks = [...new Set(WIN.buyPlan(toC(x), {ana:PREREG8_ANA}).ana)];
               ANA8.inv += ks.length*100; ANA8.races++;
               if(ks.includes(info.result)) ANA8.won.push(info.pay);
+            }
+          }
+          /* 判定⑩ぶん（波乱4点だけ）。凍結の線より後の日だけ積む。 */
+          if(date > PREREG10_AFTER){
+            for(const x of sub){
+              const info = payOfDay[x.name]; if(!info || info.pay==null) continue;
+              const ks = [...new Set(WIN.buyPlan(toC(x), {ana:PREREG10_ANA}).ana)];
+              ANA4.inv += ks.length*100; ANA4.races++;
+              if(ks.includes(info.result)) ANA4.won.push(info.pay);
             }
           }
           console.log('    この日を1日まるごと買ったら（1点100円）');
@@ -2084,6 +2121,23 @@ if(require.main===module){
            翌日に買う点数を 本線6点＋波乱4点 に変えたが、判定⑧の問いは
            「波乱だけを買う形にするか」であって、今回の変更とは別の話。
            条件を書いた日の8点に固定する（BUY_POINTS を使うと意味が変わる）。 */
+        /* 判定⑧の経過（走らせるたびに測り直すので、ここに記録を残す）
+             2026-10-28  条件を書いた。必要数15場日。
+             2026-10-30  22場日=259レースで必要数に届き、117% / 103% で条件を満たした。
+             2026-11-02  13場日=154レースを足したら、その13場日だけで47%。
+                         合わせて35場日=413レースで 91% / 82%。条件を欠く。
+             → 採らない。
+
+           なぜ裏返ったか。必要数15場日（180レース）が少なすぎた。
+           波乱8点の的中は約7レースに1本で、413レースでも的中は53本しかない。
+           最大の払戻 ¥28,500 は払戻合計 ¥299,380 の9.5%を占める。
+           1本の当たりで回収率が10ポイント動く測り方では、
+           100%の線をまたぐかどうかは運で決まる。259レースの117%はその運だった。
+
+           これから書く判定に効かせる直し（過去の判定は緩めない）：
+             ・必要数は40場日（約480レース）以上にする
+             ・さらに「最大の払戻が払戻合計の5%未満」になるまで判定しない
+           下の PREREG_NEED_DAYS / PREREG_MAX_SHARE がその線。 */
         console.log('\n  【判定⑧・2026-10-28に先に書いた】波乱8点だけを買うか（8点に固定）');
         {
           const NEED_DAYS = 15;
@@ -2107,6 +2161,50 @@ if(require.main===module){
             console.log(`    ${a>=100?'○':'×'} 回収率100%以上        ${Math.round(a)}%`);
             console.log(`    ${b>=100?'○':'×'} 最大1件を除いても100%以上 ${Math.round(b)}%`);
             console.log(`    → ${a>=100&&b>=100 ? '波乱8点を採る。' : '欠けたので捨てる。採らない。'}`);
+            /* この判定は 2026-10-30 に一度「満たした」と出て、11/2 を足して裏返った。
+               記録を並べて出す。黙って入れ替わらないようにするため。 */
+            console.log('    経過 10/30時点 22場日259レース 117% / 103%（満たした）');
+            console.log(`         いま    ${fresh.length}場日${t.races}レース `
+              + `${Math.round(a)}% / ${Math.round(b)}%${a>=100&&b>=100?'（満たしている）':'（欠けた）'}`);
+            console.log(`    払戻の偏り 最大1件 ¥${top.toLocaleString()} が払戻合計の`
+              + `${(top/back*100).toFixed(1)}%（的中${t.won.length}本）`);
+            if(top/back >= PREREG_MAX_SHARE){
+              console.log(`    ※ 1本の当たりが${Math.round(PREREG_MAX_SHARE*100)}%以上を占めている。`
+                + 'この本数では100%の線をまたぐかどうかが運で決まる。');
+              console.log(`    ※ これから書く判定は ${PREREG_NEED_DAYS}場日以上かつ偏り`
+                + `${Math.round(PREREG_MAX_SHARE*100)}%未満まで待つ（判定⑧には後から適用しない）。`);
+            }
+          }
+        }
+        console.log('\n  【判定⑩・2026-11-03に先に書いた】波乱4点だけを買うか（4点に固定）');
+        {
+          const fresh10 = full.filter(([k])=>k.split('|')[0] > PREREG10_AFTER);
+          const t = ANA4;
+          const back = t.won.reduce((a,c)=>a+c,0);
+          const top  = t.won.length?Math.max(...t.won):0;
+          const share = back ? top/back : 1;
+          const a = t.inv ? back/t.inv*100 : 0;
+          const b = t.inv ? (back-top)/t.inv*100 : 0;
+          const enough = fresh10.length >= PREREG_NEED_DAYS && share < PREREG_MAX_SHARE;
+          console.log(`    条件 回収率${PREREG10_PCT}%以上 / 最大1件を除いても${PREREG10_PCT}%以上`);
+          console.log(`         場日${PREREG_NEED_DAYS}以上 / 払戻の偏り${Math.round(PREREG_MAX_SHARE*100)}%未満`);
+          console.log(`    （2026-11-03までの日は使わない。波乱だけを買う案の2回目なので`
+            + `100%ではなく${PREREG10_PCT}%にしてある）`);
+          if(!enough){
+            console.log(`    いま ${fresh10.length}/${PREREG_NEED_DAYS} 場日`
+              + `（${t.races}レース）。たまったら判定する。`);
+            if(t.inv){
+              console.log(`    （参考 回収率${Math.round(a)}% / 最大1件除くと${Math.round(b)}% / `
+                + `的中${t.won.length}本 / 偏り${(share*100).toFixed(1)}%。`
+                + `${fresh10.length < PREREG_NEED_DAYS ? '場日が足りない' : '偏りが大きい'}ので根拠にしない）`);
+            }
+          }else{
+            console.log(`    対象 ${fresh10.length}場日 = ${t.races}レース`);
+            console.log(`    ${a>=PREREG10_PCT?'○':'×'} 回収率${PREREG10_PCT}%以上        ${Math.round(a)}%`);
+            console.log(`    ${b>=PREREG10_PCT?'○':'×'} 最大1件を除いても${PREREG10_PCT}%以上 ${Math.round(b)}%`);
+            console.log(`    偏り ${(share*100).toFixed(1)}%（的中${t.won.length}本）`);
+            console.log(`    → ${a>=PREREG10_PCT&&b>=PREREG10_PCT
+              ? '波乱4点を採る。' : '欠けたので捨てる。採らない。'}`);
           }
         }
         console.log('      ※ 判定が済むまで「波乱だけを買う」形にはしない。');
@@ -2914,7 +3012,7 @@ if(require.main===module){
            「本線10点 71%」と出しながら中身は6点、という状態になる。
            PCT_MAIN のような変数にしようとして未定義のまま置いてしまい、
            結果待ちのレースがある日に落ちる状態を作った（ここで気づいた）。 */
-        console.log(`  実測 ${L_MAIN}82% ／ ${L_ANA}だけ132% ／ ${PTS_ALL}点まとめて102%（771レース）。`);
+        console.log(`  実測 ${L_MAIN}83% ／ ${L_ANA}だけ123% ／ ${PTS_ALL}点まとめて99%（923レース）。`);
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

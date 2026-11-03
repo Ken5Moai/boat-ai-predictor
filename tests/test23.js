@@ -46,7 +46,12 @@ ok(check([{name:'A'}],[{name:'A'}],{'A':{}}).stop===true,
 
 console.log('\n実物のファイルでも止まらないこと');
 let out='', code=0;
-try{ out=execFileSync(process.execPath,[BT],{encoding:'utf8',cwd:DIR}); }
+/* maxBuffer の既定は1MBしかない。backtest.js の出力はレースが増えるほど伸びる。
+   2026-11-03、923レースで1,240,818字になり、ここが ENOBUFS で落ちて
+   「いまの backtest.js は最後まで走る」が失敗した。backtest.js は無事で、
+   落ちていたのはこのテストのほうだった。広く取る。 */
+try{ out=execFileSync(process.execPath,[BT],
+       {encoding:'utf8',cwd:DIR,maxBuffer:256*1024*1024}); }
 catch(e){ out=(e.stdout||'')+(e.stderr||''); code=1; }
 ok(code===0, 'いまの backtest.js は最後まで走る');
 /* ★ は期待値の的中マークにも使っているので、それだけでは判定できない。

@@ -102,7 +102,8 @@ for(const b of BETS){
 ok(/本線と穴は別々に数える/.test(src), '別々に数える決まりがファイルに書いてある');
 
 console.log('\n件数が少ないうちは回収率を強調しないこと');
-const out=require('child_process').execFileSync(process.execPath,[path.join(DIR,'data','bets.js')],{encoding:'utf8'});
+const out=require('child_process').execFileSync(process.execPath,
+  [path.join(DIR,'data','bets.js')],{encoding:'utf8',maxBuffer:256*1024*1024});
 ok(/回収率/.test(out), '回収率は出る');
 ok(/本線 /.test(out) && /穴枠 /.test(out) && /合計 /.test(out),
    '本線・穴枠・合計が別々の行で出る');
