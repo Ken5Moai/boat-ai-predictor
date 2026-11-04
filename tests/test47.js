@@ -119,6 +119,44 @@ PLAN.total = PLAN.rows.reduce((a,r)=>a+r.yen,0);
     ok_(!(await V.gotoRace(pg, 99)), '無いレースには切り替わらない（false を返す）');
     await ctx.close();
   }
+  /* ---- 場を変える入口を押すだけのモード（--probe-venue） ----
+     いま場をまたぐ切り替えだけが手作業で残っている。
+     「別ウィンドウを開く作りで、中を見ていないから触らない」を続けるかぎり
+     ずっと手作業なので、押して中身を書き出すところまでを作った。
+     押すだけ。選ばない。買わない。 */
+  console.log('\n  場を変える入口を押す（買わない）');
+  {
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    const r=await V.clickVenueSwitch(ctx);
+    ok_(r.ok, `入力画面の「場変更・複数場選択」を見つけて押せる（${r.ok?r.text:r.why}）`);
+    ok_((await pg.textContent('#cnt'))==='0', '押しただけで、1点も入れていない');
+    await ctx.close();
+  }
+  {
+    /* 投票後の画面にあるほうの文言でも見つかること。 */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    await pg.evaluate(()=>{ [...document.querySelectorAll('a')]
+      .filter(a=>a.textContent.includes('場変更・複数場選択'))
+      .forEach(a=>a.textContent='場を変更して投票する'); });
+    const r=await V.clickVenueSwitch(ctx);
+    ok_(r.ok && /場を変更して投票する/.test(r.text||''),
+        `投票後の「場を変更して投票する」でも見つかる（${r.ok?r.text:r.why}）`);
+    await ctx.close();
+  }
+  {
+    /* 入口が無ければ、押したふりをしない。 */
+    const ctx=await browser.newContext();
+    const pg=await ctx.newPage(); await pg.goto(MOCK);
+    await pg.evaluate(()=>{ [...document.querySelectorAll('a')]
+      .filter(a=>/場変更|場を変更/.test(a.textContent))
+      .forEach(a=>a.remove()); });
+    const r=await V.clickVenueSwitch(ctx);
+    ok_(!r.ok, `入口が無ければ見つからないと言う（${r.ok?'押してしまった':r.why}）`);
+    await ctx.close();
+  }
+
   {
     /* 締切が近いと行末が「まもなく締切」に変わる。それでも R を読めること。
        2026-11-03 大村5R、画面が締切済みの4Rのままで

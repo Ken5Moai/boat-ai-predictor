@@ -82,6 +82,12 @@ const VOTE_URL  = 'https://www.boatrace.jp/owpc/VoteConfirm.xhtml?authAfterTrans
 
 const args=process.argv.slice(2);
 const PROBE=args.includes('--probe');
+/* --probe-venue は「場を変える」経路だけを調べる。買わない。お金は動かない。
+   いま場をまたぐ切り替えだけが手作業で残っている。
+   「場変更・複数場選択」が別ウィンドウを開く作りで、中を見ていないから触らない、
+   という判断をずっと続けてきた。見ないかぎり永久に手作業のままなので、
+   押して、開いたものを書き出すところまでをやる。押すだけで、選ばない。 */
+const PROBE_VENUE=args.includes('--probe-venue');
 const SAMPLE=args.includes('--sample');
 /* --race <場コード> <R> [日付] で、買い目づくりから打ち込みまでを1コマンドにする。
    もとは「別のターミナルで predict.js を走らせて plan.json を作っておく」形だった。
@@ -345,6 +351,42 @@ async function findVotePage(ctx){
 
    場をまたぐほうは別ウィンドウを開く作りで、中を見ていないので触らない。
    場を変えるときは人に頼む。 */
+/* 「場を変える」入口を押して、何が開くかを書き出す。選ばない。買わない。
+   入口は2つある。
+     入力画面   … 「場変更・複数場選択」
+     投票後の画面 … 「場を変更して投票する」
+   どちらでも、見つかったほうを押す。別ウィンドウが開いたらそれも拾う。 */
+const VENUE_LINK = /場変更・複数場選択|場を変更して投票する|場変更|複数場選択/;
+
+async function clickVenueSwitch(ctx){
+  const before = ctx.pages().length;
+  for(const pg of ctx.pages()){
+    for(const fr of pg.frames()){
+      let found=null;
+      try{
+        const loc = fr.locator('a,button,input[type=button],input[type=submit]');
+        const n = await loc.count();
+        for(let i=0;i<Math.min(n,400);i++){
+          const el = loc.nth(i);
+          const t = ((await el.innerText().catch(()=>''))
+                  || (await el.getAttribute('value').catch(()=>'')) || '').trim();
+          if(VENUE_LINK.test(t) && await el.isVisible().catch(()=>false)){ found={el,t}; break; }
+        }
+      }catch(e){}
+      if(!found) continue;
+      console.log(`  「${found.t}」を押します（選びません。買いません）…`);
+      /* 別ウィンドウが開くかもしれないので、両方待つ。 */
+      const popup = pg.waitForEvent('popup', {timeout:8000}).catch(()=>null);
+      await found.el.click().catch(()=>{});
+      const pop = await popup;
+      await pg.waitForTimeout(2500);
+      return {ok:true, text:found.t, popup:!!pop,
+              newPages: ctx.pages().length - before};
+    }
+  }
+  return {ok:false, why:'「場変更・複数場選択」も「場を変更して投票する」も見つかりません'};
+}
+
 async function backToEntry(ctx){
   /* すでに投票画面にいるなら何もしない。 */
   if(await findVotePage(ctx)) return {ok:true, moved:false};
@@ -980,6 +1022,7 @@ async function voteAccepted(ctx){
 }
 
 module.exports = { probe, fill, loadPlan, openBrowser, toUnit, readTotals, findVotePage, voteAccepted, backToEntry,
+  clickVenueSwitch, VENUE_LINK,
                    readRaceOnScreen, venueName, gotoRace, buyReadiness,
                    buy, readConfirm, amountUnit, readBalance, TERMS_NOTICE,
                    NEVER_CLICK, OK_TO_CLICK, isNeverClick,
@@ -1005,6 +1048,29 @@ if(require.main !== module) return;
       console.log(`\n  見本を書きました: ${f}`);
       console.log('  試すとき:  node vote-assist.js tmp/plan-sample.json --dry');
       console.log('  ※ 見本はブラウザを開く側では使えません（--dry だけ）。');
+      return;
+    }
+
+    if(PROBE_VENUE){
+      const {browser,ctx,page}=await openBrowser();
+      await waitForLogin(page);
+      console.log('\n  どちらかの画面まで、ご自身で進んでください。');
+      console.log('    ・買い目を入れる画面（「場変更・複数場選択」がある画面）');
+      console.log('    ・投票したあとの画面（「場を変更して投票する」がある画面）');
+      console.log('  ★ このモードは買いません。押して、開いたものを書き出すだけです。');
+      await ask('\n  どちらかが出たら、ここで Enter > ');
+      const r = await clickVenueSwitch(ctx);
+      if(!r.ok){ console.log(`\n  ✗ ${r.why}`); }
+      else{
+        console.log(`  押しました（別ウィンドウ ${r.popup?'あり':'なし'} / `
+                  + `増えた画面 ${r.newPages}枚）。`);
+      }
+      await probe(ctx, path.join(__dirname,'tmp','venue-probe.json'));
+      console.log('\n  tmp/venue-probe.json と tmp/venue-probe-page*.png に書き出しました。');
+      console.log('  ★ 中身にセッションの鍵は入れていません（password / token / csrf はふせています）。');
+      console.log('  そのまま送ってもらえれば、場の切り替えを自動にできるか判断します。');
+      await ask('\n  ブラウザを閉じてよければ Enter > ');
+      await browser.close();
       return;
     }
 
