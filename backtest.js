@@ -3012,7 +3012,7 @@ if(require.main===module){
            「本線10点 71%」と出しながら中身は6点、という状態になる。
            PCT_MAIN のような変数にしようとして未定義のまま置いてしまい、
            結果待ちのレースがある日に落ちる状態を作った（ここで気づいた）。 */
-        console.log(`  実測 ${L_MAIN}83% ／ ${L_ANA}だけ123% ／ ${PTS_ALL}点まとめて99%（923レース）。`);
+        console.log(`  実測 ${L_MAIN}79% ／ ${L_ANA}だけ113% ／ ${PTS_ALL}点まとめて93%（1076レース）。`);
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);
