@@ -22,8 +22,16 @@ const HD = process.argv.find(a=>/^\d{8}$/.test(a))
 const FILE = path.join(ROOT,'tmp',`bought-${HD}.json`);
 
 if(!fs.existsSync(FILE)){
-  console.log(`${FILE} がありません。`);
+  /* tmp/ はコンテナと一緒に消えるので、消えない側から戻してみる。 */
+  let got=null;
+  try{ got=require('./captures.js').restoreBought(HD); }catch(e){}
+  if(got) console.log(`  data/bought/${HD}.json から戻しました。`);
+}
+if(!fs.existsSync(FILE)){
+  console.log(`${FILE} がありません（data/bought/${HD}.json もありません）。`);
   console.log('その日は auto.js で買っていないか、別のパソコンで走らせています。');
+  console.log('買い目は買った時点のものしか残せないので、あとから作り直せません。');
+  console.log('公式サイトの「投票履歴」には残っています（ログインはこちらではできません）。');
   process.exitCode = 1;
   return;
 }

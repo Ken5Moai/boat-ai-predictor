@@ -95,6 +95,18 @@ function recordBought(r, plan){
     });
     fs.writeFileSync(f, JSON.stringify(all,null,1));
     console.log(`  買った内容を tmp/bought-${HD}.json に残しました（${all.length}本目）。`);
+    /* tmp/ は git に入っていないので、コンテナが片付けられると消える。
+       そして 11/3 の分は消えた（収支を出そうとして 2026-11-06 に気づいた）。
+       買い目は買った時点のものしか残せないので、1本買うたびに
+       消えないところ（data/bought/）にも写す。ここで失敗しても
+       買い自体は止めないが、必ず画面に出す。 */
+    try{
+      const c=require('./captures.js').saveBought(HD);
+      if(c) console.log(`  data/bought/${HD}.json にも残しました（${c.rows}本。コミットを忘れずに）。`);
+    }catch(e){
+      console.log(`  ※ data/bought/ に残せませんでした（${e.message}）。`);
+      console.log('     tmp/ はコンテナと一緒に消えるので、あとで node captures.js save を走らせること。');
+    }
   }catch(e){ console.log(`  ※ 買った内容を残せませんでした（${e.message}）。`); }
 }
 

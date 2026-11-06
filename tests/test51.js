@@ -85,6 +85,43 @@ console.log('\n=== 戻すときに、すでにあるものを壊さないか ===
   }
 }
 
+console.log('\n=== 買った記録が、消えないところに残っているか ===');
+/* 買い目は買った時点のものしか残せない。あとから作り直しても同じにならない
+   （今節成績が増えるため）。tmp/ にしか無ければ、コンテナが片付けられた
+   時点でその日の収支は永久に分からなくなる。実際 11/3 の分がそうなった
+   （2026-11-06、収支を出そうとして tmp/bought-20261103.json が無いと分かった）。 */
+{
+  const bt=fs.readdirSync(path.join(ROOT,'tmp')).filter(x=>/^bought-\d{8}\.json$/.test(x))
+    .map(x=>x.slice(7,15)).sort();
+  const kept=new Set(CAP.boughtKept());
+  const miss=bt.filter(d=>!kept.has(d));
+  ok(miss.length===0,
+     `tmp にある買った記録が全部 data/bought/ にもある`
+     + (miss.length?`（残っていない: ${miss.join(' / ')}。node captures.js save を走らせること）`
+                   : bt.length?`（${bt.length}日分）`:'（tmp に買った記録はない）'));
+  /* 残してあるものは、読めて、中身があること。 */
+  let bad=[];
+  for(const d of kept){
+    try{
+      const rows=require(path.join(ROOT,'data','bought',`${d}.json`));
+      if(!Array.isArray(rows) || !rows.length) bad.push(`${d}(空)`);
+      else if(!rows.every(r=>Array.isArray(r.picks) && r.picks.length
+                           && Number.isInteger(r.rno) && r.rno>=1 && r.rno<=12))
+        bad.push(`${d}(買い目かレース番号がおかしい)`);
+    }catch(e){ bad.push(`${d}(読めない)`); }
+  }
+  ok(bad.length===0, `残してある買った記録がすべて読める`
+     + (bad.length?`（${bad.join(' / ')}）`:''));
+  /* 買ったときに自分で残すこと。あとで手で走らせるのに頼ると、
+     走らせ忘れた日がそのまま消える。 */
+  const au=fs.readFileSync(path.join(ROOT,'auto.js'),'utf8');
+  ok(/saveBought\(HD\)/.test(au),
+     'auto.js は買ったその場で data/bought/ にも残す');
+  const sb=fs.readFileSync(path.join(ROOT,'settle-bought.js'),'utf8');
+  ok(/restoreBought\(HD\)/.test(sb),
+     'settle-bought.js は tmp が無いとき data/bought/ から戻す');
+}
+
 console.log('\n=== wholeday.js が自分で戻し、自分で残すか ===');
 {
   const src=fs.readFileSync(path.join(ROOT,'wholeday.js'),'utf8');
