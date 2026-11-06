@@ -2210,6 +2210,109 @@ if(require.main===module){
         console.log('      ※ 判定が済むまで「波乱だけを買う」形にはしない。');
         console.log(`         いまの買い方は ${L_MAIN}＋${L_ANA}（${PTS_ALL}点）で、`
                   + `波乱だけを買っているわけではない。`);
+
+        /* 【判定⑪・2026-11-06】期待値方式（オッズで買い目を選ぶ）を採るか
+           ------------------------------------------------------------------
+           この判定だけは、場日がたまるのを待たずに今日で済む。理由が2つある。
+
+           (1) 「回収率100%」が、先に書いた偏りの条件を満たさない。
+               PREREG_MAX_SHARE は 5% と書いてある（2026-11-03、判定⑧が
+               15場日で裏返ったときに決めた）。期待値方式の払戻は
+               1本で2割を超える。条件は判定⑩より前に書いたものなので、
+               ここで緩めない。最大の1件を抜くと100%ではなくなる。
+
+           (2) 100%の計算に使っているのは data/odds.js、つまり締切前後の
+               オッズ。買うのは締切の10〜20分前なので、別の値段である。
+               買える時点のオッズ（data/odds-live.js）もある38レースで、
+               「買える時点で期待値1.10以上だった組」が締切までにどう
+               動いたかを測ると、値段は下がる。1.10のつもりで買っても、
+               払戻ベースでは1を切る。
+               つまり100%は「後から良い値段を選べる前提」の数字で、
+               実際には買えない。
+
+           どちらも「場日が足りない」で先送りできる話ではない。
+           (1)は先に書いた条件、(2)は買えるかどうかの測定。
+           なお catch-odds.js で買える時点のオッズを集めるのは続ける。
+           値段を使う案はこれ1つではなく、買える時点のオッズは
+           そのとき取らないと後から手に入らないため。 */
+        console.log('\n  【判定⑪・2026-11-06に判定】期待値方式（オッズで買い目を選ぶ）を採るか');
+        {
+          const evPick = (probOf, O) => allCombos
+            .map(k=>({k, p:probOf[k], o:O[k], ev:probOf[k]*O[k]}))
+            .filter(c=>c.p>=0.02 && c.o>0 && c.ev>=1.10)
+            .sort((a,b)=>b.ev-a.ev).slice(0,12);
+          /* (1) 選り好みなしの場日だけで、期待値方式の払戻の偏りを見る */
+          const fairNames = new Set();
+          for(const [,list] of full) for(const r of list) fairNames.add(r.name);
+          let inv=0, races=0; const won=[];
+          for(const x of base){
+            if(!fairNames.has(x.name)) continue;
+            const O = ODDS[x.name];
+            if(!O || Object.keys(O).length !== 120) continue;
+            const picks = evPick(x.probOf, O);
+            if(!picks.length) continue;
+            races++;
+            const unit = Math.max(100, Math.floor(1200/picks.length/100)*100);
+            inv += unit*picks.length;
+            if(picks.some(c=>c.k===x.result)) won.push(x.pay/100*unit);
+          }
+          const back = won.reduce((a,c)=>a+c,0);
+          const top  = won.length ? Math.max(...won) : 0;
+          const share = back ? top/back : 1;
+          console.log(`    (1) 払戻の偏り（先に書いた上限 ${Math.round(PREREG_MAX_SHARE*100)}%）`);
+          if(!inv){
+            console.log('        期待値1.10以上になるレースがまだ無い。');
+          }else{
+            console.log(`        選り好みなし ${full.length}場日 ${races}レース  `
+              + `回収率${Math.round(back/inv*100)}%  的中${won.length}/${races}`);
+            console.log(`        最大の払戻1件 ¥${top.toLocaleString()} = 払戻合計の`
+              + `${(share*100).toFixed(1)}%  → ${share < PREREG_MAX_SHARE ? '条件内' : '条件外'}`);
+            console.log(`        その1件を除くと ${Math.round((back-top)/inv*100)}%`);
+          }
+          /* (2) 買える時点のオッズで選んだ組は、締切までに値段が下がるか */
+          const pairs = Object.keys(ODDS_LIVE).map(name=>{
+            const L = ODDS_LIVE[name], F = ODDS[name];
+            const x = base.find(y=>y.name===name);
+            if(!L || !L.odds || !F || !x) return null;
+            if(Object.keys(L.odds).length !== 120 || Object.keys(F).length !== 120) return null;
+            return {name, live:L.odds, fin:F, x};
+          }).filter(Boolean);
+          console.log(`    (2) 買える時点のオッズで選ぶと、払戻はどうなるか`
+            + `（両方あるのは ${pairs.length}レース）`);
+          if(pairs.length){
+            const moves = [];
+            for(const q of pairs) for(const c of evPick(q.x.probOf, q.live)){
+              if(q.fin[c.k] > 0) moves.push(q.fin[c.k]/c.o);
+            }
+            const tallyEV = (sel) => {
+              let i2=0,b2=0,h2=0,n2=0;
+              for(const q of pairs){
+                const picks = sel(q); if(!picks.length) continue;
+                n2++;
+                const unit = Math.max(100, Math.floor(1200/picks.length/100)*100);
+                i2 += unit*picks.length;
+                if(picks.some(c=>c.k===q.x.result)){ h2++; b2 += q.x.pay/100*unit; }
+              }
+              return {n:n2, pct: i2 ? Math.round(b2/i2*100) : 0, hit:h2};
+            };
+            const atFin  = tallyEV(q=>evPick(q.x.probOf, q.fin));
+            const atLive = tallyEV(q=>evPick(q.x.probOf, q.live));
+            console.log(`        締切オッズで選ぶ      回収率${atFin.pct}%  的中${atFin.hit}/${atFin.n}`);
+            console.log(`        買える時点で選ぶ      回収率${atLive.pct}%  的中${atLive.hit}/${atLive.n}`);
+            if(moves.length){
+              const gm = Math.exp(moves.reduce((a,c)=>a+Math.log(c),0)/moves.length);
+              const down = moves.filter(r=>r<1).length/moves.length;
+              console.log(`        買える時点で期待値1.10以上だった ${moves.length}組の値段は、`
+                + `締切までに平均 ${Math.round(gm*100)}% になる`);
+              console.log(`        （下がった組 ${Math.round(down*100)}%）`
+                + `  → 1.10で買ったつもりが、払戻ベースでは ${(1.10*gm).toFixed(2)}`);
+            }
+          }
+          const ok1 = inv && share < PREREG_MAX_SHARE && back/inv >= 1;
+          console.log(`    → ${ok1 ? '条件を満たした。採るかどうかを書き直すこと。'
+            : '採らない。100%は大穴1本と、買えない値段でできている。'}`);
+          console.log('       （画面の「期待値方式を使わない」はこの判定の結果）');
+        }
       }
     }
   }
