@@ -97,9 +97,16 @@ function runWith(weightPatch, bandPatch, opt){
     d.getElementById('venue').value=R.jcd; d.getElementById('raceDate').value=R.date;
     d.getElementById('raceNo').value=String(R.rno||1);
     d.getElementById('wave').value=String(R.wave); d.getElementById('windSpeed').value=String(R.ws);
-    if(R.wind) d.getElementById('windDir').value=R.wind;
-    if(R.temp!=null) d.getElementById('temp').value=String(R.temp);
-    if(R.wtemp!=null) d.getElementById('waterTemp').value=String(R.wtemp);
+    /* 無いものは、空に戻す。条件付きで書き込むだけだと、
+       前のレースの値が画面に残ったままになる。
+       2026-11-06 に見つけた。races.js の風向きは 1362中 3レースしか無いのに、
+       その3レース（28〜30本目）を通ったあとは、残り1332レースが全部
+       「向かい風」として採点されていた（確率は最大5.7ポイントずれる）。
+       欠測を 0 で採点しないのと同じことで、欠測を「前のレースの値」で
+       採点してもいけない。レースを渡す順番で答えが変わるのは測定ではない。 */
+    d.getElementById('windDir').value   = R.wind || '';
+    d.getElementById('temp').value      = R.temp  != null ? String(R.temp)  : '';
+    d.getElementById('waterTemp').value = R.wtemp != null ? String(R.wtemp) : '';
     const ctx=w.scoreAll();
     const combos=w.buildProbabilities(ctx);
     const rank=combos.findIndex(c=>c.combo===R.result)+1;
@@ -2254,10 +2261,12 @@ if(require.main===module){
             races++;
             const unit = Math.max(100, Math.floor(1200/picks.length/100)*100);
             inv += unit*picks.length;
-            if(picks.some(c=>c.k===x.result)) won.push(x.pay/100*unit);
+            if(picks.some(c=>c.k===x.result))
+              won.push({v:x.pay/100*unit, name:x.name, unit, n:picks.length, pay:x.pay});
           }
-          const back = won.reduce((a,c)=>a+c,0);
-          const top  = won.length ? Math.max(...won) : 0;
+          const back = won.reduce((a,c)=>a+c.v,0);
+          const topW = won.length ? won.reduce((a,c)=>c.v>a.v?c:a) : null;
+          const top  = topW ? topW.v : 0;
           const share = back ? top/back : 1;
           console.log(`    (1) 払戻の偏り（先に書いた上限 ${Math.round(PREREG_MAX_SHARE*100)}%）`);
           if(!inv){
@@ -2267,6 +2276,11 @@ if(require.main===module){
               + `回収率${Math.round(back/inv*100)}%  的中${won.length}/${races}`);
             console.log(`        最大の払戻1件 ¥${top.toLocaleString()} = 払戻合計の`
               + `${(share*100).toFixed(1)}%  → ${share < PREREG_MAX_SHARE ? '条件内' : '条件外'}`);
+            /* その1件がどのレースかを出す。金額だけだと確かめられないし、
+               「レースの払戻」と取り違えられる。実際は買った額×オッズで、
+               点数が少ないレースほど1点あたりが厚くなる（偶然が大きく出る）。 */
+            if(topW) console.log(`        その1件 = ${topW.name}  1点${topW.unit}円 × ${topW.n}点`
+              + `（このレースの払戻は¥${topW.pay.toLocaleString()}）`);
             console.log(`        その1件を除くと ${Math.round((back-top)/inv*100)}%`);
           }
           /* (2) 買える時点のオッズで選んだ組は、締切までに値段が下がるか */
@@ -3119,7 +3133,7 @@ if(require.main===module){
            「本線10点 71%」と出しながら中身は6点、という状態になる。
            PCT_MAIN のような変数にしようとして未定義のまま置いてしまい、
            結果待ちのレースがある日に落ちる状態を作った（ここで気づいた）。 */
-        console.log(`  実測 ${L_MAIN}78% ／ ${L_ANA}だけ105% ／ ${PTS_ALL}点まとめて89%（1362レース）。`);
+        console.log(`  実測 ${L_MAIN}78% ／ ${L_ANA}だけ100% ／ ${PTS_ALL}点まとめて87%（1362レース）。`);
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

@@ -170,17 +170,41 @@ console.log('\n=== 実際に走らせる（--plan は待たない） ===');
 {
   const {execFileSync}=require('child_process');
   let out='', err=null;
+  /* どの場にするかを固定で書いてはいけない。
+     以前は 15（丸亀）と書いてあった。丸亀が開催していない日になった瞬間、
+     「予定を出している」が落ちた（JST が 2026-11-07 に変わったとき）。
+     コードは壊れていないのに落ちる試験は、落ちても調べなくなる。
+     その日開催している場をここで調べてから渡す。 */
+  const JST=new Date(Date.now()+9*3600*1000).toISOString().slice(0,10).replace(/-/g,'');
+  let venue=null;
+  try{
+    const html=require(path.join(DIR,'fetch.js'))
+      .getPage(`https://www.boatrace.jp/owpc/pc/race/index?hd=${JST}`);
+    venue=[...new Set((String(html).match(/jcd=(\d\d)/g)||[]).map(x=>x.slice(4)))].sort()[0]||null;
+  }catch(e){ venue=null; }
+  ok_(true, `走らせる場: ${venue||'開催場が調べられなかった'}（${JST}）`);
+  /* 開催場が分からないまま全場を見せると、２４場分取りに行って時間切れになる。
+     そのときはこの確かめを飛ばす（通信が出来ないのはコードの問題ではない）。 */
+  if(!venue){
+    ok_(true, '開催場が調べられないので、実機で走らせる確かめはしない');
+  }else{
   try{
     /* 全場を見ると24場ぶん取りに行って時間がかかるので、1場に絞る。
        見たいのは「落ちずに最後まで走るか」なので1場で足りる。 */
     out=execFileSync(process.execPath,
-      [path.join(DIR,'auto.js'),'--venues','15','--plan','--max','3'],
+      [path.join(DIR,'auto.js'),'--venues',venue,'--plan','--max','3'],
       {encoding:'utf8', maxBuffer:32*1024*1024, timeout:120000, stdio:['ignore','pipe','pipe']});
   }catch(e){ err=e; out=(e.stdout||'')+(e.stderr||''); }
   ok_(!err, `--plan が落ちない（${err?String(err.message).slice(0,60):'エラーなし'}）`);
   ok_(/is not defined/.test(out)===false, `未定義の変数で落ちていない`);
-  ok_(/今日まわるレース/.test(out), '予定を出している');
-  ok_(/想定の持ち出し/.test(out), '持ち出しの見込みを出している');
+  /* 深夜に走らせれば全レース締切済み、開催が無い日もある。
+     そのときは「まわるレースが無い」と出るのが正しい動き。 */
+  const NONE=/まわるレース|開催していません|対象になるレース/;
+  ok_(/今日まわるレース/.test(out) || NONE.test(out),
+      '予定を出しているか、まわるレースが無いと言っている');
+  ok_(/想定の持ち出し/.test(out) || NONE.test(out),
+      '持ち出しの見込みを出しているか、まわるレースが無い');
+  }
 }
 
 console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);

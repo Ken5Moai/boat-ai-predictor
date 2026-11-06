@@ -283,6 +283,35 @@ console.log('\n=== 採点できなかったレースの一覧が、都合よく�
       recorded.some(x=>x.date===r.date && x.jcd===r.jcd && x.rno===r.rno));
     ok(inRaces.length===0,
        `除いたレースはどれも記録に入っていない${inRaces.length?'（二重: '+inRaces.map(r=>r.date+' '+r.jcd+' R'+r.rno).join(' / ')+'）':''}`);
+    /* 逆向き。捕獲側に「永久に入らない」と残っているレースが、
+       この一覧に全部書いてあるか。
+       一覧が足りないと、その場日は「12レースそろっていない」とされ、
+       残り11レースごと「選り好みなし」から落ちる。黙って数が小さくなるだけで、
+       どこでも止まらない。実際 2026-11-04 の2本を書き忘れて、
+       画面の「選り好みなし」が 111場日→109場日 と少なく出ていた。2026-11-06。
+       （node unscorable.js を走らせれば直る。走らせ忘れをここで止める） */
+    {
+      const PERM = why => /欠場|不成立|中止/.test(why||'');
+      const tmp=path.join(DIR,'tmp','wholeday');
+      const miss=[];
+      if(fs.existsSync(tmp)){
+        for(const hd of fs.readdirSync(tmp).filter(x=>/^\d{8}$/.test(x))){
+          const date=`${hd.slice(0,4)}-${hd.slice(4,6)}-${hd.slice(6,8)}`;
+          for(const f of fs.readdirSync(path.join(tmp,hd)).filter(x=>/^\d\d\.json$/.test(x))){
+            let pack; try{ pack=JSON.parse(fs.readFileSync(path.join(tmp,hd,f),'utf8')); }
+            catch(e){ continue; }
+            for(const sk of (pack.skipped||[])){
+              if(!PERM(sk.why)) continue;
+              if(!list.some(u=>u.date===date && u.jcd===pack.jcd && u.rno===sk.rno))
+                miss.push(`${date} ${pack.jcd} ${sk.rno}R ${sk.why}`);
+            }
+          }
+        }
+      }
+      ok(miss.length===0,
+         '捕獲側の「永久に入らない」が全部一覧にある'
+         + (miss.length?`（足りない: ${miss.join(' / ')}。node unscorable.js を走らせること）`:''));
+    }
     /* 生成元があること。無いと手で書いたものと区別がつかない。 */
     ok(fs.existsSync(path.join(DIR,'unscorable.js')),
        'unscorable.js（一覧を作り直すスクリプト）がある');

@@ -50,6 +50,7 @@ const ids=[...HTML.matchAll(/<span id="(ev11[a-z]+)(\d*)">([^<]*)<\/span>/g)]
   .map(m=>({id:m[1]+m[2], key:m[1], val:m[3]}));
 ok(ids.length>=10, `判定⑪の数字が ${ids.length} 個、span id で置かれている`);
 for(const want of ['ev11n','ev11ret','ev11top','ev11share','ev11cut','ev11pairs',
+                   'ev11race','ev11unit','ev11pts','ev11pay',
                    'ev11fin','ev11live','ev11gm','ev11down','ev11eff']){
   ok(ids.some(x=>x.key===want), `${want} がある`);
 }
@@ -117,6 +118,10 @@ console.log('\n=== 画面の数字が backtest.js の出力と一致している
       ev11top:   (x=>x?'¥'+x:null)(g(/最大の払戻1件 ¥([\d,]+) =/)),
       ev11share: g(/払戻合計の([\d.]+)%/),
       ev11cut:   g(/その1件を除くと (\d+)%/),
+      ev11race:  g(/その1件 = (.+?)  1点/),
+      ev11unit:  g(/1点(\d+)円 ×/),
+      ev11pts:   g(/× (\d+)点（/),
+      ev11pay:   (x=>x?'¥'+x:null)(g(/このレースの払戻は¥([\d,]+)）/)),
       ev11pairs: g(/両方あるのは (\d+)レース/),
       ev11fin:   g(/締切オッズで選ぶ\s+回収率(\d+)%/),
       ev11live:  g(/買える時点で選ぶ\s+回収率(\d+)%/),
