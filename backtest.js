@@ -2309,8 +2309,12 @@ if(require.main===module){
             }
           }
           const ok1 = inv && share < PREREG_MAX_SHARE && back/inv >= 1;
+          /* 負けた理由を書くときも、数字を直書きしない。
+             ここを 100% と書いていたせいで、データが増えて実際は 96% に
+             なったあとも、ここだけが 100% のまま残った（2026-11-06）。 */
+          const retPct = inv ? Math.round(back/inv*100) : 0;
           console.log(`    → ${ok1 ? '条件を満たした。採るかどうかを書き直すこと。'
-            : '採らない。100%は大穴1本と、買えない値段でできている。'}`);
+            : `採らない。この${retPct}%は大穴1本と、買えない値段でできている。`}`);
           console.log('       （画面の「期待値方式を使わない」はこの判定の結果）');
         }
       }
@@ -3115,7 +3119,7 @@ if(require.main===module){
            「本線10点 71%」と出しながら中身は6点、という状態になる。
            PCT_MAIN のような変数にしようとして未定義のまま置いてしまい、
            結果待ちのレースがある日に落ちる状態を作った（ここで気づいた）。 */
-        console.log(`  実測 ${L_MAIN}79% ／ ${L_ANA}だけ113% ／ ${PTS_ALL}点まとめて93%（1076レース）。`);
+        console.log(`  実測 ${L_MAIN}78% ／ ${L_ANA}だけ105% ／ ${PTS_ALL}点まとめて89%（1362レース）。`);
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

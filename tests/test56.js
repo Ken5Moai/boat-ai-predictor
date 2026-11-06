@@ -49,7 +49,7 @@ console.log('\n=== 画面の数字が span id で持たれている ===');
 const ids=[...HTML.matchAll(/<span id="(ev11[a-z]+)(\d*)">([^<]*)<\/span>/g)]
   .map(m=>({id:m[1]+m[2], key:m[1], val:m[3]}));
 ok(ids.length>=10, `判定⑪の数字が ${ids.length} 個、span id で置かれている`);
-for(const want of ['ev11n','ev11top','ev11share','ev11cut','ev11pairs',
+for(const want of ['ev11n','ev11ret','ev11top','ev11share','ev11cut','ev11pairs',
                    'ev11fin','ev11live','ev11gm','ev11down','ev11eff']){
   ok(ids.some(x=>x.key===want), `${want} がある`);
 }
@@ -77,9 +77,13 @@ console.log('\n=== 文章に数字を埋め直していないか ===');
   ok(!/\u00a5[\d,]+/.test(outside),
      '金額が span の外に書かれていない'
      + (/\u00a5[\d,]+/.test(outside)?`（${outside.match(/\u00a5[\d,]+/)[0]}）`:''));
-  /* 測定した % も span の外に書かない。100%（通算の見出し。別の規則が持っている）と
-     5%（PREREG_MAX_SHARE。先に決めた値で、測定値ではない）だけ認める。 */
-  const pcts = (outside.match(/\d+(?:\.\d+)?%/g)||[]).filter(x=>x!=='100%'&&x!=='5%');
+  /* 測定した % も span の外に書かない。認めるのは2つだけ。
+       ・見出しの「回収率NN%」… sync-figures.js の別の規則が持っている
+       ・5%… PREREG_MAX_SHARE。先に決めた値で、測定値ではない
+     以前は 100% を文字で認めていたが、それだと実測が 96% になったあとに
+     本文の「この100%は捨てました」だけが古いまま通ってしまった（2026-11-06）。 */
+  const pcts = (outside.replace(/・回収率\d+%/g,'').match(/\d+(?:\.\d+)?%/g)||[])
+                 .filter(x=>x!=='5%');
   ok(pcts.length===0,
      '測定した % が span の外に書かれていない'
      + (pcts.length?`（残り: ${pcts.join(' ')}）`:''));
@@ -109,6 +113,7 @@ console.log('\n=== 画面の数字が backtest.js の出力と一致している
     const g=re=>(J.match(re)||[])[1]||null;
     const want={
       ev11n:     g(/選り好みなし \d+場日 (\d+)レース/),
+      ev11ret:   g(/選り好みなし \d+場日 \d+レース\s+回収率(\d+)%/),
       ev11top:   (x=>x?'¥'+x:null)(g(/最大の払戻1件 ¥([\d,]+) =/)),
       ev11share: g(/払戻合計の([\d.]+)%/),
       ev11cut:   g(/その1件を除くと (\d+)%/),
