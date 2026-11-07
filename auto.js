@@ -79,6 +79,31 @@ const YEN_PER_RACE = PTS_ALL * 100;
 
    tmp/plan-<場>-<R>-<日付>.json には1レースぶんが残るが、
    買ったかどうかは入っていない。買えたものだけを1日1ファイルに積む。 */
+/* この日、このレースをすでに買っていないか。
+   ------------------------------------------------------------------
+   2026-11-03 の投票履歴に、下関9R の 1-3-4 が受付006と007の
+   2件入っていた。同じレースの同じ組番を、連番の受付で2回買っている。
+   buy() が受付を読みそこねて打ち直す経路があるので、
+   そこで二重になる。お金が増える側の間違いなので、止める。
+
+   買った記録（tmp と data/bought の両方）を見る。
+   残っていなければ「買っていない」とは言わず、null を返す。
+   （記録が読めないことを「買っていない」にすると、また買う） */
+function alreadyBought(jcd, rno){
+  const files=[ path.join(ROOT,'tmp',`bought-${HD}.json`),
+                path.join(ROOT,'data','bought',`${HD}.json`) ];
+  let any=false;
+  for(const f of files){
+    let rows=null;
+    try{ rows=JSON.parse(fs.readFileSync(f,'utf8')); }catch(e){ continue; }
+    if(!Array.isArray(rows)) continue;
+    any=true;
+    const hit=rows.find(x=>String(x.jcd)===String(jcd) && Number(x.rno)===Number(rno));
+    if(hit) return hit;
+  }
+  return any ? false : null;
+}
+
 function recordBought(r, plan){
   try{
     const f = path.join(ROOT,'tmp',`bought-${HD}.json`);
@@ -195,6 +220,15 @@ function makePlan(r){
 }
 
 /* ---- 本体 ------------------------------------------------------- */
+/* require('./auto.js') だけでこのループが動き始めていた。
+   買うプログラムが、読み込まれただけで走り出すのは危ない。
+   2026-11-07、試験を書こうとして require しただけで全場を見に行った。
+   そのときは --buy が無かったので買わなかったが、環境から引継ぐ引数で
+   買う形になっていたら、読み込んだだけでお金が動く。
+   直接走らたときだけ動くようにする。 */
+module.exports = { alreadyBought };
+if(require.main !== module) return;
+
 (async function main(){
   console.log(`\n=== 複数場の自動ループ（${HD}） ===`);
   /* ここは「買いません」を必ず出していた。--buy のときも出るので、
@@ -442,6 +476,18 @@ async function runLoop(queue, ctx, ask, V){
         if(back.moved) console.log('  投票画面に戻しました（同じ場で投票する）。');
         await V.fill(ctx, plan, null);
         if(BUY || BUY_DRY){
+          /* 打ち込んだあと、押す直前で見る。
+             その日すでに買っているレースなら、押さない。 */
+          const dup = alreadyBought(r.jcd, r.rno);
+          if(dup){
+            console.log(`\n  ★ ${r.venue} ${r.rno}R は、この日すでに買っています`
+              + `（${String(dup.at||'').slice(11,16)} ¥${(dup.total||0).toLocaleString()}）。`);
+            console.log('    同じレースを二重に買わないため、ここは飛ばします。');
+            console.log('    （どうしても買い足すなら、画面でご自身で操作してください）');
+            continue;
+          }
+          if(dup===null && (BUY && !BUY_DRY))
+            console.log('  ※ 買った記録が読めないので、二重かどうかは確かめられません。');
           const res = await V.buy(ctx, plan, {dryRun: BUY_DRY});
           if(res.bought){ spent += plan.total; waiting.push({r, plan}); bought++; recordBought(r, plan); }
           else if(res.needsLastPress){

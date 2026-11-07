@@ -28,6 +28,31 @@ if(!fs.existsSync(FILE)){
   if(got) console.log(`  data/bought/${HD}.json から戻しました。`);
 }
 if(!fs.existsSync(FILE)){
+  /* 買った記録が消えていても、本人の投票履歴から書き写した
+     収支が data/settled.js にあるかもしれない。
+     買い目の全体は無いが、実際の数字はそっちのほうが正しい。 */
+  let sd=null;
+  try{ sd=(require('./data/settled.js')||[])
+         .find(x=>x.date===`${HD.slice(0,4)}-${HD.slice(4,6)}-${HD.slice(6,8)}`); }catch(e){}
+  if(sd){
+    const net=sd.returned-sd.invested;
+    console.log(`\n=== ${HD} 実際の収支（${sd.source}）===`);
+    console.log('  ※ auto.js の買った記録は残っていません。投票履歴から書き写した数字です。\n');
+    console.log(`  買った ${sd.races}レース  的中 ${sd.hitRaces}レース`
+      + `（${Math.round(sd.hitRaces/sd.races*100)}%）`);
+    console.log(`  投資¥${sd.invested.toLocaleString()}  払戻¥${sd.returned.toLocaleString()}  `
+      + `収支 ${net>=0?'+':'-'}¥${Math.abs(net).toLocaleString()}  `
+      + `回収率${Math.round(sd.returned/sd.invested*100)}%`);
+    if(sd.hits && sd.hits.length){
+      console.log('\n  的中した買い目');
+      for(const h of sd.hits)
+        console.log(`    ${String(h.venue).padEnd(4)} ${String(h.rno).padStart(2)}R  ${h.combo}  `
+          + `¥${String(h.yen).padStart(4)}買い → ¥${h.total.toLocaleString()}`);
+    }
+    if(sd.hitsOnly)
+      console.log('\n  外れたレースの組番は残っていません（画面が的中だけの表示だったため）。');
+    return;
+  }
   console.log(`${FILE} がありません（data/bought/${HD}.json もありません）。`);
   console.log('その日は auto.js で買っていないか、別のパソコンで走らせています。');
   console.log('買い目は買った時点のものしか残せないので、あとから作り直せません。');
