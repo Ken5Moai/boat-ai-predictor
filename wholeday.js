@@ -185,9 +185,29 @@ async function racingVenues(){
 (async()=>{
   const packs=[];
   const JCDS = await racingVenues();
+  const empty=[];
   for(const jcd of JCDS){
     const p=await grab(jcd);
     if(p && p.races.length){ packs.push(p); process.stderr.write(`${VN[jcd]} ${p.races.length}本\n`); }
+    else {
+      /* 1本も取れなかった場を、黙って捨てない。
+         2026-11-06 の常滑は一日中止で 0レースだったが、
+         「開催13場」と出したあと 12場分しか残らず、
+         どの場が欠けたのかがどこにも出なかった。
+         0レースが正しいこともあるが、正しいかどうかを
+         人が見分けられるように、理由を出す。 */
+      const why = p && p.skipped && p.skipped.length
+        ? [...new Set(p.skipped.map(x=>x.why))].join('／')
+        : '理由不明（締切時刻が読めない等）';
+      empty.push({jcd, why});
+      process.stderr.write(`${VN[jcd]} 0本（${why}）\n`);
+    }
+  }
+  if(empty.length){
+    console.log(`\n  1本も取れなかった場 ${empty.length}場`);
+    for(const e of empty) console.log(`    ${VN[e.jcd]||e.jcd}  ${e.why}`);
+    console.log('    （中止・不成立ならそれで正しい。'
+      + 'それ以外なら node wholeday.js を走らせ直す）');
   }
   if(!packs.length){ console.log('この日のデータがありません。'); return; }
   /* 取れたぶんをすぐ固める。採点の途中で落ちても、捕獲は残る。
