@@ -166,6 +166,40 @@ ok_(!/--buy-password|--password/.test(SRC), 'パスワードを引数で受け�
    runLoop() を切り出したとき、MIN_LEAD が main() の中に残っていた。
    このテストはソースを文字列で見るだけだったので捕まえられなかった。
    --plan は通信するが待たないので、ここで実際に走らせて見る。 */
+console.log('\n=== 今日まわるレースの決め方 ===');
+/* 2026-11-07、--plan で下関12R（締切20:38）が黙って消えた。
+   桐生12R（20:30）を先に入れたせいで8分差だったため。
+   締切の近いレースを落とす理由は「人が同時に2レース打ち込めない」で、
+   買わないときには関係がない。しかも「締切が近すぎるN本」にも
+   数えられていなかったので、消えたことに気づけなかった。 */
+{
+  const A=require(path.join(DIR,'auto.js'));
+  ok_(typeof A.buildQueue==='function', 'auto.js が buildQueue を出している（試験から呼べる）');
+  const mk=(jcd,venue,rno,closeMin,close)=>({jcd,venue,rno,closeMin,close});
+  /* 実際にあった並び。桐生20:30・下関20:38・住之江20:45。 */
+  const all=[mk('01','桐生',12,1230,'20:30'),
+             mk('19','下関',12,1238,'20:38'),
+             mk('12','住之江',12,1245,'20:45')];
+  const plan=A.buildQueue(all,{nowMin:1213, planOnly:true});
+  ok_(plan.queue.length===3,
+     `予想だけのときは3本とも残る（残ったのは ${plan.queue.map(r=>r.venue+r.rno+'R').join(' ')}）`);
+  ok_(plan.queue.some(r=>r.venue==='下関'), '予想だけのとき、下関12R が落ちない');
+  const buy=A.buildQueue(all,{nowMin:1213, planOnly:false});
+  ok_(!buy.queue.some(r=>r.venue==='下関'),
+     '買うときは、打ち込む時間が重なる下関12R を外す');
+  ok_(buy.gapOut.some(r=>r.venue==='下関'),
+     '外したレースは gapOut に入る（黙って消さない）');
+  const src=fs.readFileSync(path.join(DIR,'auto.js'),'utf8');
+  ok_(/gapOut\.length/.test(src) && /打ち込む時間が重なるので外したレース/.test(src),
+     '外したレースは名前を出して知らせる');
+  /* 締切が近すぎるレースは、予想だけでも落とす（展示が間に合わない）。 */
+  /* 20:30 時点。桐生は締切済み、下関は残り8分で展示が間に合わない。 */
+  const late=A.buildQueue(all,{nowMin:1230, planOnly:true});
+  ok_(late.queue.length===1 && late.queue[0].venue==='住之江',
+     '締切まで 12分無いレースは、予想だけでも外す');
+  ok_(late.lateOut===2, `外した本数を数えている（${late.lateOut}本）`);
+}
+
 console.log('\n=== 実際に走らせる（--plan は待たない） ===');
 {
   const {execFileSync}=require('child_process');

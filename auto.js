@@ -226,7 +226,39 @@ function makePlan(r){
    そのときは --buy が無かったので買わなかったが、環境から引継ぐ引数で
    買う形になっていたら、読み込んだだけでお金が動く。
    直接走らたときだけ動くようにする。 */
-module.exports = { alreadyBought };
+
+/* 「今日まわるレース」を決める。ここだけ切り出してあるのは、試験から
+   直接呼べるようにするため。時計も通信も使わない（nowMin を引数で渡す）。
+
+   planOnly=true（予想だけ）のときは、締切が近いレースを落とさない。
+   落とす理由は「人が同時に2レース打ち込めない」であって、
+   買わないときには関係がないため。 */
+function buildQueue(all, o){
+  const { nowMin, planOnly=false, max=20, minGap=14, minLead=12 } = o||{};
+  const ok = all.filter(r => r.closeMin - nowMin >= minLead);
+  const lateOut = all.length - ok.length;
+  const byVenue = new Map();
+  for(const r of ok){ if(!byVenue.has(r.jcd)) byVenue.set(r.jcd, []); byVenue.get(r.jcd).push(r); }
+  const queue=[], gapOut=[];
+  for(let depth=0; queue.length<max; depth++){
+    let added=false;
+    for(const list of byVenue.values()){
+      if(queue.length>=max) break;
+      const r=list[depth]; if(!r) continue;
+      added=true;
+      if(!planOnly && queue.some(q => Math.abs(q.closeMin - r.closeMin) < minGap)){
+        gapOut.push(r); continue;
+      }
+      queue.push(r);
+    }
+    if(!added) break;
+  }
+  queue.sort((a,b)=>a.closeMin-b.closeMin);
+  gapOut.sort((a,b)=>a.closeMin-b.closeMin);
+  return { queue, gapOut, lateOut };
+}
+
+module.exports = { alreadyBought, buildQueue };
 if(require.main !== module) return;
 
 (async function main(){
@@ -287,30 +319,18 @@ if(require.main !== module) return;
     return;
   }
 
-  /* まだ間に合うレースだけ。展示を待つ時間がいるので12分前より手前は捨てる。 */
-  const ok = all.filter(r => r.closeMin - nowMin() >= MIN_LEAD);
-  const dropped = all.length - ok.length;
-
-  /* 締切順にそのまま上から取ると、朝の2場だけで上限を使い切る
-     （2026-10-28 の下見で、唐津と三国の1〜4Rで8本埋まった）。
-     1日に散らしたいので、場ごとに順番で1本ずつ拾っていく。
-     同じ時間に2レース進めないので、前のレースの締切から
-     MIN_GAP 分あいているものだけを足す。 */
-  const byVenue = new Map();
-  for(const r of ok){ if(!byVenue.has(r.jcd)) byVenue.set(r.jcd, []); byVenue.get(r.jcd).push(r); }
-  const queue=[];
-  for(let depth=0; queue.length<MAX; depth++){
-    let added=false;
-    for(const list of byVenue.values()){
-      if(queue.length>=MAX) break;
-      const r=list[depth]; if(!r) continue;
-      added=true;
-      if(queue.some(q => Math.abs(q.closeMin - r.closeMin) < MIN_GAP)) continue;
-      queue.push(r);
-    }
-    if(!added) break;
+  /* まだ間に合うレースだけ。展示を待つ時間がいるので12分前より手前は捨てる。
+     決め方そのものは buildQueue() にある（試験から直接呼べるように切り出した）。 */
+  const picked = buildQueue(all, {nowMin:nowMin(), planOnly:PLAN_ONLY,
+                                  max:MAX, minGap:MIN_GAP, minLead:MIN_LEAD});
+  const queue=picked.queue, gapOut=picked.gapOut, dropped=picked.lateOut;
+  if(gapOut.length){
+    console.log(`\n  打ち込む時間が重なるので外したレース ${gapOut.length}本`
+      + `（前のレースの締切から${MIN_GAP}分あいていない）`);
+    for(const r of gapOut.sort((a,b)=>a.closeMin-b.closeMin))
+      console.log(`    ${r.close}  ${r.venue} ${r.rno}R`);
+    console.log('    予想だけ欲しいなら  node predict.js <場コード> <R>');
   }
-  queue.sort((a,b)=>a.closeMin-b.closeMin);
 
   console.log(`\n  今日まわるレース ${queue.length}本`
     + (dropped?`（締切が近すぎる${dropped}本は外しました）`:'')
