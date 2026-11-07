@@ -233,6 +233,16 @@ const rules = [
   /* 期待値方式の通算 */
   {re:/(<b>期待値方式を使わない。<\/b>)\d+(レースで)\d+\/\d+(・回収率)\d+(%。)/,
    to:()=>`$1${V.ev.n}$2${V.ev.hit}/${V.ev.n}$3${V.ev.pct}$4`},
+  /* edge.js が書いた測定（data/edge.js）をそのまま差し込む。
+     あちらは重い計算なので、ここでは走らせず読むだけ。
+     無ければ触らない（node edge.js --save で作る）。 */
+  ...(()=>{ let E=null; try{ E=require('./data/edge.js'); }catch(e){ return []; }
+    const m={ edgeAt:E.measuredAt, edgeN:E.races, edgeTest:E.testRaces,
+      edgeB:E.blendB, edgeRetM:E.retMarket10, edgeRetB:E.retBlend10,
+      edgeBand:E.bestBand, edgeBandPct:E.bestBandPct, edgeLearn:E.learnGain };
+    return Object.keys(m).filter(k=>m[k]!=null).map(k=>({
+      re:new RegExp(`(<span id="${k}\\d*">)[^<]*(</span>)`,'g'),
+      to:()=>`$1${m[k]}$2` })); })(),
   /* 判定⑪の数字は span id で持っているので、中身をそのまま差し替える。
      値が読めないときは触らない（キリ文字にしない）。 */
   /* 同じ数字を画面の何か所かに出している。HTML の id は重ねられないので、
