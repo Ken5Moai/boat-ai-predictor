@@ -263,6 +263,8 @@ function parseResult(html){
        <div class="weather1_bodyUnit is-windDirection">
          <p class="weather1_bodyUnitImage is-wind8"></p>
      1〜16 の16方位で、その場のコース図に対する向き。
+     17 だけは方位ではなく無風（1630レース中117本。全部風速0mで、
+     風速0m は17以外には無いことを確かめてある）。
      どの番号が追い風かは場によって違うので、意味をここで決めない。
      番号のまま持っておいて、効くかどうかは測ってから決める。
 

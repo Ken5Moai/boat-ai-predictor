@@ -214,5 +214,68 @@ if(!ok){
   console.log('\n確かめに失敗したので、元に戻しました。ファイルは触る前のままです。');
   process.exit(1);
 }
+/* 予想したときのレース名と、取り込んだときのレース名が違うことがある。
+   predict.js は番組名が読めなければ「桐生12R (11/7)」と書くが、
+   wholeday.js は「桐生12R 番組名不明(11/7)」と書く。
+   そのままだと odds.js / odds-live.js の鍵だけが古い名前で残り、
+   backtest.js が「RACES にも pending にも無いレース」として止まる。
+   2026-11-07 に実際に止まった。
+   消すのではなく名前を合わせる。買える時点のオッズは
+   そのとき取らなければ永久に手に入らないため。 */
+{
+  let P=[]; try{ P=require(path.join(__dirname,'data','pending.js')); }catch(e){ P=[]; }
+  const byKey=new Map(P.map(q=>[`${q.jcd}|${q.rno}|${q.date}`, q.name]));
+  for(const a2 of add){
+    const oldName=byKey.get(`${a2.jcd}|${a2.rno}|${DATE}`);
+    if(!oldName || oldName===a2.name) continue;
+    for(const f of ['odds.js','odds-live.js']){
+      const fp=path.join(__dirname,'data',f);
+      if(!fs.existsSync(fp)) continue;
+      let t=fs.readFileSync(fp,'utf8');
+      if(!t.includes(oldName)) continue;
+      fs.writeFileSync(fp, t.split(oldName).join(a2.name));
+      console.log(`  ${f} の名前を合わせました: 「${oldName}」→「${a2.name}」`);
+    }
+  }
+}
+/* 結果待ち（pending.js）に同じレースが残っていたら、ここで取り除く。
+   predict.js で予想したレースは pending.js に入る。
+   その日を丸ごと取り込むと、同じレースが両方に入り、
+   backtest.js が「レース名が重複」で止まる。
+   2026-11-07、実際に止まった（桐生12R・住之江12Rを予想した日）。
+   予想した日を取り込めば必ず起きるので、ここで自動で消す。
+   消すのは「今回足したレースと場・R・日が同じもの」だけ。 */
+{
+  const pPath=path.join(__dirname,'data','pending.js');
+  if(fs.existsSync(pPath)){
+    let ptxt=fs.readFileSync(pPath,'utf8');
+    const before=ptxt;
+    let P=[]; try{ P=require(pPath); }catch(e){ P=[]; }
+    const added=new Set(add.map(a=>`${a.jcd}|${a.rno}|${DATE}`));
+    const gone=[];
+    for(const q of P){
+      if(!added.has(`${q.jcd}|${q.rno}|${q.date}`)) continue;
+      const at=ptxt.indexOf(`{name:'${q.name}'`);
+      if(at<0) continue;
+      let end=ptxt.indexOf("\n{name:'", at); if(end<0) end=ptxt.lastIndexOf('\n];');
+      ptxt=(ptxt.slice(0,at)+ptxt.slice(end)).replace(/,\n+\];/,'\n];');
+      gone.push(q.name);
+    }
+    if(gone.length){
+      fs.writeFileSync(pPath, ptxt);
+      delete require.cache[require.resolve(pPath)];
+      let after=null;
+      try{ after=require(pPath); }catch(e){ after=null; }
+      if(!Array.isArray(after) || after.some(x=>!x)){
+        fs.writeFileSync(pPath, before);
+        console.log('\n✗ pending.js を書き換えたら読めなくなったので、元に戻しました。');
+        console.log('   手で ' + gone.join(' / ') + ' を消してください。');
+      }else{
+        console.log(`\n結果待ちから ${gone.length}本を取り除きました（取り込んだので二重になる）`);
+        for(const n of gone) console.log(`  ${n}`);
+      }
+    }
+  }
+}
 console.log(`\n${add.length}本を足しました（${nBefore} → ${nBefore+add.length}レース）。`);
 console.log('※ node sync-figures.js を走らせてから node tests/run.js してください。');

@@ -2184,6 +2184,7 @@ if(require.main===module){
           }
         }
         console.log('\n  【判定⑩・2026-11-03に先に書いた】波乱4点だけを買うか（4点に固定）');
+        let ANA4_DONE = false;
         {
           const fresh10 = full.filter(([k])=>k.split('|')[0] > PREREG10_AFTER);
           const t = ANA4;
@@ -2192,7 +2193,14 @@ if(require.main===module){
           const share = back ? top/back : 1;
           const a = t.inv ? back/t.inv*100 : 0;
           const b = t.inv ? (back-top)/t.inv*100 : 0;
-          const enough = fresh10.length >= PREREG_NEED_DAYS && share < PREREG_MAX_SHARE;
+          /* 判定を始めてよいかどうかは「場日がたまったか」だけで決める。
+             以前は「偏りが5%未満」も門に入れていたが、それだと
+             偏りが大きい間は永久に「たまったら判定する」のままになる。
+             2026-11-07、47場日（必要40）、回収率75%、偏り8.3% で
+             実際にそうなった。条件を欠いているのに結論が出ないのは、
+             判定の体をなしていない。偏りは、判定するときの条件の1つに戻す
+             （判定⑱ もそうしている）。 */
+          const enough = fresh10.length >= PREREG_NEED_DAYS;
           console.log(`    条件 回収率${PREREG10_PCT}%以上 / 最大1件を除いても${PREREG10_PCT}%以上`);
           console.log(`         場日${PREREG_NEED_DAYS}以上 / 払戻の偏り${Math.round(PREREG_MAX_SHARE*100)}%未満`);
           console.log(`    （2026-11-03までの日は使わない。波乱だけを買う案の2回目なので`
@@ -2209,12 +2217,22 @@ if(require.main===module){
             console.log(`    対象 ${fresh10.length}場日 = ${t.races}レース`);
             console.log(`    ${a>=PREREG10_PCT?'○':'×'} 回収率${PREREG10_PCT}%以上        ${Math.round(a)}%`);
             console.log(`    ${b>=PREREG10_PCT?'○':'×'} 最大1件を除いても${PREREG10_PCT}%以上 ${Math.round(b)}%`);
-            console.log(`    偏り ${(share*100).toFixed(1)}%（的中${t.won.length}本）`);
-            console.log(`    → ${a>=PREREG10_PCT&&b>=PREREG10_PCT
-              ? '波乱4点を採る。' : '欠けたので捨てる。採らない。'}`);
+            const shareOK = share < PREREG_MAX_SHARE;
+            console.log(`    ${shareOK?'○':'×'} 払戻の偏り${Math.round(PREREG_MAX_SHARE*100)}%未満      `
+              + `${(share*100).toFixed(1)}%（的中${t.won.length}本）`);
+            const passed = a>=PREREG10_PCT && b>=PREREG10_PCT && shareOK;
+            ANA4_DONE = true;
+            console.log(`    → ${passed ? '波乱4点を採る。'
+              : '欠けたので捨てる。採らない。'}`);
+            if(!passed)
+              console.log('       （「波乱だけを買う」は判定⑧・⑩ともに捨てた。'
+                + '3回目は引き直しになるのでやらない）');
           }
         }
-        console.log('      ※ 判定が済むまで「波乱だけを買う」形にはしない。');
+        /* 判定が済んだあとも「済むまでしない」と出していたので、書き分ける。 */
+        console.log(ANA4_DONE
+          ? '      ※ 判定は済んだ（採らない）。この先数字が上がっても、引き直さない。'
+          : '      ※ 判定が済むまで「波乱だけを買う」形にはしない。');
         console.log(`         いまの買い方は ${L_MAIN}＋${L_ANA}（${PTS_ALL}点）で、`
                   + `波乱だけを買っているわけではない。`);
 
@@ -3133,7 +3151,7 @@ if(require.main===module){
            「本線10点 71%」と出しながら中身は6点、という状態になる。
            PCT_MAIN のような変数にしようとして未定義のまま置いてしまい、
            結果待ちのレースがある日に落ちる状態を作った（ここで気づいた）。 */
-        console.log(`  実測 ${L_MAIN}78% ／ ${L_ANA}だけ100% ／ ${PTS_ALL}点まとめて87%（1362レース）。`);
+        console.log(`  実測 ${L_MAIN}79% ／ ${L_ANA}だけ96% ／ ${PTS_ALL}点まとめて86%（1630レース）。`);
       }
       if(!map){ console.log('  実オッズが odds.js に無いので市場とは比べられない'); return; }
       const ks = Object.keys(map);

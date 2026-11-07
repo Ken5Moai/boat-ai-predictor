@@ -71,7 +71,12 @@ for(const x of run){
   if(order.length!==3 || order.some(v=>!(v>=1&&v<=6))) continue;
   const combos=Object.keys(O);
   const inv=combos.map(k=>1/O[k]); const s=inv.reduce((a,c)=>a+c,0);
-  D.push({name:x.name, date:r.date, result:x.result, pay:x.pay, combos,
+  /* jcd ・風向き・風速・波を忘れずに持ってくる。
+     ここを落としていたせいで、風を 1358レース分埋めたのに
+     「風向きが使えるレース 0本」と出ていた（2026-11-07）。 */
+  D.push({name:x.name, date:r.date, jcd:r.jcd,
+          windN:(r.windN??null), ws:r.ws, wave:r.wave,
+          result:x.result, pay:x.pay, combos,
           p:combos.map(k=>x.probOf[k]), q:combos.map((k,i)=>inv[i]/s),
           o:combos.map(k=>O[k]), take:1-1/s, B:r.B, order});
 }
@@ -178,7 +183,9 @@ for(const r of D){
      （16と１が隣り合わせなのに遠い数字になるのを避けるため）。
      場の向きを引いてコース基準に直す。引けない場は風を使わない。 */
   const dir = VDIR[r.jcd];
-  const hasWind = (r.windN!=null && dir!=null);
+  /* 17 は方位ではなく無風。角度に直せないので、風の向きは使わない
+     （無風は風速0m なので、掛け算の結果もどうせ0になる）。 */
+  const hasWind = (r.windN!=null && r.windN<=16 && dir!=null);
   r.hasWind = hasWind;
   const th = hasWind ? 2*Math.PI*(((r.windN-dir)%16+16)%16)/16 : 0;
   const ws = Number.isFinite(r.ws)?r.ws:0, wv = Number.isFinite(r.wave)?r.wave:0;
@@ -301,8 +308,8 @@ if(cov < D.length*0.5){
 }
 
 /* ---- まとめ ---- */
-const verdict = (bl1-mk1 > 0.02) || (bestBand.pct >= 100) || (best3.te-base3 > 0.02)
-  || (best4 && best4.te-base3 > 0.02);
+const verdict = !!((bl1-mk1 > 0.02) || (bestBand.pct >= 100) || (best3.te-base3 > 0.02)
+  || (best4 && best4.te-base3 > 0.02));
 console.log('\n=== 結論 ===');
 console.log(verdict
   ? '  市場に足せるものが出ています。買い方を設計する価値があります。'

@@ -283,7 +283,7 @@ if(require.main !== module) return;
      決め打ちで書いていた。2026-11-02 の13場を足して回収率が101%になった日、
      「回収率101%。100%を超えていないので…」と自分で矛盾したことを出した。
      数字が動く場所に、数字を前提にした文を固定で置いてはいけない。 */
-  const FAIR_N = 1309, FAIR_PCT = 88, FAIR_CUT = 84;
+  const FAIR_N = 1577, FAIR_PCT = 87, FAIR_CUT = 84;
   console.log(`  選り好みのない${FAIR_N}レースの実測では ${PTS_ALL}点で回収率${FAIR_PCT}%`);
   console.log(`  （最大の払戻1件を除くと${FAIR_CUT}%）。`);
   if(FAIR_PCT >= 100 && FAIR_CUT >= 100){

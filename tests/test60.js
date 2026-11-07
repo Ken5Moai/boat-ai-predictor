@@ -48,9 +48,17 @@ console.log('\n=== 入っている値 ===');
 {
   const RACES=require(path.join(ROOT,'data','races.js'));
   const has=RACES.filter(r=>r.windN!=null);
-  const badv=has.filter(r=>!(Number.isInteger(r.windN) && r.windN>=1 && r.windN<=16));
-  ok(badv.length===0, `風向きは1〜16の整数`
+  /* 17 は方位ではなく無風。最初 1〜16 だと思っていて試験が落ちた（2026-11-07）。 */
+  const badv=has.filter(r=>!(Number.isInteger(r.windN) && r.windN>=1 && r.windN<=17));
+  ok(badv.length===0, `風向きは1〜17の整数（17は無風）`
      + (badv.length?`（外れている: ${badv.slice(0,3).map(r=>r.name+':'+r.windN).join(' / ')}）`:''));
+  /* 17（無風）と風速0m が一致すること。ずれたら読み取りがおかしい。 */
+  const w17=has.filter(r=>r.windN===17), w17bad=w17.filter(r=>r.ws!==0);
+  const ws0bad=has.filter(r=>r.ws===0 && r.windN!==17);
+  ok(w17bad.length===0 && ws0bad.length===0,
+     `17（無風）と風速0m が一致する（17は${w17.length}本）`
+     + (w17bad.length?`（17なのに風速あり ${w17bad.length}本）`:'')
+     + (ws0bad.length?`（風速0mなのに17でない ${ws0bad.length}本）`:''));
   console.log(`  － 風向きが入っているレース ${has.length}/${RACES.length}本`
     + `（${(has.length/RACES.length*100).toFixed(0)}%）`);
   const vd=path.join(ROOT,'data','venue-dir.js');

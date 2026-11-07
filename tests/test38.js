@@ -183,8 +183,29 @@ for(const r of RACES){
       const lane = x.B.findIndex(q=>q.reg===b.reg)+1;
       const st = x.actualST && x.actualST[lane];
       if(st==null){ noST++; continue; }          /* 本番STが無ければ照合できない */
+      /* 今節成績の1行は [コース, ST, 着順]。ST だけで探すと、
+         別の節の同じ ST に当たる。
+         2026-11-07、鳴門5R（11/7）の登番4812 で実際に起きた。
+         今節成績は [[4,.21,4],[3,.11,4]]（11/6 の2レース）なのに、
+         ST 0.11 だけで探して 11/2 の鳴門6R（6コース・3着）に当てていた。
+         コースも一緒に見れば見分けられる。 */
       const hits = rec.filter(e=>Math.abs(e[1]-st)<1e-9);
-      if(hits.length!==1){ ambiguous++; continue; } /* 同じSTが複数あれば見送る */
+      if(hits.length!==1){ ambiguous++; continue; } /* 今節成績の側で複数なら見送る */
+      /* 過去レースの側でも、同じ ST が複数あれば見送る。
+         以前は今節成績側しか見ていなかったため、
+         別の節の同じ ST に当てて「着順が違う」と言っていた。
+         2026-11-07、鳴門5R（11/7）登番4812で実際に起きた。
+         今節成績は 11/6 の2レースなのに、11/2 のレースに当てていた。
+         コースで見分けようとしたが、今節成績のコースは「実際の進入」で、
+         こちらが持っている entry は展示進入なので一致しない。
+         見分けられないものは、無理に当てずに見送る。 */
+      let same=0;
+      for(const y of earlier){
+        const l2=y.B.findIndex(q=>q.reg===b.reg)+1;
+        const s2=y.actualST && y.actualST[l2];
+        if(s2!=null && Math.abs(s2-st)<1e-9) same++;
+      }
+      if(same!==1){ ambiguous++; continue; }
       checked++; stChecked++;
       const order=String(x.result).split('-');
       const place=order.indexOf(String(lane));
