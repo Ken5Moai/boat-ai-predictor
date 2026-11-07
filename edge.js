@@ -323,7 +323,12 @@ if(SAVE){
     retMarket10:ret1(te,1,0,10), retBlend10:ret1(te,B1.a,B1.b,10),
     bestBand:bestBand.lab, bestBandPct:bestBand.pct,
     learnGain:Number((best3.te-base3).toFixed(4)),
-    windRaces:cov, windGain: best4?Number((best4.te-base3).toFixed(4)):null,
+    windRaces:cov,
+    /* 市場だけとの差と、「風を足したことによる差」は別物。
+       前者だけを windGain として画面に出し、
+       「風を足しても…」と書いていたのは誤りだった（2026-11-08）。 */
+    windGain: best4?Number((best4.te-base3).toFixed(4)):null,
+    windGainVsPlain: best4?Number((best4.te-best3.te).toFixed(4)):null,
     edge:verdict };
   fs.writeFileSync(path.join(ROOT,'data','edge.js'),
     '/* node edge.js --save が書く。手で書かないこと。 */\nmodule.exports = '

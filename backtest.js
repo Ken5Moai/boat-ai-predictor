@@ -142,6 +142,11 @@ function summarize(res){
 const line=s=>`[${s.ranks.map(x=>String(x).padStart(3)).join(' ')}]  平均${s.avg.toFixed(1)}  `+
   `6点${s.in6}/${s.n} 12点${s.in12}/${s.n} 20点${s.in20}/${s.n}`;
 
+/* 済んだ判定を、文章ではなくデータとして残す。
+   これが無いと、済んだかどうかを知るのに 2万行の出力を読むことになる。
+   実際 today.js が、済んだ判定⑩を「たまったので判定してください」と
+   出し続けていた（2026-11-08）。 */
+const JUDGED=[];
 if(require.main===module){
   /* オッズはレース名で引いている。名前が重なると別のレースのオッズを拾う。
      同じ場の同じレース番号が別の日に出てくるので、実際に起きかけた（徳山2Rが2つ）。
@@ -2222,6 +2227,10 @@ if(require.main===module){
               + `${(share*100).toFixed(1)}%（的中${t.won.length}本）`);
             const passed = a>=PREREG10_PCT && b>=PREREG10_PCT && shareOK;
             ANA4_DONE = true;
+            JUDGED.push({id:'⑩', name:'波乱4点だけを買うか', adopt:passed,
+              at:'2026-11-07', why:`${fresh10.length}場日${t.races}レースで `
+              + `回収率${Math.round(a)}%・除いて${Math.round(b)}%・偏り${(share*100).toFixed(1)}%`
+              + `（必要 ${PREREG10_PCT}%/${PREREG10_PCT}%/${Math.round(PREREG_MAX_SHARE*100)}%未満）`});
             console.log(`    → ${passed ? '波乱4点を採る。'
               : '欠けたので捨てる。採らない。'}`);
             if(!passed)
@@ -2345,6 +2354,10 @@ if(require.main===module){
              ここを 100% と書いていたせいで、データが増えて実際は 96% に
              なったあとも、ここだけが 100% のまま残った（2026-11-06）。 */
           const retPct = inv ? Math.round(back/inv*100) : 0;
+          JUDGED.push({id:'⑪', name:'期待値方式（オッズで買い目を選ぶ）を採るか',
+            adopt:!!ok1, at:'2026-11-06',
+            why:`回収率${retPct}%だが、最大の払戻1件で${(share*100).toFixed(1)}%`
+              + `（上限${Math.round(PREREG_MAX_SHARE*100)}%）。買える値段で選び直すと落ちる`});
           console.log(`    → ${ok1 ? '条件を満たした。採るかどうかを書き直すこと。'
             : `採らない。この${retPct}%は大穴1本と、買えない値段でできている。`}`);
           console.log('       （画面の「期待値方式を使わない」はこの判定の結果）');
@@ -3207,5 +3220,13 @@ if(require.main===module){
         : '確率2%以上の組が無い'));
     });
   }
+}
+if(require.main===module && JUDGED.length){
+  try{
+    fs.writeFileSync(path.join(__dirname,'data','judgments.js'),
+      '/* node backtest.js が書く。手で書かないこと。\n'
+      + '   済んだ判定。adopt:false は「採らない」。 */\n'
+      + 'module.exports = ' + JSON.stringify(JUDGED,null,2) + ';\n');
+  }catch(e){ console.log('  ※ data/judgments.js を書けませんでした: '+e.message); }
 }
 module.exports={RACES,runWith,summarize};

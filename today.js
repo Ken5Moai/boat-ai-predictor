@@ -35,8 +35,11 @@ if(!E){
   console.log(`     学習に使っていない${E.testRaces}レースでの上位10点の回収率`);
   console.log(`       市場だけ ${E.retMarket10}%  →  モデルを混ぜて ${E.retBlend10}%`);
   console.log(`     モデルを使わず人気帯を丸ごと買っても、いちばん良い${E.bestBand}で ${E.bestBandPct}%`);
-  if(E.windGain!=null)
-    console.log(`     風を足しても ${E.windGain>=0?'+':''}${E.windGain}（${E.windRaces}レースで測定）`);
+  if(E.windGainVsPlain!=null)
+    console.log(`     風を足したことによる変化 ${E.windGainVsPlain>=0?'+':''}${E.windGainVsPlain}`
+      + `（${E.windRaces}レース。風を入れないときとの差）`);
+  else if(E.windGain!=null)
+    console.log(`     風を入れたときの、市場だけとの差 ${E.windGain>=0?'+':''}${E.windGain}`);
   console.log(`     （${E.measuredAt} に ${E.races}レースで測定${old>7?`／${Math.round(old)}日前。node edge.js --save で測り直し`:''}）`);
   if(!E.edge){
     console.log('\n     買えば、賭けた額のおよそ 1〜2割が平均で減ります。');
@@ -45,7 +48,7 @@ if(!E){
 }
 
 /* ---- 2. まだ決まっていない判定 ---- */
-console.log('\n--- まだ決まっていないこと ---');
+console.log('\n--- 判定の状態 ---');
 {
   const bt=fs.readFileSync(path.join(ROOT,'backtest.js'),'utf8');
   const need=(bt.match(/PREREG_NEED_DAYS\s*=\s*(\d+)/)||[])[1];
@@ -62,10 +65,25 @@ console.log('\n--- まだ決まっていないこと ---');
     const nos=new Set(RACES.filter(x=>x.date===date&&x.jcd===jcd).map(x=>x.rno));
     if([...Array(12)].every((_,i)=>nos.has(i+1)||skip.has(i+1))) full++;
   }
-  console.log(`  判定⑩（波乱4点だけを買うか）  いま ${full}/${need} 場日`);
-  console.log(full>=Number(need)
-    ? '    → たまりました。node backtest.js で判定してください。'
-    : `    → あと ${Number(need)-full} 場日。1日12場なので ${Math.ceil((Number(need)-full)/12)}日ぶん。`);
+  /* 済んだ判定は data/judgments.js に入っている。
+     以前は場日数だけ見ていたため、済んだあとも
+     「たまったので判定してください」と出し続けていた。 */
+  const J=r('data/judgments.js')||[];
+  const j10=J.find(x=>x.id==='⑩');
+  if(j10){
+    console.log(`  判定⑩（${j10.name}）  済み—— ${j10.adopt?'採る':'採らない'}`);
+    console.log(`    ${j10.why}`);
+  }else{
+    console.log(`  判定⑩（波乱4点だけを買うか）  いま ${full}/${need} 場日`);
+    console.log(full>=Number(need)
+      ? '    → たまりました。node backtest.js で判定してください。'
+      : `    → あと ${Number(need)-full} 場日。1日12場なので ${Math.ceil((Number(need)-full)/12)}日ぶん。`);
+  }
+  const others=J.filter(x=>x.id!=='⑩');
+  for(const x of others)
+    console.log(`  判定${x.id}（${x.name}）  済み—— ${x.adopt?'採る':'採らない'}`);
+  if(J.length && J.every(x=>!x.adopt))
+    console.log('  → 先に書いた判定は全部済み。どれも採らなかった。');
 }
 
 /* ---- 3. 手元のデータ ---- */
