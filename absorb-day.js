@@ -121,7 +121,8 @@ for(const file of fs.readdirSync(DIR).filter(x=>/^\d\d\.json$/.test(x)).sort()){
       /* 返還艇は記録に残す。これが無いと、あとからオッズと払戻が合わない理由が
          分からなくなり、テスト（test37）も「払戻が合わない」と落ちる。 */
       + (refund.length ? ` refund:[${refund.join(',')}],\n` : '')
-      + ` wind:null,ws:${R.ws},wave:${R.wave},temp:${R.temp},wtemp:${R.wtemp},\n B:[\n`
+      + ` wind:null,windN:${R.windN??'null'},`
+      + `ws:${R.ws},wave:${R.wave},temp:${R.temp},wtemp:${R.wtemp},\n B:[\n`
       + r.boats.map((b,i)=>` {reg:'${b.reg}',g:'${b.g}',nat:${f(b.nat,2)},loc:${f(b.loc,2)},`
         + `motNo:${b.motNo??'null'},mot:${f(b.mot,2)},`
         + `btNo:${b.btNo??'null'},bt:${f(b.bt,2)},st:${b.st==null?'null':f(b.st,2)},F:${b.F},`

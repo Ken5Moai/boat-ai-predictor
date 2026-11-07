@@ -133,9 +133,13 @@ console.log(`   → いちばん良い帯は ${bestBand.lab} の ${bestBand.pct}
 
 /* ---- ③ 生データから重みを学習する ---- */
 console.log('\n③ 手で決めた重みを捨て、生データから学習する（Plackett-Luce）');
+let VDIR={}; try{ VDIR=require('./data/venue-dir.js'); }catch(e){ VDIR={}; }
 const NUM=['nat','loc','mot','bt','st','exST','exT','tilt','wt','recAvg','recST','recN'];
 const BIN=['F','gradeA','grade1'];
 const FEAT=[...NUM,...NUM.map(k=>k+'_na'),...BIN,'lane2','lane3','lane4','lane5','lane6'];
+const WFEAT=[...FEAT];
+for(let l=1;l<=6;l++) WFEAT.push(`wind_cos_L${l}`,`wind_sin_L${l}`);
+for(let l=1;l<=6;l++) WFEAT.push(`ws_L${l}`,`wave_L${l}`);
 for(const r of D){
   const mkt1=[0,0,0,0,0,0];
   r.combos.forEach((k,i)=>{ mkt1[Number(k[0])-1]+=r.q[i]; });
@@ -167,16 +171,40 @@ for(const r of D){
     for(let L=2;L<=6;L++) x.push(b.lane===L?1:0);
     return x; });
   r.badFeat=bad;
+  /* 風を使う版。レース全体に共通の値（風向き・風速・波）は、
+     そのまま入れても 6艇全部に同じだけ足され、比べるときに消える。
+     効かせるには艇の側の何かと掛け合わせるしかないので、コースと掛ける。
+     風向きは16方位の番号なので、角度に戻して cosとsin に分ける
+     （16と１が隣り合わせなのに遠い数字になるのを避けるため）。
+     場の向きを引いてコース基準に直す。引けない場は風を使わない。 */
+  const dir = VDIR[r.jcd];
+  const hasWind = (r.windN!=null && dir!=null);
+  r.hasWind = hasWind;
+  const th = hasWind ? 2*Math.PI*(((r.windN-dir)%16+16)%16)/16 : 0;
+  const ws = Number.isFinite(r.ws)?r.ws:0, wv = Number.isFinite(r.wave)?r.wave:0;
+  r.XW = r.X.map((x,i)=>{
+    const L=i+1, add=[];
+    for(let l=1;l<=6;l++){
+      const on = (L===l && hasWind) ? 1 : 0;
+      add.push(on*ws*Math.cos(th)/10, on*ws*Math.sin(th)/10);
+    }
+    for(let l=1;l<=6;l++){
+      const on = (L===l) ? 1 : 0;
+      add.push(on*ws/10, on*wv/10);
+    }
+    return x.concat(add.map(v=>Number.isFinite(v)?v:0));
+  });
 }
 /* 使えなかったレースは、数にも入れない。
    2026-11-07、ここで「飛ばしたのに全レース数で割る」をやっていた。
    飛ばした回は 0 を足すので、平均が良いほうへ動く。
    -3.86 が -3.12 に見えていた（2割ほど飛んでいた）。
    総当たりで出せる最良より良い数字が出たので気づいた。 */
+let FKEY='X';     /* 'X'=生のデータだけ / 'XW'=風も使う */
 function llg(set,a,W,lam,grad){
   let ll=0, used=0; const gW=new Float64Array(W.length); let gA=0;
   for(const r of set){
-    const z=r.X.map((x,i)=>{ let s=a*r.lm[i]; for(let k=0;k<W.length;k++) s+=W[k]*x[k]; return s; });
+    const z=r[FKEY].map((x,i)=>{ let s=a*r.lm[i]; for(let k=0;k<W.length;k++) s+=W[k]*x[k]; return s; });
     const mx=Math.max(...z), v=z.map(t=>Math.exp(t-mx));
     const [o1,o2,o3]=r.order.map(x=>x-1);
     const S0=v.reduce((x,y)=>x+y,0), S1=S0-v[o1], S2=S1-v[o2];
@@ -189,7 +217,7 @@ function llg(set,a,W,lam,grad){
       if(j!==o1) d+=(j===o2?1:0)-v[j]/S1;
       if(j!==o1&&j!==o2) d+=(j===o3?1:0)-v[j]/S2;
       gA+=d*r.lm[j];
-      for(let k=0;k<W.length;k++) gW[k]+=d*r.X[j][k];
+      for(let k=0;k<W.length;k++) gW[k]+=d*r[FKEY][j][k];
     }
   }
   if(!used) return {ll:-Infinity, used:0, skipped:set.length, gA:0, gW};
@@ -198,8 +226,8 @@ function llg(set,a,W,lam,grad){
   return {ll:ll/used, used, skipped:set.length-used,
           gA:gA/used, gW:gW.map(x=>x/used)};
 }
-function fit(set,lam,useW,iters=600){
-  let a=1; const W=new Float64Array(FEAT.length);
+function fit(set,lam,useW,iters=600,nf){
+  let a=1; const W=new Float64Array(nf||FEAT.length);
   let mA=0,vA=0; const mW=new Float64Array(W.length), vW=new Float64Array(W.length);
   const lr=0.05,b1=0.9,b2=0.999,eps=1e-8;
   for(let t=1;t<=iters;t++){
@@ -247,8 +275,34 @@ for(const lam of [0.3,0.1,0.03,0.01]){
 }
 console.log(`   → 市場との差 ${best3.te-base3>=0?'+':''}${(best3.te-base3).toFixed(4)}`);
 
+/* ---- ④ 風を足すと変わるか ---- */
+console.log('\n⑤ 風を足す（コースと掛け合わせる）');
+let best4=null, cov=D.filter(r=>r.hasWind).length;
+console.log(`   風向きが使えるレース ${cov}/${D.length}本`
+  + `（場の向きがある場 ${Object.keys(VDIR).length}）`);
+if(cov < D.length*0.5){
+  console.log('   風向きが半分も無いので、まだ測りません。');
+  console.log('   node backfill-wind.js と node venue-dir.js を走らせてから。');
+}else{
+  FKEY='XW';
+  for(const lam of [0.3,0.1,0.03,0.01]){
+    const m=fit(tr,lam,true,600,WFEAT.length);
+    const t4=llg(te,m.a,m.W,0,false).ll;
+    console.log(`   市場+生データ+風   測定 ${t4.toFixed(4)}（罰則 ${lam}）`);
+    if(!best4 || t4>best4.te) best4={lam,m,te:t4};
+  }
+  console.log(`   → 市場だけとの差 ${best4.te-base3>=0?'+':''}${(best4.te-base3).toFixed(4)}`
+    + `／風を足す前との差 ${best4.te-best3.te>=0?'+':''}${(best4.te-best3.te).toFixed(4)}`);
+  /* 風の重みだけ見る */
+  const w=[...best4.m.W].map((v,i)=>({f:WFEAT[i],v}))
+    .filter(x=>/^wind_/.test(x.f)).sort((x,y)=>Math.abs(y.v)-Math.abs(x.v)).slice(0,6);
+  console.log('   風の重み（大きい順） ' + w.map(x=>`${x.f} ${x.v>=0?'+':''}${x.v.toFixed(3)}`).join(' / '));
+  FKEY='X';
+}
+
 /* ---- まとめ ---- */
-const verdict = (bl1-mk1 > 0.02) || (bestBand.pct >= 100) || (best3.te-base3 > 0.02);
+const verdict = (bl1-mk1 > 0.02) || (bestBand.pct >= 100) || (best3.te-base3 > 0.02)
+  || (best4 && best4.te-base3 > 0.02);
 console.log('\n=== 結論 ===');
 console.log(verdict
   ? '  市場に足せるものが出ています。買い方を設計する価値があります。'
@@ -261,7 +315,9 @@ if(SAVE){
     blendB:Number(B1.b.toFixed(3)), blendGain:Number((bl1-mk1).toFixed(4)),
     retMarket10:ret1(te,1,0,10), retBlend10:ret1(te,B1.a,B1.b,10),
     bestBand:bestBand.lab, bestBandPct:bestBand.pct,
-    learnGain:Number((best3.te-base3).toFixed(4)), edge:verdict };
+    learnGain:Number((best3.te-base3).toFixed(4)),
+    windRaces:cov, windGain: best4?Number((best4.te-base3).toFixed(4)):null,
+    edge:verdict };
   fs.writeFileSync(path.join(ROOT,'data','edge.js'),
     '/* node edge.js --save が書く。手で書かないこと。 */\nmodule.exports = '
     + JSON.stringify(o,null,2) + ';\n');

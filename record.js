@@ -85,8 +85,9 @@ for(const R of targets){
   const before=blk;
   blk=blk.replace("result:null,pop:null,pay:null",
                   `result:'${res.result}',pop:${res.pop},pay:${res.pay}`);
-  blk=blk.replace(/wind:null,ws:[^,]+,wave:[^,]+,temp:[^,]+,wtemp:[^,]+,/,
-                  `wind:null,ws:${res.ws},wave:${res.wave},temp:${res.temp},wtemp:${res.wtemp},`);
+  blk=blk.replace(/wind:null,(?:windN:[^,]+,)?ws:[^,]+,wave:[^,]+,temp:[^,]+,wtemp:[^,]+,/,
+                  `wind:null,windN:${res.windN??'null'},`
+                  + `ws:${res.ws},wave:${res.wave},temp:${res.temp},wtemp:${res.wtemp},`);
   const st='{'+[1,2,3,4,5,6].map(l=>l+':'+String(res.actualST[l]??'null').replace(/^0/,'')).join(',')+'}';
   const refLine = refunded.length ? ` refund:[${refunded.join(',')}],\n` : '';
   blk=blk.replace(/\n(\s*\/\*)/, `\n actualST:${st},\n${refLine}$1`);

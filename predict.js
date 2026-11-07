@@ -128,7 +128,7 @@ const write = (before, odds, oddsMin) => {
   const ex = before.boats.filter(x=>x.exT!=null).length;
   const block =
 `{name:'${NAME}',jcd:'${JCD}',rno:${RNO},date:'${HD.slice(0,4)}-${HD.slice(4,6)}-${HD.slice(6,8)}',`+
-`result:null,pop:null,pay:null,wind:null,ws:${n(before.ws)},wave:${n(before.wave)},temp:null,wtemp:null,
+`result:null,pop:null,pay:null,wind:null,windN:null,ws:${n(before.ws)},wave:${n(before.wave)},temp:null,wtemp:null,
  /* ${HD.slice(0,4)}-${HD.slice(4,6)}-${HD.slice(6,8)} ${hhmm(jst())} JST、predict.js で取得（締切${closeAt}の${oddsMin}分前）。
     展示は${ex===6?'6艇ぶんそろっている':`${ex}艇ぶんしか出ていない（残りは欠測）`}。進入は展示進入。
     本番進入は使わない（先読みになる）。

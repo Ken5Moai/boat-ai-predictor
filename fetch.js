@@ -258,6 +258,26 @@ function parseResult(html){
     out.pay    = Number(m3[4].replace(/,/g,''));
     out.pop    = Number(m3[5]);
   }
+  /* 風向き。画面では矢印の画像でしか出ていないので、
+     cells()（文字だけ）では拾えない。class から読む。
+       <div class="weather1_bodyUnit is-windDirection">
+         <p class="weather1_bodyUnitImage is-wind8"></p>
+     1〜16 の16方位で、その場のコース図に対する向き。
+     どの番号が追い風かは場によって違うので、意味をここで決めない。
+     番号のまま持っておいて、効くかどうかは測ってから決める。
+
+     2026-11-07 まで、ここを一度も取っていなかった（wind:null と決め打ち）。
+     1362レース中3レースにしか風向きが無かったのはそのせい。 */
+  {
+    const m = html.match(/is-windDirection[\s\S]{0,300}?is-wind(\d+)/);
+    out.windN = m ? Number(m[1]) : null;
+    /* is-direction はその場の向きで、場ごとに一定
+       （桐生14・丸亀15→no, 丸亀7・大村3。同じ場ならレースが変わっても同じ）。
+       is-wind は絶対方位なので、場をまたいで比べるには
+       (windN - dirN) でコース基準に直す必要がある。 */
+    const d = html.match(/is-direction(\d+)/);
+    out.dirN = d ? Number(d[1]) : null;
+  }
   out.temp  = num((joined.match(/気温\|([\d.]+)℃/)||[])[1]);
   out.ws    = num((joined.match(/風速\|([\d.]+)m/)||[])[1]);
   out.wtemp = num((joined.match(/水温\|([\d.]+)℃/)||[])[1]);
@@ -323,7 +343,8 @@ function emit(race, name){
   console.log(`\n/* ---- data/races.js に貼る ---- */`);
   console.log(`{name:'${name}',jcd:'${race.jcd}',rno:${race.rno},date:'${d}',`
     + `result:'${R.result}',pop:${R.pop},pay:${R.pay},`);
-  console.log(ref + st + ` wind:null,ws:${R.ws},wave:${R.wave},temp:${R.temp},wtemp:${R.wtemp},`);
+  console.log(ref + st + ` wind:null,windN:${R.windN??'null'},`
+    + `ws:${R.ws},wave:${R.wave},temp:${R.temp},wtemp:${R.wtemp},`);
   console.log(' B:[');
   race.boats.forEach((b,i)=>{
     console.log(` {reg:'${b.reg}',g:'${b.g}',nat:${f(b.nat,2)},loc:${f(b.loc,2)},`
