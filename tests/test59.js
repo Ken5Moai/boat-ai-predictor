@@ -66,5 +66,26 @@ console.log('\n=== 結論の向きが、測定値と矛盾していないか ===
      + (E.retBlend10 > E.retMarket10+3 ? '  → 逆転した。測り直して結論を書き直すこと':''));
 }
 
+console.log('\n=== today.js が測定どおりに答えるか ===');
+{
+  const {execFileSync}=require('child_process');
+  ok(fs.existsSync(path.join(ROOT,'today.js')), 'today.js（買っていいかを答える入口）がある');
+  let out='';
+  try{ out=execFileSync(process.execPath,[path.join(ROOT,'today.js')],
+        {encoding:'utf8', maxBuffer:8*1024*1024, timeout:60000}); }
+  catch(e){ out=(e.stdout||'')+(e.stderr||''); }
+  ok(/いま、買っていいのか/.test(out), 'today.js が最後まで走る');
+  if(E.edge){
+    ok(/買ってよい/.test(out), '測定が「勝てている」なら、そう答える');
+  }else{
+    ok(/買わないほうがよい/.test(out), '測定が「勝てていない」なら、買わないと答える');
+    ok(!/◎ 買ってよい/.test(out), '勝てていないのに「買ってよい」とは言わない');
+  }
+  ok(out.includes(`${E.retMarket10}%`), '画面と同じ測定値を出している');
+  const T=fs.readFileSync(path.join(ROOT,'today.js'),'utf8');
+  ok(T.includes("data/edge.js"),
+     'today.js の答えは data/edge.js から来ている（気分で変えられない）');
+}
+
 console.log(`\n================ 結果: ${pass} 件成功 / ${fail} 件失敗 ================`);
 process.exitCode = fail?1:0;
