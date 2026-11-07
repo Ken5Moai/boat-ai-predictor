@@ -24,7 +24,6 @@ const CACHE=path.join(ROOT,'tmp','wind-cache.json');
 const SRC=path.join(ROOT,'data','races.js');
 
 const RACES=require(SRC);
-const text=fs.readFileSync(SRC,'utf8');
 /* CPU を回して待たない。project の sleep.js は秒で待つ実物を使う。
    会員規約 第25条(2)「極めて短時間に機械的に反復して…照会」に触れないよう、
    1レース1ページ・1秒あけて取る。 */
@@ -76,7 +75,10 @@ if(!have.length){ console.log('  書くものがありません。'); return; }
 
 /* races.js を1レースずつ書き換える。
    name は一意（test23 が見ている）なので、name を手がかりに探す。 */
-let out=text, wrote=0, missed=[];
+/* 書く直前に読み直す。最初に読んだ中身を持ち回すと、
+   走っている間に absorb-day.js が足したレースを上書きで消す。
+   この道具は数時間走るので、その間に他の道具を走らせたくなる。 */
+let out=fs.readFileSync(SRC,'utf8'), wrote=0, missed=[];
 for(const r of RACES){
   const v=cache[key(r)];
   if(v==null) continue;
