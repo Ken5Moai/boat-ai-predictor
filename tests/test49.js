@@ -272,6 +272,23 @@ const quiet = async f => { const r=console.log; const said=[]; console.log=(...a
   }
 
   await browser.close();
-  console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
+  console.log('\n=== パスワードの渡し方の案内 ===');
+/* 「$env:BOAT_BET_PASSWORD="平文"」と案内していたが、これだと
+   PowerShell の履歴ファイル（ConsoleHost_history.txt）に残る。
+   2026-11-08、本人から Read-Host -AsSecureString を指摘された。
+   案内文が平文代入に戻っていないかを見る。 */
+{
+  const fs2=require('fs'), path2=require('path');
+  for(const f of ['auto.js','vote-assist.js']){
+    const src=fs2.readFileSync(path2.join(__dirname,'..',f),'utf8');
+    const bad=/\$env:BOAT_BET_PASSWORD\s*=\s*"（/.test(src)
+           || /\$env:BOAT_BET_PASSWORD\s*=\s*['"][^$]/.test(src);
+    ok_(!bad, `${f} の案内が平文代入になっていない`);
+    if(/BOAT_BET_PASSWORD/.test(src))
+      ok_(/AsSecureString/.test(src), `${f} が Read-Host -AsSecureString を案内している`);
+  }
+}
+
+console.log(`\n================ 結果: ${ok} 件成功 / ${ng} 件失敗 ================`);
   process.exitCode = ng ? 1 : 0;
 })();

@@ -925,7 +925,12 @@ async function buy(ctx, plan, opt){
     console.log(`\n  ✗ ${e.message}`);
     if(/パスワード/.test(ng[1])){
       console.log('    投票用パスワードが違います。環境変数を設定し直してください。');
-      console.log('      $env:BOAT_BET_PASSWORD="（投票用パスワード）"');
+      console.log('     $s = Read-Host "投票用パスワード" -AsSecureString');
+      console.log('     $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)');
+      console.log('     $env:BOAT_BET_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)');
+      console.log('     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)');
+      console.log('     ※ パスワードをそのまま打ち込むと、PowerShell の履歴ファイルに残ります');
+
       console.log('    分からなければ 会員情報変更 → 投票用パスワードを変更する。');
     }
     console.log('    買えていません。画面の「投票内容を修正する」で戻れます。');

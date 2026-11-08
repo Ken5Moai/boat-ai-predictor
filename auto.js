@@ -353,9 +353,14 @@ if(require.main !== module) return;
       console.log('\n  ✗ 買うのに足りないものがあります。');
       for(const m of miss) console.log(`     ・${m}`);
       console.log('\n  用意のしかた（PowerShell）');
-      console.log('     $env:BOAT_BET_PASSWORD="（投票用パスワード）"');
       console.log('     $env:BOAT_TERMS_OK="yes"   ← 会員規約を自分で読んで、自動投票を');
       console.log('                                  禁じる条項が無いことを確かめてから');
+      console.log('     $s = Read-Host "投票用パスワード" -AsSecureString');
+      console.log('     $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)');
+      console.log('     $env:BOAT_BET_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)');
+      console.log('     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)');
+      console.log('     ※ パスワードをそのまま打ち込むと、PowerShell の履歴ファイルに残ります');
+
       return;
     }
     /* 損切りは必須にしない。本人は1回¥10,000しか入金しないので、
