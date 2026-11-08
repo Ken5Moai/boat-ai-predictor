@@ -116,7 +116,51 @@ const cell = v => (typeof v==='number' && isFinite(v)) ? String(v) : JSON.string
 
 /* pending.js / odds.js / odds-live.js へ書く。同じ名前があれば置き換える
    （二重登録と配列の穴を避ける）。暫定で一度書き、展示が出たら上書きする。 */
+/* 書き込み中は他の predict.js を入れない。
+   ------------------------------------------------------------------
+   pending.js / odds.js / odds-live.js は、読んで→足して→書く。
+   2つ同時に走ると、後から書いたほうが先の分を消すか、
+   書きかけのところに割り込んでファイルが壊れる。
+
+   2026-11-08、4レースを並行で走らせて pending.js が壊れた。
+   5件中3件が読めなくなり、backtest.js が止まった。
+
+   ロックを置く。先客がいたら待つ（最大3分）。
+   待っても空かなければ、書かずに止める。
+   壊すより書かないほうが安い。 */
+const LOCK = path.join(ROOT,'tmp','predict.lock');
+function takeLock(){
+  fs.mkdirSync(path.join(ROOT,'tmp'),{recursive:true});
+  for(let i=0;i<180;i++){
+    try{
+      fs.writeFileSync(LOCK, String(process.pid), {flag:'wx'});
+      return true;
+    }catch(e){
+      /* 古いロック（落ちたプロセスのもの）は5分で捨てる */
+      try{
+        const st=fs.statSync(LOCK);
+        if(Date.now()-st.mtimeMs > 5*60*1000){ fs.unlinkSync(LOCK); continue; }
+      }catch(e2){ continue; }
+      if(i===0) console.log('  ほかの predict.js が書き込み中です。空くまで待ちます…');
+      require('./sleep.js')(1);
+    }
+  }
+  return false;
+}
+const freeLock = () => { try{ fs.unlinkSync(LOCK); }catch(e){} };
+
 const write = (before, odds, oddsMin) => {
+  if(!takeLock()){
+    console.log('\n  ✗ ほかの predict.js が3分以上書き込み中なので、ここには書きません。');
+    console.log('    買い目は上に出ています。ファイルを壊さないために書き込みだけ止めました。');
+    console.log('    predict.js は1本ずつ走らせてください。');
+    return;
+  }
+  try{
+    return writeInner(before, odds, oddsMin);
+  } finally { freeLock(); }
+};
+const writeInner = (before, odds, oddsMin) => {
   const lines = boats.map((bt,i)=>{
     const L=i+1, bb=before.boats[i]||{}, e=before.exSt[L]||{};
     const rec='['+(bt.rec||[]).map(r=>'['+cell(r[0])+','+String(r[1]).replace(/^0/,'')+','+cell(r[2])+']').join(',')+']';
